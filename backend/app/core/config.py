@@ -5,6 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROJECT_DIR = BACKEND_DIR.parent
+DATA_DIR = BACKEND_DIR / "data"
+
+
+def default_database_url() -> str:
+    return f"sqlite:///{DATA_DIR / 'beenaround.db'}"
 
 
 class Settings(BaseSettings):
@@ -12,7 +17,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
-    database_url: str = "sqlite:///./data/beenaround.db"
+    database_url: str = default_database_url()
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_DIR / ".env",
