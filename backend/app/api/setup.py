@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -10,11 +12,12 @@ from app.services.setup import (
 )
 
 router = APIRouter(prefix="/setup", tags=["Setup"])
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/status", response_model=SetupStatusResponse)
 def get_setup_status(
-    session: Session = Depends(get_db),
+    session: DatabaseSession,
 ) -> SetupStatusResponse:
     return SetupStatusResponse(
         setup_required=is_setup_required(session),
@@ -28,7 +31,7 @@ def get_setup_status(
 )
 def complete_setup(
     data: SetupRequest,
-    session: Session = Depends(get_db),
+    session: DatabaseSession,
 ) -> SetupResponse:
     try:
         user = create_initial_admin(session, data)

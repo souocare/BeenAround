@@ -1,9 +1,9 @@
 from pathlib import Path
-import pytest
 
+import pytest
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, Table, text
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.db.session import create_database_engine
 
