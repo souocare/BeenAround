@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
+    # Authentication
+    secret_key: str | None = None
+    access_token_expire_minutes: int = 15
+    session_idle_expire_days: int = 30
+
     database_url: str = default_database_url()
 
     model_config = SettingsConfigDict(
