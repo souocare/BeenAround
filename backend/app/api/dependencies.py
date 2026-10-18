@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.auth_session import AuthSession
@@ -13,8 +14,6 @@ from app.services.auth_sessions import AuthSessionService
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
 ApplicationSettings = Annotated[Settings, Depends(get_settings)]
-
-WEB_SESSION_COOKIE = "beenaround_session"
 
 
 @dataclass(frozen=True, slots=True)

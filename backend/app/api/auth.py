@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthentication, CurrentUser
+from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.auth_session import AuthSessionType
@@ -20,8 +21,6 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
 ApplicationSettings = Annotated[Settings, Depends(get_settings)]
-
-WEB_SESSION_COOKIE = "beenaround_session"
 
 
 @router.post("/login", response_model=LoginResponse)
