@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
-from app.models.auth_session import AuthSession
+from app.models.auth_session import AuthSession, AuthSessionType
 from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
 from app.services.auth_sessions import AuthSessionService
@@ -48,7 +48,7 @@ def get_authenticated_user(
 
     auth_session = session_service.resolve(credential)
 
-    if auth_session is None:
+    if auth_session is None or auth_session.session_type != AuthSessionType.WEB:
         raise unauthorized
 
     user = session.get(User, auth_session.user_id)

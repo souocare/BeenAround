@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     csrf_allowed_origins: list[str] = []
 
+    # Login rate limiting
+    login_rate_limit_window_seconds: int = 900
+    login_rate_limit_ip_attempts: int = 20
+    login_rate_limit_identifier_attempts: int = 10
+
     model_config = SettingsConfigDict(
         env_file=PROJECT_DIR / ".env",
         env_prefix="BEENAROUND_",

@@ -436,3 +436,33 @@ def test_csrf_does_not_block_unauthenticated_requests(
     )
 
     assert response.status_code == 200
+
+
+def test_mobile_session_cannot_authenticate_web_requests(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    user = session.query(User).filter_by(username="goncalo").one()
+
+    session_service = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=30,
+    )
+
+    mobile_session = session_service.create(
+        user_id=user.id,
+        session_type=AuthSessionType.MOBILE,
+    )
+
+    client.cookies.set(
+        "beenaround_session",
+        mobile_session.credential,
+        path="/api/v1",
+    )
+
+    response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required."
