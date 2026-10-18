@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.orm import Session
@@ -131,3 +132,49 @@ def test_invalid_credentials_have_generic_error(
         )
 
     assert str(error.value) == "Invalid credentials."
+
+
+def test_unknown_user_performs_dummy_password_verification(
+    authentication_environment: Session,
+) -> None:
+    service = AuthenticationService(authentication_environment)
+
+    with (
+        patch("app.services.authentication.verify_dummy_password") as verify_dummy,
+        pytest.raises(InvalidCredentialsError),
+    ):
+        service.authenticate(
+            login="unknown",
+            password="wrong-password",
+        )
+
+    verify_dummy.assert_called_once_with("wrong-password")
+
+
+def test_existing_user_does_not_perform_dummy_verification(
+    authentication_environment: Session,
+) -> None:
+    service = AuthenticationService(authentication_environment)
+
+    with (
+        patch("app.services.authentication.verify_dummy_password") as verify_dummy,
+        pytest.raises(InvalidCredentialsError),
+    ):
+        service.authenticate(
+            login="goncalo",
+            password="wrong-password",
+        )
+
+    verify_dummy.assert_not_called()
+
+
+def test_unknown_user_cannot_authenticate_with_dummy_password(
+    authentication_environment: Session,
+) -> None:
+    service = AuthenticationService(authentication_environment)
+
+    with pytest.raises(InvalidCredentialsError):
+        service.authenticate(
+            login="unknown",
+            password="beenaround-dummy-password-not-for-authentication",
+        )

@@ -59,8 +59,6 @@ def auth_client(
     engine.dispose()
 
 
-
-
 def test_login_returns_user_and_sets_httponly_cookie(
     auth_client: tuple[TestClient, Session],
 ) -> None:
