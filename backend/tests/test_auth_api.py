@@ -36,18 +36,20 @@ def auth_client(
         session.add(user)
         session.commit()
 
-        app = create_app()
+        settings = Settings(
+            _env_file=None,
+            environment="development",
+            csrf_allowed_origins=["http://testserver"],
+        )
+
+        app = create_app(settings=settings)
 
         def override_get_db() -> Generator[Session, None, None]:
             with Session(engine) as request_session:
                 yield request_session
 
         app.dependency_overrides[get_db] = override_get_db
-        app.dependency_overrides[get_settings] = lambda: Settings(
-            _env_file=None,
-            environment="development",
-            session_idle_expire_days=30,
-        )
+        app.dependency_overrides[get_settings] = lambda: settings
 
         with TestClient(app) as client:
             yield client, session
@@ -55,6 +57,8 @@ def auth_client(
         app.dependency_overrides.clear()
 
     engine.dispose()
+
+
 
 
 def test_login_returns_user_and_sets_httponly_cookie(
@@ -243,7 +247,10 @@ def test_logout_revokes_session(
 
     assert credential is not None
 
-    logout_response = client.post("/api/v1/auth/logout")
+    logout_response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Origin": "http://testserver"},
+    )
 
     assert logout_response.status_code == 204
     assert "beenaround_session" not in client.cookies
@@ -274,7 +281,10 @@ def test_revoked_session_cannot_access_me(
 
     assert credential is not None
 
-    client.post("/api/v1/auth/logout")
+    client.post(
+        "/api/v1/auth/logout",
+        headers={"Origin": "http://testserver"},
+    )
 
     response = client.get(
         "/api/v1/auth/me",
@@ -289,7 +299,10 @@ def test_logout_requires_authentication(
 ) -> None:
     client, _ = auth_client
 
-    response = client.post("/api/v1/auth/logout")
+    response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Origin": "http://testserver"},
+    )
 
     assert response.status_code == 401
 
@@ -314,3 +327,114 @@ def test_inactive_user_cannot_access_me(
     response = client.get("/api/v1/auth/me")
 
     assert response.status_code == 401
+
+
+def test_logout_rejects_external_origin(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+
+    # The rejected request must not revoke the session.
+    assert client.get("/api/v1/auth/me").status_code == 200
+
+
+def test_logout_rejects_missing_origin_and_referer(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 403
+
+
+def test_logout_accepts_valid_referer(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Referer": "http://testserver/trips"},
+    )
+
+    assert response.status_code == 204
+
+
+def test_csrf_protection_applies_to_other_endpoints(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    response = client.post(
+        "/api/v1/setup",
+        json={
+            "username": "anotheruser",
+            "display_name": "Another User",
+            "password": "another-password-123",
+        },
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid request origin."
+
+
+def test_csrf_does_not_block_unauthenticated_requests(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    client.cookies.clear()
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 200

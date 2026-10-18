@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     database_url: str = default_database_url()
 
+    csrf_allowed_origins: list[str] = []
+
     model_config = SettingsConfigDict(
         env_file=PROJECT_DIR / ".env",
         env_prefix="BEENAROUND_",
