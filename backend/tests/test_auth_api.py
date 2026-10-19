@@ -753,3 +753,352 @@ def test_web_me_does_not_accept_mobile_bearer_token(
     )
 
     assert response.status_code == 401
+
+
+def test_mobile_refresh_rotates_tokens(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    original = login_response.json()
+
+    response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": original["refresh_token"],
+        },
+    )
+
+    assert response.status_code == 200
+
+    refreshed = response.json()
+
+    assert refreshed["access_token"]
+    assert refreshed["refresh_token"] != original["refresh_token"]
+    assert refreshed["token_type"] == "bearer"
+    assert refreshed["expires_in"] == 900
+    assert response.headers["cache-control"] == "no-store"
+
+    token_service = AccessTokenService(
+        secret_key="beenaround-test-secret-key-32-bytes-minimum",
+        expire_minutes=15,
+    )
+
+    original_claims = token_service.validate(original["access_token"])
+    refreshed_claims = token_service.validate(refreshed["access_token"])
+
+    assert refreshed_claims.user_id == original_claims.user_id
+    assert refreshed_claims.session_id == original_claims.session_id
+
+    auth_session = AuthSessionRepository(session).get_by_id(
+        refreshed_claims.session_id,
+    )
+
+    assert auth_session is not None
+    assert auth_session.credential_hash == hash_session_credential(
+        refreshed["refresh_token"],
+    )
+
+
+def test_mobile_refresh_rejects_reused_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    original_refresh_token = login_response.json()["refresh_token"]
+
+    first_response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": original_refresh_token,
+        },
+    )
+
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": original_refresh_token,
+        },
+    )
+
+    assert second_response.status_code == 401
+    assert second_response.json()["detail"] == "Invalid refresh token."
+
+
+def test_mobile_refresh_rejects_unknown_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": "unknown-refresh-token",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_refresh_rejects_web_session_credential(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    web_credential = client.cookies.get("beenaround_session")
+
+    assert web_credential is not None
+
+    response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": web_credential,
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_refresh_rejects_missing_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={},
+    )
+
+    assert response.status_code == 422
+
+
+def test_mobile_refresh_does_not_set_web_cookie(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    refresh_response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": login_response.json()["refresh_token"],
+        },
+    )
+
+    assert refresh_response.status_code == 200
+    assert "beenaround_session" not in refresh_response.headers.get(
+        "set-cookie",
+        "",
+    )
+
+
+def test_mobile_logout_revokes_session_and_access_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    tokens = login_response.json()
+
+    headers = {
+        "Authorization": f"Bearer {tokens['access_token']}",
+    }
+
+    before_logout = client.get(
+        "/api/v1/auth/mobile/me",
+        headers=headers,
+    )
+
+    assert before_logout.status_code == 200
+
+    logout_response = client.post(
+        "/api/v1/auth/mobile/logout",
+        json={
+            "refresh_token": tokens["refresh_token"],
+        },
+    )
+
+    assert logout_response.status_code == 204
+    assert logout_response.headers["cache-control"] == "no-store"
+
+    after_logout = client.get(
+        "/api/v1/auth/mobile/me",
+        headers=headers,
+    )
+
+    assert after_logout.status_code == 401
+
+    refresh_response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": tokens["refresh_token"],
+        },
+    )
+
+    assert refresh_response.status_code == 401
+
+def test_mobile_logout_is_idempotent(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    for _ in range(2):
+        response = client.post(
+            "/api/v1/auth/mobile/logout",
+            json={
+                "refresh_token": "unknown-refresh-token",
+            },
+        )
+
+        assert response.status_code == 204
+
+
+def test_old_refresh_token_cannot_logout_rotated_session(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    original = login_response.json()
+
+    refresh_response = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": original["refresh_token"],
+        },
+    )
+
+    assert refresh_response.status_code == 200
+
+    refreshed = refresh_response.json()
+
+    logout_response = client.post(
+        "/api/v1/auth/mobile/logout",
+        json={
+            "refresh_token": original["refresh_token"],
+        },
+    )
+
+    assert logout_response.status_code == 204
+
+    me_response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers={
+            "Authorization": f"Bearer {refreshed['access_token']}",
+        },
+    )
+
+    assert me_response.status_code == 200
+
+    second_refresh = client.post(
+        "/api/v1/auth/mobile/refresh",
+        json={
+            "refresh_token": refreshed["refresh_token"],
+        },
+    )
+
+    assert second_refresh.status_code == 200
+
+
+def test_mobile_logout_does_not_revoke_web_session(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    web_credential = client.cookies.get("beenaround_session")
+
+    assert web_credential is not None
+
+    logout_response = client.post(
+        "/api/v1/auth/mobile/logout",
+        json={
+            "refresh_token": web_credential,
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert logout_response.status_code == 204
+
+    me_response = client.get("/api/v1/auth/me")
+
+    assert me_response.status_code == 200
+
+
+def test_mobile_logout_unknown_token_returns_204(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/logout",
+        json={
+            "refresh_token": "invalid-token",
+        },
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""

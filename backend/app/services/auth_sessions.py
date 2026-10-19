@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.models.user import User
 from app.core.session_credentials import (
     generate_session_credential,
     hash_session_credential,
@@ -17,6 +18,8 @@ class CreatedAuthSession:
     session: AuthSession
     credential: str
 
+class InvalidRefreshTokenError(ValueError):
+    """Raised when a Mobile refresh credential cannot be used."""
 
 def normalize_datetime(value: datetime) -> datetime:
     """Normalize SQLite and timezone-aware datetimes to UTC."""
@@ -124,3 +127,78 @@ class AuthSessionService:
             return False
 
         return self.revoke(session_id=session_id, now=now)
+
+
+    def rotate_mobile_credential(
+        self,
+        credential: str,
+        *,
+        now: datetime | None = None,
+    ) -> CreatedAuthSession:
+        """Atomically rotate a valid Mobile refresh credential."""
+
+        if not credential:
+            raise InvalidRefreshTokenError("Invalid refresh token.")
+
+        current_time = normalize_datetime(now or datetime.now(UTC))
+
+        auth_session = self.resolve(credential, now=current_time)
+
+        if auth_session is None or auth_session.session_type != AuthSessionType.MOBILE:
+            raise InvalidRefreshTokenError("Invalid refresh token.")
+
+        user = self._session.get(User, auth_session.user_id)
+
+        if user is None or not user.is_active:
+            raise InvalidRefreshTokenError("Invalid refresh token.")
+
+        new_credential = generate_session_credential()
+
+        try:
+            rotated = self._repository.rotate_mobile_credential(
+                session_id=auth_session.id,
+                old_credential_hash=hash_session_credential(credential),
+                new_credential_hash=new_credential.hash,
+                now=current_time,
+            )
+
+            if not rotated:
+                self._session.rollback()
+                raise InvalidRefreshTokenError("Invalid refresh token.")
+
+            self._session.commit()
+
+        except Exception:
+            self._session.rollback()
+            raise
+
+        self._session.refresh(auth_session)
+
+        return CreatedAuthSession(
+            session=auth_session,
+            credential=new_credential.value,
+        )
+
+    
+    def revoke_mobile_credential(
+        self,
+        credential: str,
+        *,
+        now: datetime | None = None,
+    ) -> None:
+        """Revoke a Mobile session without revealing credential validity."""
+
+        if not credential:
+            return
+
+        current_time = normalize_datetime(now or datetime.now(UTC))
+
+        try:
+            self._repository.revoke_mobile_by_credential_hash(
+                credential_hash=hash_session_credential(credential),
+                now=current_time,
+            )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise

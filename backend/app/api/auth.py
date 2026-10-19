@@ -13,7 +13,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.auth_session import AuthSessionType
 from app.repositories.auth_sessions import AuthSessionRepository
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.schemas.auth import LoginRequest, LoginResponse, MobileLogoutRequest
 from app.schemas.setup import SetupResponse
 from app.services.auth_sessions import AuthSessionService
 from app.services.authentication import (
@@ -22,6 +22,9 @@ from app.services.authentication import (
 )
 from app.core.access_tokens import AccessTokenService
 from app.schemas.auth import LoginRequest, LoginResponse, MobileLoginResponse
+from app.schemas.auth import MobileRefreshRequest, MobileRefreshResponse
+from app.services.auth_sessions import InvalidRefreshTokenError
+
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -185,3 +188,82 @@ def get_mobile_me(
     """Return the currently authenticated Mobile user."""
 
     return SetupResponse.model_validate(user)
+
+
+@router.post(
+    "/mobile/refresh",
+    response_model=MobileRefreshResponse,
+)
+def mobile_refresh(
+    data: MobileRefreshRequest,
+    response: Response,
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+) -> MobileRefreshResponse:
+    """Rotate a Mobile refresh credential and issue a new access token."""
+
+    if not settings.secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mobile authentication is not configured.",
+        )
+
+    token_service = AccessTokenService(
+        secret_key=settings.secret_key,
+        expire_minutes=settings.access_token_expire_minutes,
+    )
+
+    session_service = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=settings.session_idle_expire_days,
+    )
+
+    try:
+        rotated = session_service.rotate_mobile_credential(
+            data.refresh_token,
+        )
+    except InvalidRefreshTokenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from error
+
+    access_token = token_service.create(
+        user_id=rotated.session.user_id,
+        session_id=rotated.session.id,
+    )
+
+    response.headers["Cache-Control"] = "no-store"
+
+    return MobileRefreshResponse(
+        access_token=access_token,
+        refresh_token=rotated.credential,
+        expires_in=int(token_service.expiration.total_seconds()),
+    )
+
+
+@router.post(
+    "/mobile/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def mobile_logout(
+    data: MobileLogoutRequest,
+    response: Response,
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+) -> None:
+    """Revoke the Mobile session associated with the current refresh token."""
+
+    session_service = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=settings.session_idle_expire_days,
+    )
+
+    session_service.revoke_mobile_credential(
+        data.refresh_token,
+    )
+
+    response.headers["Cache-Control"] = "no-store"
