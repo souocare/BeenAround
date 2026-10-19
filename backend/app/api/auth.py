@@ -16,6 +16,8 @@ from app.services.authentication import (
     AuthenticationService,
     InvalidCredentialsError,
 )
+from app.core.access_tokens import AccessTokenService
+from app.schemas.auth import LoginRequest, LoginResponse, MobileLoginResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -107,3 +109,64 @@ def logout(
     )
 
     response.headers["Cache-Control"] = "no-store"
+
+@router.post(
+    "/mobile/login",
+    response_model=MobileLoginResponse,
+)
+def mobile_login(
+    data: LoginRequest,
+    response: Response,
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+) -> MobileLoginResponse:
+    """Authenticate a mobile client and issue session-bound tokens."""
+
+    if not settings.secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mobile authentication is not configured.",
+        )
+
+    token_service = AccessTokenService(
+        secret_key=settings.secret_key,
+        expire_minutes=settings.access_token_expire_minutes,
+    )
+
+    authentication_service = AuthenticationService(session)
+
+    try:
+        user = authentication_service.authenticate(
+            login=data.login,
+            password=data.password,
+        )
+    except InvalidCredentialsError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials.",
+        ) from error
+
+    session_service = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=settings.session_idle_expire_days,
+    )
+
+    created_session = session_service.create(
+        user_id=user.id,
+        session_type=AuthSessionType.MOBILE,
+    )
+
+    access_token = token_service.create(
+        user_id=user.id,
+        session_id=created_session.session.id,
+    )
+
+    response.headers["Cache-Control"] = "no-store"
+
+    return MobileLoginResponse(
+        access_token=access_token,
+        refresh_token=created_session.credential,
+        expires_in=int(token_service.expiration.total_seconds()),
+        user=SetupResponse.model_validate(user),
+    )

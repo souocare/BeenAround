@@ -18,6 +18,7 @@ class AccessTokenClaims:
     """Validated claims extracted from a BeenAround access token."""
 
     user_id: UUID
+    session_id: UUID
     issued_at: datetime
     expires_at: datetime
 
@@ -49,14 +50,16 @@ class AccessTokenService:
         self,
         *,
         user_id: UUID,
+        session_id: UUID,
         now: datetime | None = None,
     ) -> str:
-        """Create a signed short-lived access token for a user."""
+        """Create a signed access token bound to an authentication session."""
         issued_at = _normalize_datetime(now or datetime.now(UTC))
         expires_at = issued_at + self._expiration
 
         payload = {
             "sub": str(user_id),
+            "sid": str(session_id),
             "type": _ACCESS_TOKEN_TYPE,
             "iat": issued_at,
             "exp": expires_at,
@@ -81,6 +84,7 @@ class AccessTokenService:
                 options={
                     "require": [
                         "sub",
+                        "sid",
                         "type",
                         "iat",
                         "exp",
@@ -95,13 +99,18 @@ class AccessTokenService:
 
         try:
             user_id = UUID(payload["sub"])
+            session_id = UUID(payload["sid"])
             issued_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
             expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
         except (KeyError, TypeError, ValueError, OverflowError) as error:
             raise InvalidAccessTokenError("Access token contains invalid claims.") from error
 
+        if expires_at <= issued_at:
+            raise InvalidAccessTokenError("Access token has an invalid lifetime.")
+
         return AccessTokenClaims(
             user_id=user_id,
+            session_id=session_id,
             issued_at=issued_at,
             expires_at=expires_at,
         )

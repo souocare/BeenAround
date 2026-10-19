@@ -14,6 +14,8 @@ from app.models.auth_session import AuthSessionType
 from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
 from app.services.auth_sessions import AuthSessionService
+from app.core.access_tokens import AccessTokenService
+from app.core.session_credentials import hash_session_credential
 
 TEST_PASSWORD = "correct-password-123"
 
@@ -40,6 +42,7 @@ def auth_client(
             _env_file=None,
             environment="development",
             csrf_allowed_origins=["http://testserver"],
+            secret_key="beenaround-test-secret-key-32-bytes-minimum",
         )
 
         app = create_app(settings=settings)
@@ -466,3 +469,118 @@ def test_mobile_session_cannot_authenticate_web_requests(
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Authentication required."
+
+def test_mobile_login_returns_access_and_refresh_tokens(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["token_type"] == "bearer"
+    assert body["expires_in"] == 900
+    assert body["user"]["username"] == "goncalo"
+    assert body["access_token"]
+    assert body["refresh_token"]
+    assert body["access_token"] != body["refresh_token"]
+
+    assert "password_hash" not in body
+    assert response.headers["cache-control"] == "no-store"
+
+    assert "beenaround_session" not in response.headers.get("set-cookie", "")
+
+    token_service = AccessTokenService(
+        secret_key="beenaround-test-secret-key-32-bytes-minimum",
+        expire_minutes=15,
+    )
+
+    claims = token_service.validate(body["access_token"])
+
+    auth_session = AuthSessionRepository(session).get_by_id(claims.session_id)
+
+    assert auth_session is not None
+    assert auth_session.user_id == claims.user_id
+    assert auth_session.session_type == AuthSessionType.MOBILE
+    assert auth_session.credential_hash == hash_session_credential(body["refresh_token"])
+
+
+def test_mobile_login_rejects_invalid_password(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": "wrong-password",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid credentials."
+
+
+def test_mobile_login_rejects_unknown_user(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "unknown",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid credentials."
+
+
+def test_mobile_login_accepts_email_case_insensitively(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "  GONCALO@EXAMPLE.COM  ",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+def test_mobile_login_does_not_create_web_cookie(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "beenaround_session" not in client.cookies
+
+    me_response = client.get("/api/v1/auth/me")
+
+    assert me_response.status_code == 401
+

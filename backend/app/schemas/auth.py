@@ -1,6 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from app.schemas.setup import SetupResponse
+
 
 
 class LoginRequest(BaseModel):
@@ -11,4 +13,15 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
+    user: SetupResponse
+
+
+
+class MobileLoginResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    access_token: str
+    refresh_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
     user: SetupResponse

@@ -22,12 +22,17 @@ def token_service() -> AccessTokenService:
 
 def test_create_access_token(token_service: AccessTokenService) -> None:
     user_id = uuid4()
+    session_id = uuid4()
 
-    token = token_service.create(user_id=user_id)
+    token = token_service.create(
+        user_id=user_id,
+        session_id=session_id,
+    )
 
     claims = token_service.validate(token)
 
     assert claims.user_id == user_id
+    assert claims.session_id == session_id
     assert claims.expires_at - claims.issued_at == timedelta(minutes=15)
 
 
@@ -35,8 +40,12 @@ def test_access_token_contains_expected_claims(
     token_service: AccessTokenService,
 ) -> None:
     user_id = uuid4()
+    session_id = uuid4()
 
-    token = token_service.create(user_id=user_id)
+    token = token_service.create(
+        user_id=user_id,
+        session_id=session_id,
+    )
 
     payload = jwt.decode(
         token,
@@ -45,8 +54,9 @@ def test_access_token_contains_expected_claims(
     )
 
     assert payload["sub"] == str(user_id)
+    assert payload["sid"] == str(session_id)
     assert payload["type"] == "access"
-    assert set(payload) == {"sub", "type", "iat", "exp"}
+    assert set(payload) == {"sub", "sid", "type", "iat", "exp"}
 
 
 def test_expired_access_token_is_rejected(
@@ -54,6 +64,7 @@ def test_expired_access_token_is_rejected(
 ) -> None:
     token = token_service.create(
         user_id=uuid4(),
+        session_id=uuid4(),
         now=datetime.now(UTC) - timedelta(hours=1),
     )
 
@@ -83,6 +94,7 @@ def test_wrong_token_type_is_rejected(
     token = jwt.encode(
         {
             "sub": str(uuid4()),
+            "sid": str(uuid4()),
             "type": "refresh",
             "iat": now,
             "exp": now + timedelta(minutes=15),
@@ -103,8 +115,51 @@ def test_missing_required_claim_is_rejected(
     token = jwt.encode(
         {
             "sub": str(uuid4()),
+            "type": "access",
             "iat": now,
             "exp": now + timedelta(minutes=15),
+        },
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(InvalidAccessTokenError):
+        token_service.validate(token)
+
+
+def test_invalid_session_id_is_rejected(
+    token_service: AccessTokenService,
+) -> None:
+    now = datetime.now(UTC)
+
+    token = jwt.encode(
+        {
+            "sub": str(uuid4()),
+            "sid": "not-a-uuid",
+            "type": "access",
+            "iat": now,
+            "exp": now + timedelta(minutes=15),
+        },
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(InvalidAccessTokenError):
+        token_service.validate(token)
+
+
+def test_invalid_token_lifetime_is_rejected(
+    token_service: AccessTokenService,
+) -> None:
+    now = datetime.now(UTC)
+
+    token = jwt.encode(
+        {
+            "sub": str(uuid4()),
+            "sid": str(uuid4()),
+            "type": "access",
+            "iat": now,
+            "exp": now,
         },
         TEST_SECRET,
         algorithm="HS256",
@@ -137,9 +192,27 @@ def test_naive_datetime_is_normalized(
 
     token = token_service.create(
         user_id=uuid4(),
+        session_id=uuid4(),
         now=now,
     )
 
     claims = token_service.validate(token)
 
     assert claims.issued_at.tzinfo == UTC
+
+
+def test_access_token_rejects_wrong_signature(
+    token_service: AccessTokenService,
+) -> None:
+    other_service = AccessTokenService(
+        secret_key="another-valid-secret-key-with-enough-bytes",
+        expire_minutes=15,
+    )
+
+    token = other_service.create(
+        user_id=uuid4(),
+        session_id=uuid4(),
+    )
+
+    with pytest.raises(InvalidAccessTokenError):
+        token_service.validate(token)
