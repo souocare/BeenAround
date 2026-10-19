@@ -62,6 +62,24 @@ def auth_client(
     engine.dispose()
 
 
+def mobile_login_headers(client: TestClient) -> dict[str, str]:
+    """Authenticate a Mobile client and return Bearer headers."""
+
+    response = client.post(
+        "/api/v1/auth/mobile/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert response.status_code == 200
+
+    return {
+        "Authorization": f"Bearer {response.json()['access_token']}",
+    }
+
+
 def test_login_returns_user_and_sets_httponly_cookie(
     auth_client: tuple[TestClient, Session],
 ) -> None:
@@ -584,3 +602,154 @@ def test_mobile_login_does_not_create_web_cookie(
 
     assert me_response.status_code == 401
 
+
+
+
+
+def test_mobile_me_requires_bearer_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.get("/api/v1/auth/mobile/me")
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_mobile_me_returns_authenticated_user(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers=mobile_login_headers(client),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "goncalo"
+    assert "password_hash" not in response.json()
+
+
+def test_mobile_me_rejects_invalid_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_me_rejects_revoked_session(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    headers = mobile_login_headers(client)
+    token = headers["Authorization"].removeprefix("Bearer ")
+
+    token_service = AccessTokenService(
+        secret_key="beenaround-test-secret-key-32-bytes-minimum",
+        expire_minutes=15,
+    )
+
+    claims = token_service.validate(token)
+
+    service = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=30,
+    )
+
+    assert service.revoke(session_id=claims.session_id)
+
+    response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers=headers,
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_me_rejects_web_session_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    web_login_response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "login": "goncalo",
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert web_login_response.status_code == 200
+
+    user = session.query(User).filter_by(username="goncalo").one()
+
+    web_session_credential = client.cookies.get("beenaround_session")
+
+    assert web_session_credential is not None
+
+    web_session = AuthSessionService(
+        session=session,
+        repository=AuthSessionRepository(session),
+        idle_expire_days=30,
+    ).resolve(web_session_credential)
+
+    assert web_session is not None
+
+    token = AccessTokenService(
+        secret_key="beenaround-test-secret-key-32-bytes-minimum",
+        expire_minutes=15,
+    ).create(
+        user_id=user.id,
+        session_id=web_session.id,
+    )
+
+    response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_me_rejects_inactive_user(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, session = auth_client
+
+    headers = mobile_login_headers(client)
+
+    user = session.query(User).filter_by(username="goncalo").one()
+    user.is_active = False
+    session.commit()
+
+    response = client.get(
+        "/api/v1/auth/mobile/me",
+        headers=headers,
+    )
+
+    assert response.status_code == 401
+
+
+def test_web_me_does_not_accept_mobile_bearer_token(
+    auth_client: tuple[TestClient, Session],
+) -> None:
+    client, _ = auth_client
+
+    headers = mobile_login_headers(client)
+
+    response = client.get(
+        "/api/v1/auth/me",
+        headers=headers,
+    )
+
+    assert response.status_code == 401

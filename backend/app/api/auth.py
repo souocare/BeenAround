@@ -3,7 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import CurrentAuthentication, CurrentUser
+from app.api.dependencies import (
+    CurrentAuthentication,
+    CurrentMobileUser,
+    CurrentUser,
+)
 from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
@@ -170,3 +174,14 @@ def mobile_login(
         expires_in=int(token_service.expiration.total_seconds()),
         user=SetupResponse.model_validate(user),
     )
+
+@router.get(
+    "/mobile/me",
+    response_model=SetupResponse,
+)
+def get_mobile_me(
+    user: CurrentMobileUser,
+) -> SetupResponse:
+    """Return the currently authenticated Mobile user."""
+
+    return SetupResponse.model_validate(user)

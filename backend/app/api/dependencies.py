@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 from typing import Annotated
+from datetime import UTC, datetime
+
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,6 +14,13 @@ from app.models.auth_session import AuthSession, AuthSessionType
 from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
 from app.services.auth_sessions import AuthSessionService
+
+from app.core.access_tokens import (
+    AccessTokenService,
+    InvalidAccessTokenError,
+)
+from app.models.auth_session import AuthSession, AuthSessionType
+from app.services.auth_sessions import normalize_datetime
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
 ApplicationSettings = Annotated[Settings, Depends(get_settings)]
@@ -61,6 +71,71 @@ def get_authenticated_user(
         auth_session=auth_session,
     )
 
+mobile_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_authenticated_mobile_user(
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(mobile_bearer_scheme),
+    ],
+) -> AuthenticatedUser:
+    """Resolve an active Mobile session from a Bearer access token."""
+
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise unauthorized
+
+    if not settings.secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mobile authentication is not configured.",
+        )
+
+    token_service = AccessTokenService(
+        secret_key=settings.secret_key,
+        expire_minutes=settings.access_token_expire_minutes,
+    )
+
+    try:
+        claims = token_service.validate(credentials.credentials)
+    except InvalidAccessTokenError as error:
+        raise unauthorized from error
+
+    auth_session = AuthSessionRepository(session).get_by_id(claims.session_id)
+
+    if auth_session is None:
+        raise unauthorized
+
+    if auth_session.session_type != AuthSessionType.MOBILE:
+        raise unauthorized
+
+    if auth_session.user_id != claims.user_id:
+        raise unauthorized
+
+    if auth_session.revoked_at is not None:
+        raise unauthorized
+
+    if normalize_datetime(auth_session.expires_at) <= datetime.now(UTC):
+        raise unauthorized
+
+    user = session.get(User, claims.user_id)
+
+    if user is None or not user.is_active:
+        raise unauthorized
+
+    return AuthenticatedUser(
+        user=user,
+        auth_session=auth_session,
+    )
+
 
 CurrentAuthentication = Annotated[
     AuthenticatedUser,
@@ -93,3 +168,22 @@ def require_admin(
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+CurrentMobileAuthentication = Annotated[
+    AuthenticatedUser,
+    Depends(get_authenticated_mobile_user),
+]
+
+
+def get_current_mobile_user(
+    authentication: CurrentMobileAuthentication,
+) -> User:
+    """Return the current active Mobile user."""
+    return authentication.user
+
+
+CurrentMobileUser = Annotated[
+    User,
+    Depends(get_current_mobile_user),
+]
