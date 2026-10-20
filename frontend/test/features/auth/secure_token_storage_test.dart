@@ -1,4 +1,5 @@
 import 'package:beenaround/features/auth/data/secure_token_storage.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class InMemorySecureTokenStorage implements SecureTokenStorage {
@@ -47,5 +48,33 @@ void main() {
     await storage.deleteRefreshToken();
 
     expect(await storage.readRefreshToken(), isNull);
+  });
+  test('refresh tokens are isolated by server origin', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final firstServer = FlutterSecureTokenStorage(
+      serverOrigin: Uri.parse('https://travel.example.com'),
+    );
+
+    final secondServer = FlutterSecureTokenStorage(
+      serverOrigin: Uri.parse('https://other.example.com'),
+    );
+
+    await firstServer.writeRefreshToken('token-server-a');
+
+    expect(await firstServer.readRefreshToken(), 'token-server-a');
+
+    expect(await secondServer.readRefreshToken(), isNull);
+
+    await secondServer.writeRefreshToken('token-server-b');
+
+    expect(await firstServer.readRefreshToken(), 'token-server-a');
+
+    expect(await secondServer.readRefreshToken(), 'token-server-b');
+
+    await firstServer.deleteRefreshToken();
+
+    expect(await firstServer.readRefreshToken(), isNull);
+    expect(await secondServer.readRefreshToken(), 'token-server-b');
   });
 }

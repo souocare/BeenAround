@@ -34,6 +34,7 @@ class AuthCubit extends Cubit<AuthState> {
   int _sessionGeneration = 0;
 
   String? get accessToken => _accessToken;
+  int get sessionGeneration => _sessionGeneration;
 
   bool _isCurrent(int generation) {
     return !isClosed && generation == _sessionGeneration;
@@ -130,6 +131,25 @@ class AuthCubit extends Cubit<AuthState> {
       if (_isCurrent(generation)) {
         emit(const AuthState(phase: AuthPhase.unavailable));
       }
+    }
+  }
+
+  Future<void> invalidateSession({required int expectedGeneration}) async {
+    if (!_isCurrent(expectedGeneration)) return;
+
+    final generation = ++_sessionGeneration;
+
+    _accessToken = null;
+    _refreshToken = null;
+
+    await _withStorageLock(() async {
+      if (!_isCurrent(generation)) return;
+
+      await _tokenStorage?.deleteRefreshToken();
+    });
+
+    if (_isCurrent(generation)) {
+      emit(const AuthState(phase: AuthPhase.unauthenticated));
     }
   }
 
@@ -257,15 +277,17 @@ class AuthCubit extends Cubit<AuthState> {
 
     if (isClosed) return Future<void>.value();
 
-    ++_sessionGeneration;
-
+    final generation = ++_sessionGeneration;
     final refreshToken = _refreshToken;
 
-    // Remove access immediately so no new authenticated requests use it.
+    // Immediately prevent new requests from using the old credentials.
     _accessToken = null;
     _refreshToken = null;
 
-    final future = _performLogout(refreshToken);
+    final future = _performLogout(
+      refreshToken: refreshToken,
+      generation: generation,
+    );
 
     _logoutInProgress = future;
 
@@ -276,7 +298,10 @@ class AuthCubit extends Cubit<AuthState> {
     });
   }
 
-  Future<void> _performLogout(String? refreshToken) async {
+  Future<void> _performLogout({
+    required String? refreshToken,
+    required int generation,
+  }) async {
     try {
       await _sessionRepository.logout(
         refreshToken: _isWeb ? null : refreshToken,
@@ -284,9 +309,13 @@ class AuthCubit extends Cubit<AuthState> {
     } on SessionException {
       // Local logout must complete even if the server is unavailable.
     } finally {
-      await _clearLocalSession();
+      await _withStorageLock(() async {
+        if (!_isCurrent(generation)) return;
 
-      if (!isClosed) {
+        await _tokenStorage?.deleteRefreshToken();
+      });
+
+      if (_isCurrent(generation)) {
         emit(const AuthState(phase: AuthPhase.unauthenticated));
       }
     }

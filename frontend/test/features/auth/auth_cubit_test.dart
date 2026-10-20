@@ -48,6 +48,7 @@ class FakeSessionRepository implements SessionRepository {
   SessionException? currentUserError;
   SessionException? refreshError;
   SessionException? logoutError;
+  Completer<void>? logoutCompleter;
 
   MobileSession refreshedSession = const MobileSession(
     accessToken: 'new-access',
@@ -97,6 +98,10 @@ class FakeSessionRepository implements SessionRepository {
 
     if (logoutError != null) {
       throw logoutError!;
+    }
+
+    if (logoutCompleter != null) {
+      await logoutCompleter!.future;
     }
   }
 }
@@ -447,6 +452,54 @@ void main() {
       expect(cubit.state.phase, AuthPhase.unauthenticated);
       expect(cubit.accessToken, isNull);
       expect(storage.token, isNull);
+    });
+    test('old logout does not clear a newer login session', () async {
+      repository.logoutCompleter = Completer<void>();
+
+      final cubit = createMobileCubit();
+      addTearDown(cubit.close);
+
+      // Authenticate session A.
+      await cubit.acceptLogin(
+        const LoginResult(
+          user: testUser,
+          accessToken: 'access-a',
+          refreshToken: 'refresh-a',
+          expiresIn: 900,
+        ),
+      );
+
+      expect(storage.token, 'refresh-a');
+
+      // Start logout, but keep the server response pending.
+      final pendingLogout = cubit.logout();
+
+      expect(cubit.accessToken, isNull);
+      expect(repository.logoutCalls, 1);
+      expect(repository.lastRefreshToken, 'refresh-a');
+
+      // Authenticate session B before the old logout completes.
+      await cubit.acceptLogin(
+        const LoginResult(
+          user: testUser,
+          accessToken: 'access-b',
+          refreshToken: 'refresh-b',
+          expiresIn: 900,
+        ),
+      );
+
+      expect(cubit.state.phase, AuthPhase.authenticated);
+      expect(cubit.accessToken, 'access-b');
+      expect(storage.token, 'refresh-b');
+
+      // Complete logout for session A.
+      repository.logoutCompleter!.complete();
+      await pendingLogout;
+
+      // Session B must remain untouched.
+      expect(cubit.state.phase, AuthPhase.authenticated);
+      expect(cubit.accessToken, 'access-b');
+      expect(storage.token, 'refresh-b');
     });
   });
 }
