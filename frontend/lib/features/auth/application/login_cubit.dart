@@ -54,4 +54,15 @@ class LoginCubit extends Cubit<LoginState> {
       );
     }
   }
+
+  void sessionPersistenceFailed() {
+    if (isClosed || state.phase != LoginPhase.success) return;
+
+    emit(
+      const LoginState(
+        phase: LoginPhase.failure,
+        failure: LoginFailure.unexpected,
+      ),
+    );
+  }
 }

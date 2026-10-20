@@ -1,3 +1,4 @@
+import 'package:beenaround/features/auth/presentation/authentication_gateway.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -75,11 +76,13 @@ class AppBootstrapPage extends StatelessWidget {
               ),
             );
 
-          case AppBootstrapPhase.login:
-            return _BootstrapDestinationPage(
-              title: 'Welcome back',
-              message: 'Sign in to continue your travel story.',
-              serverConfig: state.serverConfig,
+          case AppBootstrapPhase.authentication:
+            final serverConfig = state.serverConfig!;
+
+            return AuthenticationGateway(
+              key: ValueKey(serverConfig.baseUrl.toString()),
+              serverConfig: serverConfig,
+              isWeb: isWeb,
             );
 
           case AppBootstrapPhase.unavailable:

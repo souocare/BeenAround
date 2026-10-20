@@ -90,7 +90,7 @@ void main() {
 
     await cubit.initialize();
 
-    expect(cubit.state.phase, AppBootstrapPhase.login);
+    expect(cubit.state.phase, AppBootstrapPhase.authentication);
 
     await cubit.close();
   });
@@ -129,7 +129,7 @@ void main() {
 
     await cubit.initialize();
 
-    expect(cubit.state.phase, AppBootstrapPhase.login);
+    expect(cubit.state.phase, AppBootstrapPhase.authentication);
     expect(repository.loadCount, 0);
 
     await cubit.close();

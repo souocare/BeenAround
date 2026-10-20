@@ -1,0 +1,239 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../core/config/server_config.dart';
+import '../../../core/network/api_client.dart';
+import '../application/auth_cubit.dart';
+import '../application/auth_state.dart';
+import '../application/login_cubit.dart';
+import '../data/login_repository.dart';
+import '../data/secure_token_storage.dart';
+import '../data/session_repository.dart';
+import 'pages/login_page.dart';
+
+class AuthenticationDependencies {
+  const AuthenticationDependencies({
+    required this.loginRepository,
+    required this.sessionRepository,
+    required this.tokenStorage,
+  });
+
+  final LoginRepository loginRepository;
+  final SessionRepository sessionRepository;
+  final SecureTokenStorage? tokenStorage;
+}
+
+typedef AuthenticationDependenciesFactory =
+    AuthenticationDependencies Function(
+      ApiClient apiClient,
+      ServerConfig serverConfig,
+      bool isWeb,
+    );
+
+class AuthenticationGateway extends StatefulWidget {
+  const AuthenticationGateway({
+    required this.serverConfig,
+    required this.isWeb,
+    this.dependenciesFactory,
+    super.key,
+  });
+
+  final ServerConfig serverConfig;
+  final bool isWeb;
+  final AuthenticationDependenciesFactory? dependenciesFactory;
+
+  @override
+  State<AuthenticationGateway> createState() => _AuthenticationGatewayState();
+}
+
+class _AuthenticationGatewayState extends State<AuthenticationGateway> {
+  late final ApiClient _apiClient;
+  late final AuthCubit _authCubit;
+  late final AuthenticationDependencies _dependencies;
+  late final LoginCubit _loginCubit;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _apiClient = ApiClient(serverConfig: widget.serverConfig);
+
+    _dependencies =
+        widget.dependenciesFactory?.call(
+          _apiClient,
+          widget.serverConfig,
+          widget.isWeb,
+        ) ??
+        AuthenticationDependencies(
+          loginRepository: ApiLoginRepository(
+            apiClient: _apiClient,
+            isWeb: widget.isWeb,
+          ),
+          sessionRepository: ApiSessionRepository(
+            apiClient: _apiClient,
+            isWeb: widget.isWeb,
+          ),
+          tokenStorage: widget.isWeb
+              ? null
+              : FlutterSecureTokenStorage(
+                  serverOrigin: widget.serverConfig.baseUrl,
+                ),
+        );
+
+    _authCubit = AuthCubit(
+      sessionRepository: _dependencies.sessionRepository,
+      tokenStorage: _dependencies.tokenStorage,
+      isWeb: widget.isWeb,
+    );
+
+    _loginCubit = LoginCubit(repository: _dependencies.loginRepository);
+
+    _apiClient.configureAuthentication(
+      authCubit: _authCubit,
+      isWeb: widget.isWeb,
+    );
+
+    _authCubit.restoreSession();
+  }
+
+  @override
+  void dispose() {
+    _loginCubit.close();
+    _authCubit.close();
+    _apiClient.dio.close(force: true);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _authCubit,
+      child: BlocBuilder<AuthCubit, AuthState>(
+        builder: (context, state) {
+          switch (state.phase) {
+            case AuthPhase.initial:
+            case AuthPhase.restoring:
+              return const _AuthenticationLoadingPage();
+
+            case AuthPhase.unauthenticated:
+              return BlocProvider.value(
+                value: _loginCubit,
+                child: LoginPage(onAuthenticated: _acceptLogin),
+              );
+
+            case AuthPhase.authenticated:
+              return _AuthenticatedHomePage(
+                username:
+                    state.user?.displayName ??
+                    state.user?.username ??
+                    'Traveler',
+                onLogout: _authCubit.logout,
+              );
+
+            case AuthPhase.unavailable:
+              return _AuthenticationUnavailablePage(
+                onRetry: _authCubit.restoreSession,
+              );
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _acceptLogin(LoginResult result) async {
+    try {
+      await _authCubit.acceptLogin(result);
+    } catch (_) {
+      if (!mounted) return;
+
+      _loginCubit.sessionPersistenceFailed();
+    }
+  }
+}
+
+class _AuthenticationLoadingPage extends StatelessWidget {
+  const _AuthenticationLoadingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}
+
+class _AuthenticationUnavailablePage extends StatelessWidget {
+  const _AuthenticationUnavailablePage({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 64),
+              const SizedBox(height: 20),
+              const Text(
+                'Unable to restore your session.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(onPressed: onRetry, child: const Text('Try Again')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthenticatedHomePage extends StatelessWidget {
+  const _AuthenticatedHomePage({
+    required this.username,
+    required this.onLogout,
+  });
+
+  final String username;
+  final Future<void> Function() onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('BeenAround'),
+        actions: [
+          IconButton(
+            tooltip: 'Sign Out',
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout_outlined),
+          ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.public, size: 72),
+              const SizedBox(height: 24),
+              Text(
+                'Welcome, $username!',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Your travel history starts here.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

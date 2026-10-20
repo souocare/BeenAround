@@ -81,7 +81,7 @@ class AppBootstrapCubit extends Cubit<AppBootstrapState> {
 
     final phase = switch (result.status) {
       ServerProbeStatus.setupRequired => AppBootstrapPhase.firstRunSetup,
-      ServerProbeStatus.ready => AppBootstrapPhase.login,
+      ServerProbeStatus.ready => AppBootstrapPhase.authentication,
       ServerProbeStatus.unavailable => AppBootstrapPhase.unavailable,
       ServerProbeStatus.incompatible => AppBootstrapPhase.incompatible,
     };
@@ -104,7 +104,7 @@ class AppBootstrapCubit extends Cubit<AppBootstrapState> {
 
     emit(
       AppBootstrapState(
-        phase: AppBootstrapPhase.login,
+        phase: AppBootstrapPhase.authentication,
         serverConfig: state.serverConfig,
       ),
     );

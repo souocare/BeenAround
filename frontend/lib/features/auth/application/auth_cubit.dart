@@ -258,16 +258,8 @@ class AuthCubit extends Cubit<AuthState> {
     return session;
   }
 
-  Future<void> _invalidateSession(int generation) async {
-    if (!_isCurrent(generation)) return;
-
-    ++_sessionGeneration;
-
-    await _clearLocalSession();
-
-    if (!isClosed) {
-      emit(const AuthState(phase: AuthPhase.unauthenticated));
-    }
+  Future<void> _invalidateSession(int generation) {
+    return invalidateSession(expectedGeneration: generation);
   }
 
   Future<void> logout() {
@@ -319,18 +311,5 @@ class AuthCubit extends Cubit<AuthState> {
         emit(const AuthState(phase: AuthPhase.unauthenticated));
       }
     }
-  }
-
-  Future<void> _clearLocalSession() async {
-    _accessToken = null;
-    _refreshToken = null;
-
-    if (_isWeb) return;
-
-    final storage = _tokenStorage;
-
-    if (storage == null) return;
-
-    await _withStorageLock(storage.deleteRefreshToken);
   }
 }

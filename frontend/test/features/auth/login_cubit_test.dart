@@ -94,4 +94,21 @@ void main() {
 
     expect(repository.callCount, 1);
   });
+  test('allows retry after session persistence failure', () async {
+    final cubit = LoginCubit(repository: repository);
+    addTearDown(cubit.close);
+
+    await cubit.submit(login: 'goncalo', password: 'valid-password');
+
+    expect(cubit.state.phase, LoginPhase.success);
+
+    cubit.sessionPersistenceFailed();
+
+    expect(cubit.state.phase, LoginPhase.failure);
+    expect(cubit.state.failure, LoginFailure.unexpected);
+
+    await cubit.submit(login: 'goncalo', password: 'valid-password');
+
+    expect(cubit.state.phase, LoginPhase.success);
+  });
 }

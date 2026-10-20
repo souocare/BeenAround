@@ -6,7 +6,7 @@ enum AppBootstrapPhase {
   serverSetup,
   checking,
   firstRunSetup,
-  login,
+  authentication,
   unavailable,
   incompatible,
 }
