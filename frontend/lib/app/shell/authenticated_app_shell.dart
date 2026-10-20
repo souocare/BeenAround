@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../features/auth/domain/authenticated_user.dart';
 import 'app_destination.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../theme/theme_cubit.dart';
 
 class AuthenticatedAppShell extends StatefulWidget {
   const AuthenticatedAppShell({
@@ -195,27 +198,182 @@ class _ProfilePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircleAvatar(radius: 36, child: Icon(Icons.person, size: 36)),
-            const SizedBox(height: 20),
-            Text(
-              user.displayName,
-              style: Theme.of(context).textTheme.headlineSmall,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: colors.surfaceContainerHigh,
+                child: Icon(Icons.person, size: 36, color: colors.primary),
+              ),
+
+              const SizedBox(height: 20),
+
+              Text(
+                user.displayName,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall,
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                '@${user.username}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+
+              const SizedBox(height: 36),
+
+              Text(
+                'Appearance',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Choose how BeenAround looks on this device.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              BlocBuilder<ThemeCubit, ThemeMode>(
+                builder: (context, selectedMode) {
+                  return Column(
+                    children: [
+                      _ThemeOption(
+                        title: 'Dark',
+                        subtitle: 'Use the dark appearance.',
+                        icon: Icons.dark_mode_outlined,
+                        mode: ThemeMode.dark,
+                        selectedMode: selectedMode,
+                      ),
+                      _ThemeOption(
+                        title: 'Light',
+                        subtitle: 'Use the light appearance.',
+                        icon: Icons.light_mode_outlined,
+                        mode: ThemeMode.light,
+                        selectedMode: selectedMode,
+                      ),
+                      _ThemeOption(
+                        title: 'System',
+                        subtitle: 'Follow your device settings.',
+                        icon: Icons.brightness_auto_outlined,
+                        mode: ThemeMode.system,
+                        selectedMode: selectedMode,
+                      ),
+                    ],
+                  );
+                },
+              ),
+
+              const SizedBox(height: 32),
+
+              FilledButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout),
+                label: const Text('Sign Out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  const _ThemeOption({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.mode,
+    required this.selectedMode,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final ThemeMode mode;
+  final ThemeMode selectedMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final selected = mode == selectedMode;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected
+            ? colors.primary.withValues(alpha: 0.10)
+            : colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            context.read<ThemeCubit>().setThemeMode(mode);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? colors.primary : colors.outline,
+              ),
             ),
-            const SizedBox(height: 8),
-            Text('@${user.username}'),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout),
-              label: const Text('Sign Out'),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
+                ),
+
+                const SizedBox(width: 16),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (selected) Icon(Icons.check_circle, color: colors.primary),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

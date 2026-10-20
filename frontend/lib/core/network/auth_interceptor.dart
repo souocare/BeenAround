@@ -5,12 +5,10 @@ import '../../features/auth/data/session_repository.dart';
 
 class AuthInterceptor extends Interceptor {
   AuthInterceptor({
-    required Dio dio,
-    required AuthCubit authCubit,
-    required bool isWeb,
-  }) : _dio = dio,
-       _authCubit = authCubit,
-       _isWeb = isWeb;
+    required this._dio,
+    required this._authCubit,
+    required this._isWeb,
+  });
 
   final Dio _dio;
   final AuthCubit _authCubit;

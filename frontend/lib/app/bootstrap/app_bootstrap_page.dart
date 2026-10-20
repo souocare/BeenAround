@@ -123,10 +123,7 @@ class _BootstrapLoadingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF111217),
-      body: Center(child: CircularProgressIndicator(color: Color(0xFFE63E00))),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
@@ -143,8 +140,10 @@ class _BootstrapDestinationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF111217),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -152,35 +151,34 @@ class _BootstrapDestinationPage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.explore_outlined,
                   size: 72,
-                  color: Color(0xFFE63E00),
+                  color: colorScheme.primary,
                 ),
                 const SizedBox(height: 24),
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 28,
+                  style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFFD3AAA2)),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 if (serverConfig != null) ...[
                   const SizedBox(height: 24),
                   Text(
                     serverConfig!.baseUrl.toString(),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF88888F),
-                      fontSize: 12,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -208,8 +206,10 @@ class _BootstrapErrorPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF111217),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -219,27 +219,25 @@ class _BootstrapErrorPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.cloud_off_outlined,
                     size: 64,
-                    color: Color(0xFFE63E00),
+                    color: colorScheme.primary,
                   ),
                   const SizedBox(height: 24),
                   Text(
                     title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 26,
+                    style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     message,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFFD3AAA2),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),

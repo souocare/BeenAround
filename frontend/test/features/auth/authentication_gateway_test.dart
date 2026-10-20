@@ -10,6 +10,12 @@ import 'package:beenaround/features/auth/presentation/authentication_gateway.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/app/shell/authenticated_app_shell.dart';
+import 'package:beenaround/app/theme/theme_cubit.dart';
+import 'package:beenaround/app/theme/theme_preference_repository.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 const testUser = AuthenticatedUser(
   id: 'user-1',
@@ -109,11 +115,24 @@ void main() {
   late FakeLoginRepository loginRepository;
   late FakeSessionRepository sessionRepository;
   late FakeTokenStorage tokenStorage;
+  late ThemeCubit themeCubit;
 
   setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+
     loginRepository = FakeLoginRepository();
     sessionRepository = FakeSessionRepository();
     tokenStorage = FakeTokenStorage();
+
+    themeCubit = ThemeCubit(
+      repository: ThemePreferenceRepository(
+        preferences: SharedPreferencesAsync(),
+      ),
+    );
+  });
+  tearDown(() async {
+    await themeCubit.close();
   });
 
   ServerConfig server(String address) {
@@ -126,15 +145,18 @@ void main() {
   }) {
     final config = server(address);
 
-    return MaterialApp(
-      home: AuthenticationGateway(
-        key: ValueKey(config.baseUrl.toString()),
-        serverConfig: config,
-        isWeb: isWeb,
-        dependenciesFactory: (_, _, _) => AuthenticationDependencies(
-          loginRepository: loginRepository,
-          sessionRepository: sessionRepository,
-          tokenStorage: isWeb ? null : tokenStorage,
+    return BlocProvider.value(
+      value: themeCubit,
+      child: MaterialApp(
+        home: AuthenticationGateway(
+          key: ValueKey(config.baseUrl.toString()),
+          serverConfig: config,
+          isWeb: isWeb,
+          dependenciesFactory: (_, _, _) => AuthenticationDependencies(
+            loginRepository: loginRepository,
+            sessionRepository: sessionRepository,
+            tokenStorage: isWeb ? null : tokenStorage,
+          ),
         ),
       ),
     );
@@ -208,7 +230,13 @@ void main() {
     await tester.pumpAndSettle();
 
     // Logout.
-    await tester.tap(find.text('Sign Out'));
+    // Scroll to the logout action before tapping.
+    final signOutButton = find.widgetWithText(FilledButton, 'Sign Out');
+
+    await tester.ensureVisible(signOutButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(signOutButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Sign In'), findsOneWidget);

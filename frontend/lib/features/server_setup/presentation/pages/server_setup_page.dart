@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../app/theme/app_tokens.dart';
 import '../../application/server_setup_cubit.dart';
 import '../../application/server_setup_state.dart';
+import '../../../../app/theme/app_colors.dart';
 
 class ServerSetupPage extends StatefulWidget {
   const ServerSetupPage({super.key});
@@ -12,11 +14,6 @@ class ServerSetupPage extends StatefulWidget {
 }
 
 class _ServerSetupPageState extends State<ServerSetupPage> {
-  static const _background = Color(0xFF111217);
-  static const _fieldBackground = Color(0xFF1B1C23);
-  static const _accent = Color(0xFFE63E00);
-  static const _mutedText = Color(0xFFD3AAA2);
-
   final _serverController = TextEditingController();
 
   @override
@@ -28,7 +25,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -41,7 +37,11 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [_buildHeader(), _buildForm(), _buildFooter()],
+                      children: [
+                        _buildHeader(context),
+                        _buildForm(),
+                        _buildFooter(context),
+                      ],
                     ),
                   ),
                 ),
@@ -53,50 +53,54 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(top: 36),
       child: Column(
         children: [
-          _buildCompass(),
-          const SizedBox(height: 24),
-          const Text(
+          _buildCompass(context),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
             'BeenAround',
-            style: TextStyle(
-              fontSize: 18,
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: Color(0xFFE7E5EB),
             ),
           ),
-          const SizedBox(height: 12),
-          const Text(
+          const SizedBox(height: AppSpacing.md),
+          Text(
             'Connect to your server',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 30,
+            style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
               letterSpacing: -0.8,
-              color: Color(0xFFE7E5EB),
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
+          const SizedBox(height: AppSpacing.xs),
+          Text(
             'Your travels. Your server. Your story.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Color(0xFFF0A89D)),
+            style: theme.textTheme.bodyLarge?.copyWith(color: colors.secondary),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Enter your BeenAround server address to\nget started.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, height: 1.5, color: _mutedText),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+              height: 1.5,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCompass() {
+  Widget _buildCompass(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: 86,
       height: 86,
@@ -108,13 +112,13 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
             height: 78,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF1D1E25),
-              border: Border.all(color: const Color(0xFF343039)),
+              color: colors.surfaceContainerHigh,
+              border: Border.all(color: colors.outline),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.explore_outlined,
               size: 43,
-              color: Color(0xFF6F5150),
+              color: colors.onSurfaceVariant,
             ),
           ),
           Positioned(
@@ -123,14 +127,14 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
             child: Container(
               width: 32,
               height: 32,
-              decoration: const BoxDecoration(
-                color: _background,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.navigation_rounded,
                 size: 22,
-                color: _accent,
+                color: colors.primary,
               ),
             ),
           ),
@@ -142,6 +146,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   Widget _buildForm() {
     return BlocBuilder<ServerSetupCubit, ServerSetupState>(
       builder: (context, state) {
+        final theme = Theme.of(context);
+        final colors = theme.colorScheme;
         final cubit = context.read<ServerSetupCubit>();
 
         final isBusy = state.isChecking || state.isSaving;
@@ -151,13 +157,13 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'SERVER ADDRESS',
-                style: TextStyle(
+                style: theme.textTheme.labelSmall?.copyWith(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.8,
-                  color: _mutedText,
+                  color: colors.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 6),
@@ -171,46 +177,50 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                 enableSuggestions: false,
                 onChanged: cubit.addressChanged,
                 onSubmitted: (_) => cubit.testConnection(),
-                style: const TextStyle(fontSize: 15, color: Color(0xFFE7E5EB)),
+                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 15),
                 decoration: InputDecoration(
                   hintText: 'https://beenaround.example.com',
-                  hintStyle: const TextStyle(color: Color(0xFF76504C)),
-                  prefixIcon: const Icon(
+                  hintStyle: TextStyle(color: colors.onSurfaceVariant),
+                  prefixIcon: Icon(
                     Icons.dns_outlined,
-                    color: _mutedText,
+                    color: colors.onSurfaceVariant,
                     size: 20,
                   ),
                   filled: true,
-                  fillColor: _fieldBackground,
+                  fillColor: colors.surfaceContainerHigh,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: BorderSide.none,
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _accent, width: 1.5),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderSide: BorderSide(color: colors.primary, width: 1.5),
                   ),
                 ),
               ),
 
               const SizedBox(height: 10),
 
-              const Text(
+              Text(
                 'Connect to your own self-hosted BeenAround instance '
                 'or private server.',
-                style: TextStyle(fontSize: 12, height: 1.4, color: _mutedText),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: colors.onSurfaceVariant,
+                ),
               ),
 
               if (state.showHttpWarning) ...[
-                const SizedBox(height: 16),
-                _buildHttpWarning(),
+                const SizedBox(height: AppSpacing.lg),
+                _buildHttpWarning(context),
               ],
 
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
               // Secondary action: verify the server.
               SizedBox(
@@ -230,10 +240,10 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         : 'Test Connection',
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFE7E5EB),
-                    side: const BorderSide(color: Color(0xFF39343B)),
+                    foregroundColor: colors.onSurface,
+                    side: BorderSide(color: colors.outline),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                 ),
@@ -243,11 +253,11 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   state.phase == ServerSetupPhase.unavailable ||
                   state.phase == ServerSetupPhase.incompatible ||
                   state.phase == ServerSetupPhase.saveFailed) ...[
-                const SizedBox(height: 16),
-                _buildConnectionStatus(state),
+                const SizedBox(height: AppSpacing.lg),
+                _buildConnectionStatus(context, state),
               ],
 
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
 
               // Primary action: enabled only after successful verification.
               SizedBox(
@@ -255,12 +265,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                 child: FilledButton(
                   onPressed: state.canConnect ? cubit.connect : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFF34343A),
-                    disabledForegroundColor: const Color(0xFF88888F),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                   child: state.isSaving
@@ -283,7 +289,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            SizedBox(width: 12),
+                            SizedBox(width: AppSpacing.md),
                             Icon(Icons.arrow_forward_rounded, size: 20),
                           ],
                         ),
@@ -296,41 +302,54 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 28),
       child: Column(
         children: [
           Container(
             constraints: const BoxConstraints(maxWidth: 320),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: AppSpacing.sm,
+            ),
             decoration: BoxDecoration(
-              color: _fieldBackground,
+              color: colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(30),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline_rounded, size: 15, color: _mutedText),
-                SizedBox(width: 8),
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 15,
+                  color: colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 Flexible(
                   child: Text(
                     'Self-hosted. Your data stays yours.',
                     textAlign: TextAlign.center,
                     softWrap: true,
-                    style: TextStyle(fontSize: 12, color: _mutedText),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          const SizedBox(height: AppSpacing.sm),
+          Text(
             'BEENAROUND MOBILE CLIENT',
-            style: TextStyle(
+            style: theme.textTheme.labelSmall?.copyWith(
               fontSize: 10,
               letterSpacing: 0.8,
-              color: Color(0xFF76504C),
+              color: colors.onSurfaceVariant,
             ),
           ),
         ],
@@ -338,27 +357,32 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
     );
   }
 
-  Widget _buildHttpWarning() {
+  Widget _buildHttpWarning(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final warningColor = colors.tertiary;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFF33271B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF76532A)),
+        color: warningColor.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: warningColor.withValues(alpha: 0.35)),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, size: 20, color: Color(0xFFFFB74D)),
-          SizedBox(width: 10),
+          Icon(Icons.warning_amber_rounded, size: 20, color: warningColor),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Unencrypted connection. HTTP does not protect '
               'your login credentials or travel data while in transit.',
-              style: TextStyle(
+              style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
                 height: 1.4,
-                color: Color(0xFFFFD6A0),
+                color: colors.onSurface,
               ),
             ),
           ),
@@ -367,40 +391,47 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
     );
   }
 
-  Widget _buildConnectionStatus(ServerSetupState state) {
+  Widget _buildConnectionStatus(BuildContext context, ServerSetupState state) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final successColor = colors.brightness == Brightness.dark
+        ? AppColors.darkSuccess
+        : AppColors.lightSuccess;
+
     final (color, icon, title, description) = switch (state.phase) {
       ServerSetupPhase.available => (
-        const Color(0xFF4CAF80),
+        successColor,
         Icons.check_circle_outline_rounded,
         'Server available',
         'BeenAround server verified.',
       ),
       ServerSetupPhase.unavailable => (
-        const Color(0xFFFF7373),
+        colors.error,
         Icons.error_outline_rounded,
         'Unable to reach server',
         'Check the address and try again.',
       ),
       ServerSetupPhase.incompatible => (
-        const Color(0xFFFF7373),
+        colors.error,
         Icons.error_outline_rounded,
         'Incompatible server',
         'This address does not appear to host BeenAround.',
       ),
       ServerSetupPhase.saveFailed => (
-        const Color(0xFFFF7373),
+        colors.error,
         Icons.error_outline_rounded,
         'Unable to save server',
         'Please try again.',
       ),
-      _ => (Colors.transparent, Icons.info_outline, '', ''),
+      _ => (colors.onSurfaceVariant, Icons.info_outline, '', ''),
     };
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: _fieldBackground,
-        borderRadius: BorderRadius.circular(12),
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +444,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: color,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -422,7 +453,10 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                 const SizedBox(height: 3),
                 Text(
                   description,
-                  style: const TextStyle(fontSize: 12, color: _mutedText),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),

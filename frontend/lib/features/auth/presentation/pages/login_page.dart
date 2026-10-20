@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../app/theme/app_tokens.dart';
 import '../../application/login_cubit.dart';
 import '../../application/login_state.dart';
 import '../../data/login_repository.dart';
@@ -15,11 +16,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const _background = Color(0xFF111217);
-  static const _surface = Color(0xFF1B1C23);
-  static const _accent = Color(0xFFE63E00);
-  static const _muted = Color(0xFFD3AAA2);
-
   final _formKey = GlobalKey<FormState>();
 
   final _loginController = TextEditingController();
@@ -35,7 +31,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     context.read<LoginCubit>().submit(
       login: _loginController.text,
@@ -45,25 +43,28 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return BlocConsumer<LoginCubit, LoginState>(
       listenWhen: (previous, current) =>
           previous.phase != current.phase &&
           current.phase == LoginPhase.success,
       listener: (context, state) {
         final result = state.result;
+
         if (result != null) {
           widget.onAuthenticated(result);
         }
       },
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: _background,
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 32,
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.xxl,
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
@@ -72,49 +73,51 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.explore_outlined,
-                          color: _accent,
+                          color: colors.primary,
                           size: 76,
                         ),
+
                         const SizedBox(height: 20),
-                        const Text(
+
+                        Text(
                           'BeenAround',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
+                          style: theme.textTheme.titleLarge?.copyWith(
                             fontSize: 19,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+
                         const SizedBox(height: 36),
-                        const Text(
+
+                        Text(
                           'Welcome back',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
+                          style: theme.textTheme.headlineLarge?.copyWith(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+
                         const SizedBox(height: 10),
-                        const Text(
+
+                        Text(
                           'Sign in to continue your travel story.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _muted, height: 1.5),
-                        ),
-                        const SizedBox(height: 40),
-
-                        const Text(
-                          'USERNAME OR EMAIL',
-                          style: TextStyle(
-                            color: _muted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.8,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            height: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 8),
+
+                        const SizedBox(height: 40),
+
+                        _buildFieldLabel(context, 'USERNAME OR EMAIL'),
+
+                        const SizedBox(height: AppSpacing.sm),
+
                         TextFormField(
                           controller: _loginController,
                           textInputAction: TextInputAction.next,
@@ -133,6 +136,7 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                           decoration: _decoration(
+                            context,
                             icon: Icons.person_outline,
                             hint: 'Username or email',
                           ),
@@ -140,23 +144,19 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 22),
 
-                        const Text(
-                          'PASSWORD',
-                          style: TextStyle(
-                            color: _muted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
+                        _buildFieldLabel(context, 'PASSWORD'),
+
+                        const SizedBox(height: AppSpacing.sm),
+
                         TextFormField(
                           controller: _passwordController,
                           obscureText: !_showPassword,
                           autocorrect: false,
                           enableSuggestions: false,
                           onFieldSubmitted: (_) {
-                            if (!state.isSubmitting) _submit();
+                            if (!state.isSubmitting) {
+                              _submit();
+                            }
                           },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -170,6 +170,7 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                           decoration: _decoration(
+                            context,
                             icon: Icons.lock_outline,
                             hint: 'Password',
                             suffix: IconButton(
@@ -190,29 +191,29 @@ class _LoginPageState extends State<LoginPage> {
 
                         if (state.phase == LoginPhase.failure) ...[
                           const SizedBox(height: 22),
-                          _errorMessage(state.failure),
+                          _errorMessage(context, state.failure),
                         ],
 
-                        const SizedBox(height: 32),
+                        const SizedBox(height: AppSpacing.xxl),
 
                         SizedBox(
                           height: 54,
                           child: FilledButton(
                             onPressed: state.isSubmitting ? null : _submit,
                             style: FilledButton.styleFrom(
-                              backgroundColor: _accent,
-                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
                               ),
                             ),
                             child: state.isSubmitting
-                                ? const SizedBox(
+                                ? SizedBox(
                                     height: 22,
                                     width: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: colors.onPrimary,
                                     ),
                                   )
                                 : const Text(
@@ -226,10 +227,13 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 30),
 
-                        const Text(
+                        Text(
                           'Your journeys. Your memories. Your space.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _muted, fontSize: 12),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
@@ -243,29 +247,54 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  InputDecoration _decoration({
-    required IconData icon,
-    required String hint,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: _muted),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: _surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _accent),
+  Widget _buildFieldLabel(BuildContext context, String label) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Text(
+      label,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: colors.onSurfaceVariant,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
       ),
     );
   }
 
-  Widget _errorMessage(LoginFailure? failure) {
+  InputDecoration _decoration(
+    BuildContext context, {
+    required IconData icon,
+    required String hint,
+    Widget? suffix,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, color: colors.onSurfaceVariant),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: colors.surfaceContainerHigh,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: BorderSide(color: colors.primary, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _errorMessage(BuildContext context, LoginFailure? failure) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     final message = switch (failure) {
       LoginFailure.invalidCredentials => 'Invalid username/email or password.',
       LoginFailure.unavailable =>
@@ -277,12 +306,15 @@ class _LoginPageState extends State<LoginPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF332020),
-        borderRadius: BorderRadius.circular(12),
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFFFF9999), fontSize: 13),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colors.onErrorContainer,
+          fontSize: 13,
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../app/theme/app_tokens.dart';
 import '../../application/first_run_setup_cubit.dart';
 import '../../application/first_run_setup_state.dart';
 import '../../data/first_run_setup_repository.dart';
@@ -15,11 +16,6 @@ class FirstRunSetupPage extends StatefulWidget {
 }
 
 class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
-  static const _background = Color(0xFF111217);
-  static const _fieldBackground = Color(0xFF1B1C23);
-  static const _accent = Color(0xFFE63E00);
-  static const _muted = Color(0xFFD3AAA2);
-
   final _formKey = GlobalKey<FormState>();
 
   final _displayNameController = TextEditingController();
@@ -45,11 +41,14 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
     if (value == null || value.trim().isEmpty) {
       return 'This field is required.';
     }
+
     return null;
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     context.read<FirstRunSetupCubit>().submit(
       displayName: _displayNameController.text,
@@ -62,6 +61,9 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return BlocConsumer<FirstRunSetupCubit, FirstRunSetupState>(
       listenWhen: (previous, current) =>
           previous.phase != current.phase &&
@@ -69,13 +71,12 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
       listener: (context, state) => widget.onCompleted(),
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: _background,
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 32,
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.xxl,
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
@@ -84,55 +85,71 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.explore_outlined,
                           size: 72,
-                          color: _accent,
+                          color: colors.primary,
                         ),
+
                         const SizedBox(height: 20),
-                        const Text(
+
+                        Text(
                           'BeenAround',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
+                          style: theme.textTheme.titleLarge?.copyWith(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+
                         const SizedBox(height: 28),
-                        const Text(
+
+                        Text(
                           'Welcome to BeenAround',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
+                          style: theme.textTheme.headlineLarge?.copyWith(
                             fontSize: 30,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+
                         const SizedBox(height: 10),
-                        const Text(
+
+                        Text(
                           'Create your administrator account to get started.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _muted, height: 1.5),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            height: 1.5,
+                          ),
                         ),
+
                         const SizedBox(height: 36),
 
                         _field(
+                          context,
                           label: 'DISPLAY NAME',
                           controller: _displayNameController,
                           icon: Icons.badge_outlined,
                           validator: (value) {
                             final error = _required(value);
-                            if (error != null) return error;
+
+                            if (error != null) {
+                              return error;
+                            }
+
                             if (value!.trim().length > 100) {
                               return 'Maximum 100 characters.';
                             }
+
                             return null;
                           },
                         ),
+
                         const SizedBox(height: 18),
 
                         _field(
+                          context,
                           label: 'USERNAME',
                           controller: _usernameController,
                           icon: Icons.person_outline,
@@ -142,39 +159,52 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
                             ).hasMatch(value!.trim().toLowerCase())) {
                               return 'Use 3–32 letters, numbers or underscores.';
                             }
+
                             return null;
                           },
                         ),
+
                         const SizedBox(height: 18),
 
                         _field(
+                          context,
                           label: 'EMAIL (OPTIONAL)',
                           controller: _emailController,
                           icon: Icons.mail_outline,
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             final email = value?.trim() ?? '';
-                            if (email.isEmpty) return null;
+
+                            if (email.isEmpty) {
+                              return null;
+                            }
+
                             if (email.length > 320 ||
                                 !RegExp(
                                   r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
                                 ).hasMatch(email)) {
                               return 'Enter a valid email address.';
                             }
+
                             return null;
                           },
                         ),
+
                         const SizedBox(height: 18),
 
                         _field(
+                          context,
                           label: 'PASSWORD',
                           controller: _passwordController,
                           icon: Icons.lock_outline,
                           obscureText: !_showPassword,
                           suffix: IconButton(
                             tooltip: 'Toggle password visibility',
-                            onPressed: () =>
-                                setState(() => _showPassword = !_showPassword),
+                            onPressed: () {
+                              setState(() {
+                                _showPassword = !_showPassword;
+                              });
+                            },
                             icon: Icon(
                               _showPassword
                                   ? Icons.visibility_off_outlined
@@ -185,25 +215,30 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
                             if (value == null || value.length < 12) {
                               return 'Use at least 12 characters.';
                             }
+
                             if (value.length > 1024) {
                               return 'Maximum 1024 characters.';
                             }
+
                             return null;
                           },
                         ),
+
                         const SizedBox(height: 18),
 
                         _field(
+                          context,
                           label: 'CONFIRM PASSWORD',
                           controller: _confirmPasswordController,
                           icon: Icons.lock_reset_outlined,
                           obscureText: !_showConfirmPassword,
                           suffix: IconButton(
                             tooltip: 'Toggle confirmation visibility',
-                            onPressed: () => setState(
-                              () =>
-                                  _showConfirmPassword = !_showConfirmPassword,
-                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showConfirmPassword = !_showConfirmPassword;
+                              });
+                            },
                             icon: Icon(
                               _showConfirmPassword
                                   ? Icons.visibility_off_outlined
@@ -214,13 +249,14 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
                             if (value != _passwordController.text) {
                               return 'Passwords do not match.';
                             }
+
                             return null;
                           },
                         ),
 
                         if (state.phase == FirstRunSetupPhase.failure) ...[
                           const SizedBox(height: 20),
-                          _errorMessage(state.failure),
+                          _errorMessage(context, state.failure),
                         ],
 
                         const SizedBox(height: 30),
@@ -230,19 +266,19 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
                           child: FilledButton(
                             onPressed: state.isSubmitting ? null : _submit,
                             style: FilledButton.styleFrom(
-                              backgroundColor: _accent,
-                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
                               ),
                             ),
                             child: state.isSubmitting
-                                ? const SizedBox(
+                                ? SizedBox(
                                     height: 20,
                                     width: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: colors.onPrimary,
                                     ),
                                   )
                                 : const Text(
@@ -256,10 +292,13 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
 
                         const SizedBox(height: 26),
 
-                        const Text(
+                        Text(
                           'Self-hosted. Your data stays yours.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: _muted),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -273,7 +312,8 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
     );
   }
 
-  Widget _field({
+  Widget _field(
+    BuildContext context, {
     required String label,
     required TextEditingController controller,
     required IconData icon,
@@ -282,19 +322,24 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
     bool obscureText = false,
     Widget? suffix,
   }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: _muted,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(height: 8),
+
+        const SizedBox(height: AppSpacing.sm),
+
         TextFormField(
           controller: controller,
           validator: validator,
@@ -302,19 +347,22 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
           obscureText: obscureText,
           autocorrect: false,
           enableSuggestions: !obscureText,
-          style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: _muted),
+            prefixIcon: Icon(icon, color: colors.onSurfaceVariant),
             suffixIcon: suffix,
             filled: true,
-            fillColor: _fieldBackground,
+            fillColor: colors.surfaceContainerHigh,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
               borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _accent),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(color: colors.primary, width: 1.5),
             ),
           ),
         ),
@@ -322,7 +370,10 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
     );
   }
 
-  Widget _errorMessage(FirstRunSetupFailure? failure) {
+  Widget _errorMessage(BuildContext context, FirstRunSetupFailure? failure) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     final message = switch (failure) {
       FirstRunSetupFailure.alreadyCompleted =>
         'Initial setup has already been completed.',
@@ -337,12 +388,15 @@ class _FirstRunSetupPageState extends State<FirstRunSetupPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF332020),
-        borderRadius: BorderRadius.circular(12),
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFFFF9999), fontSize: 13),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colors.onErrorContainer,
+          fontSize: 13,
+        ),
       ),
     );
   }

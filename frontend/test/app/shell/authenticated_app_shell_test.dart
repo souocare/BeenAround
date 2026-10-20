@@ -1,9 +1,17 @@
 import 'package:beenaround/app/shell/authenticated_app_shell.dart';
+import 'package:beenaround/app/theme/app_theme.dart';
 import 'package:beenaround/features/auth/domain/authenticated_user.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/app/theme/theme_cubit.dart';
+import 'package:beenaround/app/theme/theme_preference_repository.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
+  late ThemeCubit themeCubit;
   const user = AuthenticatedUser(
     id: 'user-1',
     username: 'goncalo',
@@ -21,17 +29,48 @@ void main() {
 
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    themeCubit = ThemeCubit(
+      repository: ThemePreferenceRepository(
+        preferences: SharedPreferencesAsync(),
+      ),
+    );
 
+    addTearDown(themeCubit.close);
     await tester.pumpWidget(
-      MaterialApp(
-        home: AuthenticatedAppShell(
-          user: user,
-          onLogout: onLogout ?? () async {},
+      BlocProvider.value(
+        value: themeCubit,
+        child: BlocBuilder<ThemeCubit, ThemeMode>(
+          builder: (context, mode) {
+            return MaterialApp(
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: mode,
+              home: AuthenticatedAppShell(
+                user: user,
+                onLogout: onLogout ?? () async {},
+              ),
+            );
+          },
         ),
       ),
     );
 
     await tester.pumpAndSettle();
+  }
+
+  Future<void> openProfile(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Profile'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appearance'), findsOneWidget);
   }
 
   tearDown(() {
@@ -293,6 +332,117 @@ void main() {
         find.text('Your visited countries, cities and flights.'),
         findsOneWidget,
       );
+    });
+    testWidgets('Profile defaults to Dark Mode', (tester) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      expect(themeCubit.state, ThemeMode.dark);
+
+      expect(find.text('Dark'), findsOneWidget);
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('System'), findsOneWidget);
+
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    });
+    testWidgets('Profile allows selecting Light Mode', (tester) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      await tester.tap(find.text('Light'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.light);
+
+      final repository = ThemePreferenceRepository(
+        preferences: SharedPreferencesAsync(),
+      );
+
+      expect(await repository.load(), ThemeMode.light);
+    });
+    testWidgets('Profile allows selecting System Mode', (tester) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      await tester.tap(find.text('System'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.system);
+
+      final repository = ThemePreferenceRepository(
+        preferences: SharedPreferencesAsync(),
+      );
+
+      expect(await repository.load(), ThemeMode.system);
+    });
+    testWidgets('Profile supports switching between all theme modes', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      await tester.tap(find.text('Light'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.light);
+
+      await tester.tap(find.text('System'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.system);
+
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.dark);
+
+      final repository = ThemePreferenceRepository(
+        preferences: SharedPreferencesAsync(),
+      );
+
+      expect(await repository.load(), ThemeMode.dark);
+    });
+    testWidgets('Theme preference survives a new ThemeCubit instance', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      await tester.tap(find.text('Light'));
+      await tester.pumpAndSettle();
+
+      expect(themeCubit.state, ThemeMode.light);
+
+      final restoredCubit = ThemeCubit(
+        repository: ThemePreferenceRepository(
+          preferences: SharedPreferencesAsync(),
+        ),
+      );
+
+      addTearDown(restoredCubit.close);
+
+      await restoredCubit.initialize();
+
+      expect(restoredCubit.state, ThemeMode.light);
+    });
+    testWidgets('Selecting Light Mode updates the application theme', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await openProfile(tester);
+
+      final profileContext = tester.element(find.text('Appearance'));
+
+      expect(Theme.of(profileContext).brightness, Brightness.dark);
+
+      await tester.tap(find.text('Light'));
+      await tester.pumpAndSettle();
+
+      final updatedContext = tester.element(find.text('Appearance'));
+
+      expect(Theme.of(updatedContext).brightness, Brightness.light);
+
+      expect(themeCubit.state, ThemeMode.light);
     });
   });
 }
