@@ -9,6 +9,7 @@ import 'package:beenaround/features/auth/domain/mobile_session.dart';
 import 'package:beenaround/features/auth/presentation/authentication_gateway.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/app/shell/authenticated_app_shell.dart';
 
 const testUser = AuthenticatedUser(
   id: 'user-1',
@@ -154,7 +155,7 @@ void main() {
     await tester.pumpWidget(createApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
     expect(sessionRepository.refreshCalls, 1);
     expect(tokenStorage.token, 'rotated-refresh');
   });
@@ -163,7 +164,7 @@ void main() {
     await tester.pumpWidget(createApp(isWeb: true));
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
     expect(sessionRepository.currentUserCalls, 1);
     expect(sessionRepository.refreshCalls, 0);
   });
@@ -190,7 +191,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(loginRepository.calls, 1);
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
     expect(tokenStorage.token, 'refresh-token');
   });
 
@@ -200,9 +201,14 @@ void main() {
     await tester.pumpWidget(createApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Sign Out'));
+    // Navigate to Profile.
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    // Logout.
+    await tester.tap(find.text('Sign Out'));
     await tester.pumpAndSettle();
 
     expect(find.text('Sign In'), findsOneWidget);
@@ -228,7 +234,7 @@ void main() {
     await tester.tap(find.text('Try Again'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
   });
 
   testWidgets('storage failure allows login retry', (tester) async {
@@ -260,7 +266,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(loginRepository.calls, 2);
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
   });
 
   testWidgets('changing server creates a new authentication session', (
@@ -289,6 +295,6 @@ void main() {
     sessionRepository.currentUserCompleter!.complete(testUser);
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome, Gonçalo!'), findsOneWidget);
+    expect(find.byType(AuthenticatedAppShell), findsOneWidget);
   });
 }

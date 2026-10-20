@@ -10,6 +10,7 @@ import '../data/login_repository.dart';
 import '../data/secure_token_storage.dart';
 import '../data/session_repository.dart';
 import 'pages/login_page.dart';
+import '../../../app/shell/authenticated_app_shell.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -122,11 +123,14 @@ class _AuthenticationGatewayState extends State<AuthenticationGateway> {
               );
 
             case AuthPhase.authenticated:
-              return _AuthenticatedHomePage(
-                username:
-                    state.user?.displayName ??
-                    state.user?.username ??
-                    'Traveler',
+              final user = state.user;
+
+              if (user == null) {
+                return const _AuthenticationLoadingPage();
+              }
+
+              return AuthenticatedAppShell(
+                user: user,
                 onLogout: _authCubit.logout,
               );
 
@@ -182,54 +186,6 @@ class _AuthenticationUnavailablePage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               FilledButton(onPressed: onRetry, child: const Text('Try Again')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthenticatedHomePage extends StatelessWidget {
-  const _AuthenticatedHomePage({
-    required this.username,
-    required this.onLogout,
-  });
-
-  final String username;
-  final Future<void> Function() onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('BeenAround'),
-        actions: [
-          IconButton(
-            tooltip: 'Sign Out',
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_outlined),
-          ),
-        ],
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.public, size: 72),
-              const SizedBox(height: 24),
-              Text(
-                'Welcome, $username!',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Your travel history starts here.',
-                textAlign: TextAlign.center,
-              ),
             ],
           ),
         ),
