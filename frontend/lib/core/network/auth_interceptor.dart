@@ -54,7 +54,7 @@ class AuthInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // Web authentication uses HttpOnly cookies.
     // Authentication endpoints manage their own credentials.
-    if (_isWeb || _isExcluded(options)) {
+    if (_isWeb || !_isBeenAroundApiRequest(options) || _isExcluded(options)) {
       handler.next(options);
       return;
     }
@@ -77,13 +77,16 @@ class AuthInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException error, ErrorInterceptorHandler handler) async {
-    final options = error.requestOptions;
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    final options = err.requestOptions;
 
     // Web authentication is handled through session cookies.
     // Only HTTP 401 responses from protected endpoints are relevant.
-    if (_isWeb || error.response?.statusCode != 401 || _isExcluded(options)) {
-      handler.next(error);
+    if (_isWeb ||
+        err.response?.statusCode != 401 ||
+        !_isBeenAroundApiRequest(options) ||
+        _isExcluded(options)) {
+      handler.next(err);
       return;
     }
 
@@ -92,7 +95,7 @@ class AuthInterceptor extends Interceptor {
     // Requests without a known session must not trigger refresh.
     // Responses from older sessions must not affect newer sessions.
     if (generation is! int || generation != _authCubit.sessionGeneration) {
-      handler.next(error);
+      handler.next(err);
       return;
     }
 
@@ -106,13 +109,13 @@ class AuthInterceptor extends Interceptor {
         await _authCubit.invalidateSession(expectedGeneration: generation);
       }
 
-      handler.next(error);
+      handler.next(err);
       return;
     }
 
     // Do not refresh if the original request cannot be replayed.
     if (!_canRetry(options)) {
-      handler.next(error);
+      handler.next(err);
       return;
     }
 
@@ -120,7 +123,7 @@ class AuthInterceptor extends Interceptor {
     final currentToken = _authCubit.accessToken;
 
     if (currentToken == null || currentToken.isEmpty) {
-      handler.next(error);
+      handler.next(err);
       return;
     }
 
@@ -133,14 +136,14 @@ class AuthInterceptor extends Interceptor {
 
       // Logout or a new login may have occurred during refresh.
       if (generation != _authCubit.sessionGeneration) {
-        handler.next(error);
+        handler.next(err);
         return;
       }
 
       final refreshedToken = _authCubit.accessToken;
 
       if (refreshedToken == null || refreshedToken.isEmpty) {
-        handler.next(error);
+        handler.next(err);
         return;
       }
 
@@ -163,10 +166,27 @@ class AuthInterceptor extends Interceptor {
         await _authCubit.invalidateSession(expectedGeneration: generation);
       }
 
-      handler.next(error);
+      handler.next(err);
     } catch (_) {
       // Preserve the original HTTP error.
-      handler.next(error);
+      handler.next(err);
     }
+  }
+
+  bool _isBeenAroundApiRequest(RequestOptions options) {
+    final apiBase = Uri.parse(_dio.options.baseUrl);
+    final requestUri = options.uri;
+
+    if (requestUri.scheme != apiBase.scheme ||
+        requestUri.host != apiBase.host ||
+        requestUri.port != apiBase.port) {
+      return false;
+    }
+
+    final apiPath = apiBase.path.endsWith('/')
+        ? apiBase.path
+        : '${apiBase.path}/';
+
+    return requestUri.path.startsWith(apiPath);
   }
 }

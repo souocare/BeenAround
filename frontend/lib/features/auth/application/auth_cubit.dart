@@ -10,13 +10,10 @@ import 'auth_state.dart';
 
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit({
-    required SessionRepository sessionRepository,
-    required SecureTokenStorage? tokenStorage,
-    required bool isWeb,
-  }) : _sessionRepository = sessionRepository,
-       _tokenStorage = tokenStorage,
-       _isWeb = isWeb,
-       super(const AuthState());
+    required this._sessionRepository,
+    required this._tokenStorage,
+    required this._isWeb,
+  }) : super(const AuthState());
 
   final SessionRepository _sessionRepository;
   final SecureTokenStorage? _tokenStorage;
@@ -238,11 +235,13 @@ class AuthCubit extends Cubit<AuthState> {
         await storage.writeRefreshToken(session.refreshToken);
       });
     } catch (_) {
-      // The backend may already have invalidated the previous refresh token.
-      // Never continue using credentials from that session.
+      // The backend may already have rotated the refresh token.
+      // The previous credentials must no longer be used.
       if (_isCurrent(generation)) {
         _accessToken = null;
         _refreshToken = null;
+
+        emit(const AuthState(phase: AuthPhase.unavailable));
       }
 
       throw const SessionException(SessionFailure.unexpected);
@@ -301,14 +300,22 @@ class AuthCubit extends Cubit<AuthState> {
     } on SessionException {
       // Local logout must complete even if the server is unavailable.
     } finally {
-      await _withStorageLock(() async {
-        if (!_isCurrent(generation)) return;
+      try {
+        await _withStorageLock(() async {
+          if (!_isCurrent(generation)) return;
 
-        await _tokenStorage?.deleteRefreshToken();
-      });
+          await _tokenStorage?.deleteRefreshToken();
+        });
 
-      if (_isCurrent(generation)) {
-        emit(const AuthState(phase: AuthPhase.unauthenticated));
+        if (_isCurrent(generation)) {
+          emit(const AuthState(phase: AuthPhase.unauthenticated));
+        }
+      } catch (_) {
+        if (_isCurrent(generation)) {
+          // A persisted refresh token may still exist.
+          // Do not report logout as successfully completed.
+          emit(const AuthState(phase: AuthPhase.unavailable));
+        }
       }
     }
   }

@@ -19,6 +19,7 @@ const testUser = AuthenticatedUser(
 class FakeTokenStorage implements SecureTokenStorage {
   String? token;
   bool failWrites = false;
+  bool failDeletes = false;
   Completer<void>? writeCompleter;
 
   @override
@@ -39,6 +40,10 @@ class FakeTokenStorage implements SecureTokenStorage {
 
   @override
   Future<void> deleteRefreshToken() async {
+    if (failDeletes) {
+      throw StateError('Secure storage deletion failed');
+    }
+
     token = null;
   }
 }
@@ -500,6 +505,27 @@ void main() {
       expect(cubit.state.phase, AuthPhase.authenticated);
       expect(cubit.accessToken, 'access-b');
       expect(storage.token, 'refresh-b');
+    });
+    test('failed token deletion does not report successful logout', () async {
+      final cubit = createMobileCubit();
+      addTearDown(cubit.close);
+
+      await cubit.acceptLogin(
+        const LoginResult(
+          user: testUser,
+          accessToken: 'login-access',
+          refreshToken: 'login-refresh',
+          expiresIn: 900,
+        ),
+      );
+
+      storage.failDeletes = true;
+
+      await cubit.logout();
+
+      expect(cubit.accessToken, isNull);
+      expect(storage.token, 'login-refresh');
+      expect(cubit.state.phase, AuthPhase.unavailable);
     });
   });
 }

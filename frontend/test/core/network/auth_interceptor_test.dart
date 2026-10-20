@@ -436,4 +436,64 @@ void main() {
     expect(requests, 1);
     expect(repository.refreshCalls, 0);
   });
+  test('Mobile does not send Bearer token to external origins', () async {
+    final (client, cubit) = await createClient(
+      isWeb: false,
+      handler: (options) {
+        expect(options.uri.host, 'external.example.com');
+        expect(options.headers.containsKey('Authorization'), isFalse);
+
+        return jsonResponse({'ok': true});
+      },
+    );
+
+    addTearDown(cubit.close);
+
+    await client.dio.get<Map<String, dynamic>>(
+      'https://external.example.com/resource',
+    );
+
+    expect(repository.refreshCalls, 0);
+  });
+  test('External 401 does not refresh or invalidate session', () async {
+    final (client, cubit) = await createClient(
+      isWeb: false,
+      handler: (options) {
+        expect(options.uri.host, 'external.example.com');
+
+        return jsonResponse({'detail': 'Unauthorized'}, statusCode: 401);
+      },
+    );
+
+    addTearDown(cubit.close);
+
+    await expectLater(
+      client.dio.get<Map<String, dynamic>>(
+        'https://external.example.com/resource',
+      ),
+      throwsA(isA<DioException>()),
+    );
+
+    expect(repository.refreshCalls, 0);
+    expect(cubit.state.phase, AuthPhase.authenticated);
+    expect(cubit.accessToken, 'old-access');
+    expect(storage.token, 'old-refresh');
+  });
+  test('Mobile does not send Bearer token outside API path', () async {
+    final (client, cubit) = await createClient(
+      isWeb: false,
+      handler: (options) {
+        expect(options.uri.path, '/public/resource');
+        expect(options.headers.containsKey('Authorization'), isFalse);
+
+        return jsonResponse({'ok': true});
+      },
+    );
+
+    addTearDown(cubit.close);
+
+    await client.dio.get<Map<String, dynamic>>(
+      'https://travel.example.com/public/resource',
+    );
+  });
 }
