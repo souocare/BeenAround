@@ -1,3 +1,5 @@
+import 'package:beenaround/app/widgets/app_error_state.dart';
+import 'package:beenaround/app/widgets/app_loading_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -160,7 +162,7 @@ class _AuthenticationLoadingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return const Scaffold(body: AppLoadingState());
   }
 }
 
@@ -172,23 +174,11 @@ class _AuthenticationUnavailablePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_outlined, size: 64),
-              const SizedBox(height: 20),
-              const Text(
-                'Unable to restore your session.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              FilledButton(onPressed: onRetry, child: const Text('Try Again')),
-            ],
-          ),
-        ),
+      body: AppErrorState(
+        title: 'Unable to restore your session.',
+        message: 'Please try again to reconnect to your BeenAround server.',
+        icon: Icons.cloud_off_outlined,
+        onRetry: onRetry,
       ),
     );
   }

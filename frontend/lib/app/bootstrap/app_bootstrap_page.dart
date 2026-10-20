@@ -1,3 +1,4 @@
+import 'package:beenaround/app/widgets/app_loading_state.dart';
 import 'package:beenaround/features/auth/presentation/authentication_gateway.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -123,7 +124,7 @@ class _BootstrapLoadingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return const Scaffold(body: AppLoadingState());
   }
 }
 
