@@ -4,9 +4,8 @@ import '../data/first_run_setup_repository.dart';
 import 'first_run_setup_state.dart';
 
 class FirstRunSetupCubit extends Cubit<FirstRunSetupState> {
-  FirstRunSetupCubit({required FirstRunSetupRepository repository})
-    : _repository = repository,
-      super(const FirstRunSetupState());
+  FirstRunSetupCubit({required this._repository})
+    : super(const FirstRunSetupState());
 
   final FirstRunSetupRepository _repository;
 

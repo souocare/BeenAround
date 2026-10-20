@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/authenticated_user.dart';
 import '../domain/mobile_session.dart';
-import 'secure_token_storage.dart';
 
 enum SessionFailure { unauthorized, unavailable, unexpected }
 
@@ -29,6 +28,9 @@ class ApiSessionRepository implements SessionRepository {
 
   @override
   Future<AuthenticatedUser> getCurrentUser({String? accessToken}) async {
+    if (!isWeb && (accessToken == null || accessToken.isEmpty)) {
+      throw const SessionException(SessionFailure.unauthorized);
+    }
     try {
       final response = await apiClient.dio.get<Map<String, dynamic>>(
         isWeb ? 'auth/me' : 'auth/mobile/me',

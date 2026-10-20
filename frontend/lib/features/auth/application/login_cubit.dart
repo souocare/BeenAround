@@ -4,9 +4,7 @@ import '../data/login_repository.dart';
 import 'login_state.dart';
 
 class LoginCubit extends Cubit<LoginState> {
-  LoginCubit({required LoginRepository repository})
-    : _repository = repository,
-      super(const LoginState());
+  LoginCubit({required this._repository}) : super(const LoginState());
 
   final LoginRepository _repository;
 
