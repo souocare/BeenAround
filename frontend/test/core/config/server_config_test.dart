@@ -26,15 +26,8 @@ void main() {
       );
     });
 
-    test('rejects HTTP by default', () {
-      expect(ServerConfig.parse('http://travel.example.com'), isNull);
-    });
-
     test('allows HTTP when explicitly enabled', () {
-      final config = ServerConfig.parse(
-        'http://192.168.1.100:8000',
-        allowHttp: true,
-      );
+      final config = ServerConfig.parse('http://192.168.1.100:8000');
 
       expect(config, isNotNull);
     });

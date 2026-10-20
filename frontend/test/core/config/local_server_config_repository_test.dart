@@ -77,27 +77,24 @@ void main() {
       expect(await repository.load(), isNull);
     });
 
-    test('rejects saving HTTP when not explicitly enabled', () async {
-      final config = ServerConfig.parse(
-        'http://192.168.1.100:8000',
-        allowHttp: true,
-      )!;
+    test('saves HTTP server configuration', () async {
+      final config = ServerConfig.parse('http://192.168.1.100:8000')!;
 
-      await expectLater(repository.save(config), throwsArgumentError);
+      await repository.save(config);
 
-      expect(await repository.load(), isNull);
+      final restored = await repository.load();
+
+      expect(restored, isNotNull);
+      expect(restored!.baseUrl.toString(), 'http://192.168.1.100:8000');
+      expect(restored.isSecure, isFalse);
     });
 
     test('allows HTTP when explicitly enabled', () async {
       final httpRepository = LocalServerConfigRepository(
         preferences: preferences,
-        allowHttp: true,
       );
 
-      final config = ServerConfig.parse(
-        'http://192.168.1.100:8000',
-        allowHttp: true,
-      )!;
+      final config = ServerConfig.parse('http://192.168.1.100:8000')!;
 
       await httpRepository.save(config);
 
@@ -118,7 +115,7 @@ void main() {
       expect(restored, isNull);
     });
 
-    test('rejects stored HTTP when HTTP is disabled', () async {
+    test('restores a previously saved HTTP server', () async {
       await preferences.setString(
         LocalServerConfigRepository.storageKey,
         'http://192.168.1.100:8000',
@@ -126,7 +123,9 @@ void main() {
 
       final restored = await repository.load();
 
-      expect(restored, isNull);
+      expect(restored, isNotNull);
+      expect(restored!.baseUrl.toString(), 'http://192.168.1.100:8000');
+      expect(restored.isSecure, isFalse);
     });
 
     test('preserves saved configuration when loading it', () async {

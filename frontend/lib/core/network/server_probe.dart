@@ -3,11 +3,16 @@ import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'server_probe_result.dart';
 
-class ServerProbe {
+abstract interface class ServerConnectivityProbe {
+  Future<ServerProbeResult> check();
+}
+
+class ServerProbe implements ServerConnectivityProbe {
   const ServerProbe({required this._apiClient});
 
   final ApiClient _apiClient;
 
+  @override
   Future<ServerProbeResult> check() async {
     try {
       final healthResponse = await _apiClient.dio.get<Object?>('health');
@@ -86,7 +91,7 @@ class ServerProbe {
 
         return ServerProbeStatus.unavailable;
       case DioExceptionType.transformTimeout:
-        throw UnimplementedError();
+        return ServerProbeStatus.unavailable;
     }
   }
 

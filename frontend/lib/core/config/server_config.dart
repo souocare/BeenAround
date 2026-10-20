@@ -5,7 +5,9 @@ class ServerConfig {
 
   final Uri baseUrl;
 
-  static ServerConfig? parse(String input, {bool allowHttp = false}) {
+  bool get isSecure => baseUrl.scheme == 'https';
+
+  static ServerConfig? parse(String input) {
     final value = input.trim();
 
     if (value.isEmpty) {
@@ -24,10 +26,6 @@ class ServerConfig {
       return null;
     }
 
-    if (uri.scheme == 'http' && !allowHttp) {
-      return null;
-    }
-
     // The server URL represents an origin, not an API endpoint.
     if (uri.path.isNotEmpty && uri.path != '/') {
       return null;
@@ -43,6 +41,6 @@ class ServerConfig {
       return null;
     }
 
-    return ServerConfig.parse(Uri.base.origin, allowHttp: true);
+    return ServerConfig.parse(Uri.base.origin);
   }
 }

@@ -4,15 +4,11 @@ import 'server_config.dart';
 import 'server_config_repository.dart';
 
 class LocalServerConfigRepository implements ServerConfigRepository {
-  LocalServerConfigRepository({
-    required this._preferences,
-    this.allowHttp = false,
-  });
+  LocalServerConfigRepository({required this._preferences});
 
   static const String storageKey = 'beenaround.server_url';
 
   final SharedPreferencesAsync _preferences;
-  final bool allowHttp;
 
   @override
   Future<ServerConfig?> load() async {
@@ -22,19 +18,11 @@ class LocalServerConfigRepository implements ServerConfigRepository {
       return null;
     }
 
-    return ServerConfig.parse(storedUrl, allowHttp: allowHttp);
+    return ServerConfig.parse(storedUrl);
   }
 
   @override
   Future<void> save(ServerConfig config) async {
-    if (config.baseUrl.scheme == 'http' && !allowHttp) {
-      throw ArgumentError.value(
-        config.baseUrl,
-        'config',
-        'HTTP server URLs are not allowed.',
-      );
-    }
-
     await _preferences.setString(storageKey, config.baseUrl.toString());
   }
 
