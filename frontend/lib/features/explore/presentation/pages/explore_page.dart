@@ -10,6 +10,7 @@ import '../../../../app/widgets/app_section_header.dart';
 import '../../application/explore_cubit.dart';
 import '../../application/explore_state.dart';
 import '../../domain/country.dart';
+import 'country_details_page.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -336,6 +337,18 @@ class _CountryCard extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        onTap: () {
+          final exploreCubit = context.read<ExploreCubit>();
+
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => BlocProvider.value(
+                value: exploreCubit,
+                child: CountryDetailsPage(country: country),
+              ),
+            ),
+          );
+        },
         leading: CircleAvatar(
           backgroundColor: colors.primaryContainer,
           child: Text(
