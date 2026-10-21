@@ -20,6 +20,17 @@ class FakeCountriesRepository implements CountriesRepository {
 
   @override
   Future<List<CountryVisit>> getCountryVisits() async => const [];
+
+  @override
+  Future<CountryVisit> createCountryVisit({
+    required String countryCode,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError(
+      'Country visit creation is not used by this test.',
+    );
+  }
 }
 
 void main() {

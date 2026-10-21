@@ -8,6 +8,8 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../core/network/auth_interceptor_test.dart';
+
 class FakeCountriesHttpAdapter implements HttpClientAdapter {
   FakeCountriesHttpAdapter(this.handler);
 
@@ -163,5 +165,123 @@ void main() {
         ),
       );
     });
+  });
+  test('creates a country visit with exact dates', () async {
+    final dio = Dio()
+      ..httpClientAdapter = FakeHttpAdapter((options) {
+        expect(options.method, 'POST');
+        expect(options.uri.path, '/api/v1/country-visits');
+
+        final payload = options.data as Map<String, dynamic>;
+
+        expect(payload, {
+          'country_code': 'PT',
+          'started_on': '2026-10-10',
+          'ended_on': '2026-10-15',
+        });
+
+        expect(payload.containsKey('user_id'), isFalse);
+
+        return ResponseBody.fromString(
+          jsonEncode({
+            'id': 'visit-1',
+            'country_code': 'PT',
+            'started_on': '2026-10-10',
+            'ended_on': '2026-10-15',
+            'created_at': '2026-10-21T06:00:00',
+            'updated_at': '2026-10-21T06:00:00',
+          }),
+          201,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+          },
+        );
+      });
+
+    final repository = ApiCountriesRepository(
+      apiClient: ApiClient(
+        serverConfig: ServerConfig.parse('https://travel.example.com')!,
+        dio: dio,
+      ),
+    );
+
+    final visit = await repository.createCountryVisit(
+      countryCode: ' pt ',
+      startedOn: DateTime(2026, 10, 10),
+      endedOn: DateTime(2026, 10, 15),
+    );
+
+    expect(visit.id, 'visit-1');
+    expect(visit.countryCode, 'PT');
+    expect(visit.startedOn, DateTime(2026, 10, 10));
+    expect(visit.endedOn, DateTime(2026, 10, 15));
+  });
+  test('creates a country visit without dates', () async {
+    final dio = Dio()
+      ..httpClientAdapter = FakeHttpAdapter((options) {
+        expect(options.method, 'POST');
+
+        expect(options.data, {
+          'country_code': 'ES',
+          'started_on': null,
+          'ended_on': null,
+        });
+
+        return ResponseBody.fromString(
+          jsonEncode({
+            'id': 'visit-2',
+            'country_code': 'ES',
+            'started_on': null,
+            'ended_on': null,
+            'created_at': '2026-10-21T06:00:00',
+            'updated_at': '2026-10-21T06:00:00',
+          }),
+          201,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+          },
+        );
+      });
+
+    final repository = ApiCountriesRepository(
+      apiClient: ApiClient(
+        serverConfig: ServerConfig.parse('https://travel.example.com')!,
+        dio: dio,
+      ),
+    );
+
+    final visit = await repository.createCountryVisit(countryCode: 'es');
+
+    expect(visit.countryCode, 'ES');
+    expect(visit.startedOn, isNull);
+    expect(visit.endedOn, isNull);
+  });
+  test('maps validation errors when creating a visit', () async {
+    final dio = Dio()
+      ..httpClientAdapter = FakeHttpAdapter((options) {
+        return ResponseBody.fromString(
+          jsonEncode({'detail': 'End date cannot be earlier than start date.'}),
+          422,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+          },
+        );
+      });
+
+    final repository = ApiCountriesRepository(
+      apiClient: ApiClient(
+        serverConfig: ServerConfig.parse('https://travel.example.com')!,
+        dio: dio,
+      ),
+    );
+
+    await expectLater(
+      repository.createCountryVisit(
+        countryCode: 'PT',
+        startedOn: DateTime(2026, 10, 15),
+        endedOn: DateTime(2026, 10, 10),
+      ),
+      throwsA(isA<ApiException>()),
+    );
   });
 }

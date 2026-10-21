@@ -41,6 +41,17 @@ class FakeCountriesRepository implements CountriesRepository {
 
     return Future.value(visits);
   }
+
+  @override
+  Future<CountryVisit> createCountryVisit({
+    required String countryCode,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError(
+      'Country visit creation is not used by this test.',
+    );
+  }
 }
 
 const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');

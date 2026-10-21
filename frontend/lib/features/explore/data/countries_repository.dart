@@ -9,6 +9,12 @@ abstract interface class CountriesRepository {
   Future<List<Country>> getCountries();
 
   Future<List<CountryVisit>> getCountryVisits();
+
+  Future<CountryVisit> createCountryVisit({
+    required String countryCode,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  });
 }
 
 class ApiCountriesRepository implements CountriesRepository {
@@ -73,5 +79,43 @@ class ApiCountriesRepository implements CountriesRepository {
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }
+  }
+
+  @override
+  Future<CountryVisit> createCountryVisit({
+    required String countryCode,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) async {
+    try {
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
+        'country-visits',
+        data: {
+          'country_code': countryCode.trim().toUpperCase(),
+          'started_on': _formatDate(startedOn),
+          'ended_on': _formatDate(endedOn),
+        },
+      );
+
+      final data = response.data;
+
+      if (data == null) {
+        throw const FormatException('Missing country visit creation response.');
+      }
+
+      return CountryVisit.fromJson(data);
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  String? _formatDate(DateTime? date) {
+    if (date == null) return null;
+
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
   }
 }
