@@ -759,3 +759,119 @@ def test_delete_rejects_external_origin(
     )
 
     assert response.status_code == 403
+
+
+def test_mobile_user_can_update_country_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+    visit_id = create_visit_for_test(visits_client)
+
+    visits_client.cookies.clear()
+    headers = login_mobile(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": "ES"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["country_code"] == "ES"
+
+
+def test_mobile_user_can_delete_country_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+    visit_id = create_visit_for_test(visits_client)
+
+    visits_client.cookies.clear()
+    headers = login_mobile(visits_client)
+
+    response = visits_client.delete(
+        f"/api/v1/country-visits/{visit_id}",
+        headers=headers,
+    )
+
+    assert response.status_code == 204
+
+
+def test_update_nonexistent_visit_returns_404(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.patch(
+        "/api/v1/country-visits/550e8400-e29b-41d4-a716-446655440000",
+        json={"country_code": "PT"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_delete_nonexistent_visit_returns_404(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.delete(
+        "/api/v1/country-visits/550e8400-e29b-41d4-a716-446655440000",
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_update_cannot_clear_start_with_existing_end(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2026-09-28",
+        ended_on="2026-10-03",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"started_on": None},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_rejects_null_country_code(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": None},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_invalid_bearer_does_not_fallback_to_cookie(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": "ES"},
+        headers={
+            "Authorization": "Bearer invalid-token",
+            "Origin": "http://testserver",
+        },
+    )
+
+    assert response.status_code == 401
