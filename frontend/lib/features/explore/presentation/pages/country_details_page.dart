@@ -5,6 +5,7 @@ import '../../application/explore_cubit.dart';
 import '../../application/explore_state.dart';
 import '../../domain/country.dart';
 import '../../domain/country_visit.dart';
+import '../widgets/show_edit_country_visit.dart';
 
 class CountryDetailsPage extends StatelessWidget {
   const CountryDetailsPage({required this.country, super.key});
@@ -93,6 +94,20 @@ class CountryDetailsPage extends StatelessWidget {
                               child: _VisitCard(
                                 visit: visits[index],
                                 number: index + 1,
+                                onEdit: () async {
+                                  final exploreCubit = context
+                                      .read<ExploreCubit>();
+
+                                  final updated = await showEditCountryVisit(
+                                    context,
+                                    country: country,
+                                    visit: visits[index],
+                                  );
+
+                                  if (updated && !exploreCubit.isClosed) {
+                                    await exploreCubit.refresh();
+                                  }
+                                },
                               ),
                             ),
                       ],
@@ -127,10 +142,15 @@ class CountryDetailsPage extends StatelessWidget {
 }
 
 class _VisitCard extends StatelessWidget {
-  const _VisitCard({required this.visit, required this.number});
+  const _VisitCard({
+    required this.visit,
+    required this.number,
+    required this.onEdit,
+  });
 
   final CountryVisit visit;
   final int number;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +159,11 @@ class _VisitCard extends StatelessWidget {
         leading: CircleAvatar(child: Text('$number')),
         title: Text('Visit $number'),
         subtitle: Text(_formatVisitDates(visit)),
+        trailing: IconButton(
+          tooltip: 'Edit visit',
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: onEdit,
+        ),
         isThreeLine: false,
       ),
     );
