@@ -189,4 +189,142 @@ void main() {
 
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
+  testWidgets('searches visited countries by name', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('1', 'PT'), visit('2', 'ES')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('visitedCountriesSearch')),
+      'port',
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsNothing);
+
+    // A pesquisa não altera as estatísticas globais.
+    expect(cubit.state.visitedCountryCount, 2);
+  });
+  testWidgets('searches visited countries by ISO codes', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('1', 'PT'), visit('2', 'ES')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+
+    final search = find.byKey(const Key('visitedCountriesSearch'));
+
+    await tester.enterText(search, 'PRT');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsNothing);
+
+    await tester.enterText(search, 'ES');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spain'), findsOneWidget);
+    expect(find.text('Portugal'), findsNothing);
+  });
+
+  testWidgets('filters countries with multiple visits', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('1', 'PT'), visit('2', 'PT'), visit('3', 'ES')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+
+    await tester.tap(find.text('Multiple visits'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsNothing);
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsOneWidget);
+  });
+
+  testWidgets('shows no matching countries for empty search results', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('1', 'PT')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+
+    await tester.enterText(
+      find.byKey(const Key('visitedCountriesSearch')),
+      'Japan',
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('No matching countries'), findsOneWidget);
+    expect(find.text('No countries visited yet'), findsNothing);
+  });
+
+  testWidgets('sorts visited countries by number of visits', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [
+          visit('1', 'PT'),
+          visit('2', 'ES'),
+          visit('3', 'ES'),
+          visit('4', 'ES'),
+        ],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+
+    await tester.tap(find.text('Name A–Z'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Most visited').last);
+    await tester.pumpAndSettle();
+
+    final portugalPosition = tester.getTopLeft(find.text('Portugal')).dy;
+    final spainPosition = tester.getTopLeft(find.text('Spain')).dy;
+
+    expect(spainPosition, lessThan(portugalPosition));
+  });
 }
