@@ -8,6 +8,7 @@ from app.db.session import create_database_engine
 from app.models import (
     auth_session,  # noqa: F401
     country,  # noqa: F401
+    country_visit,  # noqa: F401
     user,  # noqa: F401
 )
 
