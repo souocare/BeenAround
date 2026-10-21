@@ -413,4 +413,48 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+  test('deletes a country visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'DELETE');
+      expect(options.uri.path, '/api/v1/country-visits/visit-1');
+
+      return ResponseBody.fromString('', 204);
+    });
+
+    await repository.deleteCountryVisit(visitId: 'visit-1');
+  });
+  test('maps not found errors when deleting a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'DELETE');
+
+      return jsonResponse({
+        'detail': 'Country visit not found.',
+      }, statusCode: 404);
+    });
+
+    await expectLater(
+      repository.deleteCountryVisit(visitId: 'visit-1'),
+      throwsA(isA<ApiException>()),
+    );
+  });
+  test('maps server errors when deleting a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'DELETE');
+
+      return jsonResponse({
+        'detail': 'Internal server error.',
+      }, statusCode: 500);
+    });
+
+    await expectLater(
+      repository.deleteCountryVisit(visitId: 'visit-1'),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.type,
+          'type',
+          ApiErrorType.server,
+        ),
+      ),
+    );
+  });
 }

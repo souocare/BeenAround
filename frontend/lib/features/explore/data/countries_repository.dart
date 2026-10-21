@@ -20,6 +20,7 @@ abstract interface class CountriesRepository {
     DateTime? startedOn,
     DateTime? endedOn,
   });
+  Future<void> deleteCountryVisit({required String visitId});
 }
 
 class ApiCountriesRepository implements CountriesRepository {
@@ -146,6 +147,17 @@ class ApiCountriesRepository implements CountriesRepository {
       }
 
       return CountryVisit.fromJson(data);
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) async {
+    try {
+      await apiClient.dio.delete<void>(
+        'country-visits/${Uri.encodeComponent(visitId)}',
+      );
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }

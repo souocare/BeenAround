@@ -54,6 +54,13 @@ class FakeExploreRepository implements CountriesRepository {
       'Country visit updates are not used by this test.',
     );
   }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) {
+    throw UnimplementedError(
+      'Country visit deletion is not used by this test.',
+    );
+  }
 }
 
 const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');

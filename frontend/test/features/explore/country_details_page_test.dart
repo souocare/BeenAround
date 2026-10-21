@@ -78,6 +78,13 @@ class FakeCountriesRepository implements CountriesRepository {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) {
+    throw UnimplementedError(
+      'Country visit deletion is not used by this test.',
+    );
+  }
 }
 
 CountryVisit visit({
