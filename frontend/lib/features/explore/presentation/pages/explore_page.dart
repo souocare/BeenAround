@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/application/visited_countries_filter.dart';
 import 'package:beenaround/features/explore/presentation/widgets/show_add_destination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -63,19 +64,36 @@ class ExplorePage extends StatelessWidget {
   }
 }
 
-class _ExploreContent extends StatelessWidget {
+class _ExploreContent extends StatefulWidget {
   const _ExploreContent({required this.state});
 
   final ExploreState state;
 
   @override
+  State<_ExploreContent> createState() => _ExploreContentState();
+}
+
+class _ExploreContentState extends State<_ExploreContent> {
+  String _query = '';
+
+  VisitedCountriesFilter _filter = VisitedCountriesFilter.all;
+
+  VisitedCountriesSort _sort = VisitedCountriesSort.nameAscending;
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final visitedCountries = state.countries
-        .where((country) => state.isCountryVisited(country.code))
-        .toList(growable: false);
+    final visitedCountries = filterVisitedCountries(
+      state,
+      options: VisitedCountriesFilterOptions(
+        query: _query,
+        filter: _filter,
+        sort: _sort,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -148,6 +166,73 @@ class _ExploreContent extends StatelessWidget {
 
         const SizedBox(height: 16),
 
+        TextField(
+          key: const Key('visitedCountriesSearch'),
+          decoration: const InputDecoration(
+            hintText: 'Search visited countries...',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) {
+            setState(() => _query = value);
+          },
+        ),
+
+        const SizedBox(height: 12),
+
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('All'),
+              selected: _filter == VisitedCountriesFilter.all,
+              onSelected: (_) {
+                setState(() => _filter = VisitedCountriesFilter.all);
+              },
+            ),
+            ChoiceChip(
+              label: const Text('Multiple visits'),
+              selected: _filter == VisitedCountriesFilter.multipleVisits,
+              onSelected: (_) {
+                setState(() => _filter = VisitedCountriesFilter.multipleVisits);
+              },
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
+        DropdownButtonFormField<VisitedCountriesSort>(
+          key: const Key('visitedCountriesSort'),
+          initialValue: _sort,
+          decoration: const InputDecoration(
+            labelText: 'Sort by',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: VisitedCountriesSort.nameAscending,
+              child: Text('Name A–Z'),
+            ),
+            DropdownMenuItem(
+              value: VisitedCountriesSort.nameDescending,
+              child: Text('Name Z–A'),
+            ),
+            DropdownMenuItem(
+              value: VisitedCountriesSort.mostVisited,
+              child: Text('Most visited'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+
+            setState(() => _sort = value);
+          },
+        ),
+
+        const SizedBox(height: 16),
+
         if (state.phase == ExplorePhase.loading)
           const Padding(
             padding: EdgeInsets.only(bottom: 16),
@@ -166,13 +251,19 @@ class _ExploreContent extends StatelessWidget {
           ),
 
         if (visitedCountries.isEmpty)
-          const AppEmptyState(
-            title: 'No countries visited yet',
-            message:
-                'Your visited countries will appear here once you start '
-                'recording your travels.',
-            icon: Icons.travel_explore_outlined,
-          )
+          state.visitedCountryCount == 0
+              ? const AppEmptyState(
+                  title: 'No countries visited yet',
+                  message:
+                      'Your visited countries will appear here once you start '
+                      'recording your travels.',
+                  icon: Icons.travel_explore_outlined,
+                )
+              : const AppEmptyState(
+                  title: 'No matching countries',
+                  message: 'Try changing your search or filters.',
+                  icon: Icons.search_off_outlined,
+                )
         else
           ...visitedCountries.map(
             (country) => Padding(

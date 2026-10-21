@@ -102,7 +102,10 @@ void main() {
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'port');
+    await tester.enterText(
+      find.byKey(const Key('destinationCountrySearch')),
+      'port',
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Portugal'), findsOneWidget);

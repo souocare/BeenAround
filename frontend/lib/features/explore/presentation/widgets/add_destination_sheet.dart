@@ -279,6 +279,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: TextField(
+            key: const Key('destinationCountrySearch'),
             autofocus: true,
             decoration: InputDecoration(
               hintText: 'Search countries...',
