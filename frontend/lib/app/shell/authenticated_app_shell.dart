@@ -5,6 +5,7 @@ import 'app_destination.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../theme/theme_cubit.dart';
+import '../../features/explore/presentation/pages/explore_page.dart';
 
 class AuthenticatedAppShell extends StatefulWidget {
   const AuthenticatedAppShell({
@@ -91,11 +92,7 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
 
   Widget _buildDestinationContent(BuildContext context) {
     return switch (_selectedDestination) {
-      AppDestination.explore => const _DestinationPlaceholder(
-        title: 'Explore',
-        subtitle: 'Your visited countries, cities and flights.',
-        icon: Icons.explore_outlined,
-      ),
+      AppDestination.explore => const ExplorePage(),
       AppDestination.trips => const _DestinationPlaceholder(
         title: 'Trips',
         subtitle: 'Organize your travel memories.',

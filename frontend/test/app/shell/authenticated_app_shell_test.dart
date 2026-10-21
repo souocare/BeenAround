@@ -9,6 +9,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:beenaround/features/explore/application/explore_cubit.dart';
+import 'package:beenaround/features/explore/data/countries_repository.dart';
+import 'package:beenaround/features/explore/domain/country.dart';
+import 'package:beenaround/features/explore/domain/country_visit.dart';
+
+class FakeCountriesRepository implements CountriesRepository {
+  @override
+  Future<List<Country>> getCountries() async => const [];
+
+  @override
+  Future<List<CountryVisit>> getCountryVisits() async => const [];
+}
 
 void main() {
   late ThemeCubit themeCubit;
@@ -31,6 +43,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
+    final exploreCubit = ExploreCubit(repository: FakeCountriesRepository());
+
+    await exploreCubit.load();
+
+    addTearDown(exploreCubit.close);
     themeCubit = ThemeCubit(
       repository: ThemePreferenceRepository(
         preferences: SharedPreferencesAsync(),
@@ -39,8 +56,11 @@ void main() {
 
     addTearDown(themeCubit.close);
     await tester.pumpWidget(
-      BlocProvider.value(
-        value: themeCubit,
+      MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: themeCubit),
+          BlocProvider.value(value: exploreCubit),
+        ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, mode) {
             return MaterialApp(
@@ -83,10 +103,8 @@ void main() {
       await pumpShell(tester);
 
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(
-        find.text('Your visited countries, cities and flights.'),
-        findsOneWidget,
-      );
+      expect(find.text('Countries visited'), findsOneWidget);
+      expect(find.text('Total visits'), findsOneWidget);
 
       final navigationBar = tester.widget<NavigationBar>(
         find.byType(NavigationBar),
@@ -140,10 +158,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Your visited countries, cities and flights.'),
-        findsOneWidget,
-      );
+      expect(find.text('Countries visited'), findsOneWidget);
+      expect(find.text('Total visits'), findsOneWidget);
     });
 
     testWidgets('wide layouts use top navigation', (tester) async {
@@ -328,10 +344,8 @@ void main() {
 
       await tester.tap(find.text('Explore'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Your visited countries, cities and flights.'),
-        findsOneWidget,
-      );
+      expect(find.text('Countries visited'), findsOneWidget);
+      expect(find.text('Total visits'), findsOneWidget);
     });
     testWidgets('Profile defaults to Dark Mode', (tester) async {
       await pumpShell(tester);
@@ -443,6 +457,14 @@ void main() {
       expect(Theme.of(updatedContext).brightness, Brightness.light);
 
       expect(themeCubit.state, ThemeMode.light);
+    });
+    testWidgets('Explore displays the country overview', (tester) async {
+      await pumpShell(tester);
+
+      expect(find.text('Explore'), findsWidgets);
+      expect(find.text('Countries visited'), findsOneWidget);
+      expect(find.text('Total visits'), findsOneWidget);
+      expect(find.text('No countries visited yet'), findsOneWidget);
     });
   });
 }

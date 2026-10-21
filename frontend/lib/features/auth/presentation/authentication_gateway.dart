@@ -13,6 +13,8 @@ import '../data/secure_token_storage.dart';
 import '../data/session_repository.dart';
 import 'pages/login_page.dart';
 import '../../../app/shell/authenticated_app_shell.dart';
+import '../../explore/application/explore_cubit.dart';
+import '../../explore/data/countries_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -131,9 +133,15 @@ class _AuthenticationGatewayState extends State<AuthenticationGateway> {
                 return const _AuthenticationLoadingPage();
               }
 
-              return AuthenticatedAppShell(
-                user: user,
-                onLogout: _authCubit.logout,
+              return BlocProvider(
+                key: ValueKey(user.id),
+                create: (_) => ExploreCubit(
+                  repository: ApiCountriesRepository(apiClient: _apiClient),
+                )..load(),
+                child: AuthenticatedAppShell(
+                  user: user,
+                  onLogout: _authCubit.logout,
+                ),
               );
 
             case AuthPhase.unavailable:
