@@ -273,3 +273,166 @@ def test_response_contains_expected_fields(
         "created_at",
         "updated_at",
     }
+
+
+def test_create_country_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={
+            "country_code": "PT",
+            "started_on": "2025-07-10",
+            "ended_on": "2025-07-15",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 201
+
+    body = response.json()
+
+    assert body["country_code"] == "PT"
+    assert body["started_on"] == "2025-07-10"
+    assert body["ended_on"] == "2025-07-15"
+    assert body["id"] is not None
+    assert "user_id" not in body
+
+
+def test_create_country_visit_normalizes_country_code(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": " pt "},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["country_code"] == "PT"
+
+
+def test_create_country_visit_without_dates(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": "ES"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["started_on"] is None
+    assert response.json()["ended_on"] is None
+
+
+def test_create_country_visit_rejects_unknown_country(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": "ZZ"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_create_country_visit_rejects_end_without_start(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={
+            "country_code": "PT",
+            "ended_on": "2025-07-15",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_country_visit_rejects_invalid_date_range(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={
+            "country_code": "PT",
+            "started_on": "2025-07-15",
+            "ended_on": "2025-07-10",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_country_visit_rejects_user_id(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={
+            "country_code": "PT",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_country_visit_requires_authentication(
+    visits_client: TestClient,
+) -> None:
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": "PT"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_mobile_user_can_create_country_visit(
+    visits_client: TestClient,
+) -> None:
+    headers = login_mobile(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": "PT"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["country_code"] == "PT"
+
+
+def test_create_country_visit_rejects_external_origin(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        "/api/v1/country-visits",
+        json={"country_code": "PT"},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403

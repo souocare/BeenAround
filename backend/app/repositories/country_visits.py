@@ -1,6 +1,7 @@
 """Country visit database queries."""
 
 from uuid import UUID
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,3 +28,26 @@ class CountryVisitRepository:
         )
 
         return list(self._session.scalars(statement).all())
+
+    def create(
+        self,
+        *,
+        user_id: UUID,
+        country_code: str,
+        started_on: date | None,
+        ended_on: date | None,
+    ) -> CountryVisit:
+        """Persist a new country visit."""
+
+        visit = CountryVisit(
+            user_id=user_id,
+            country_code=country_code,
+            started_on=started_on,
+            ended_on=ended_on,
+        )
+
+        self._session.add(visit)
+        self._session.commit()
+        self._session.refresh(visit)
+
+        return visit
