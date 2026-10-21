@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/presentation/widgets/show_add_destination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -79,11 +80,30 @@ class _ExploreContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Explore',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Explore',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            IconButton.filled(
+              tooltip: 'Add Destination',
+              onPressed: () async {
+                final exploreCubit = context.read<ExploreCubit>();
+
+                final created = await showAddDestination(context);
+
+                if (created && !exploreCubit.isClosed) {
+                  await exploreCubit.refresh();
+                }
+              },
+              icon: const Icon(Icons.add),
+            ),
+          ],
         ),
 
         const SizedBox(height: 8),
