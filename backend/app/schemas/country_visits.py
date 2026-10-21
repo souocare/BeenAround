@@ -3,7 +3,32 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+
+def normalize_country_code(value: str) -> str:
+    """Normalize and validate an ISO alpha-2 country code."""
+    code = value.strip().upper()
+
+    if len(code) != 2 or not code.isascii() or not code.isalpha():
+        raise ValueError("Country code must be a valid ISO alpha-2 code.")
+
+    return code
+
+
+def validate_visit_dates(
+    started_on: date | None,
+    ended_on: date | None,
+) -> None:
+    """Validate the final date range of a country visit."""
+    if ended_on is None:
+        return
+
+    if started_on is None:
+        raise ValueError("End date requires a start date.")
+
+    if ended_on < started_on:
+        raise ValueError("End date cannot be earlier than start date.")
 
 
 class CountryVisitResponse(BaseModel):
@@ -35,20 +60,37 @@ class CountryVisitCreate(BaseModel):
     started_on: date | None = None
     ended_on: date | None = None
 
+    @field_validator("country_code")
+    @classmethod
+    def validate_country_code(cls, value: str) -> str:
+        return normalize_country_code(value)
+
     @model_validator(mode="after")
     def validate_visit(self) -> "CountryVisitCreate":
-        """Normalize the country code and validate visit dates."""
+        validate_visit_dates(self.started_on, self.ended_on)
+        return self
 
-        self.country_code = self.country_code.strip().upper()
 
-        if len(self.country_code) != 2 or not self.country_code.isalpha():
-            raise ValueError("Country code must be a valid ISO alpha-2 code.")
+class CountryVisitUpdate(BaseModel):
+    """Fields that may be modified on an existing country visit."""
 
-        if self.ended_on is not None:
-            if self.started_on is None:
-                raise ValueError("End date requires a start date.")
+    model_config = ConfigDict(extra="forbid")
 
-            if self.ended_on < self.started_on:
-                raise ValueError("End date cannot be earlier than start date.")
+    country_code: str | None = None
+    started_on: date | None = None
+    ended_on: date | None = None
+
+    @field_validator("country_code")
+    @classmethod
+    def validate_country_code(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("Country code cannot be null.")
+
+        return normalize_country_code(value)
+
+    @model_validator(mode="after")
+    def validate_update(self) -> "CountryVisitUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided.")
 
         return self

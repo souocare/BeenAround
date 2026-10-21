@@ -148,6 +148,30 @@ def login_mobile(
     }
 
 
+def create_visit_for_test(
+    client: TestClient,
+    *,
+    country_code: str = "PT",
+    started_on: str | None = None,
+    ended_on: str | None = None,
+) -> str:
+    payload = {
+        "country_code": country_code,
+        "started_on": started_on,
+        "ended_on": ended_on,
+    }
+
+    response = client.post(
+        "/api/v1/country-visits",
+        json=payload,
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 201
+
+    return response.json()["id"]
+
+
 def test_listing_requires_authentication(
     visits_client: TestClient,
 ) -> None:
@@ -432,6 +456,305 @@ def test_create_country_visit_rejects_external_origin(
     response = visits_client.post(
         "/api/v1/country-visits",
         json={"country_code": "PT"},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_country_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={
+            "country_code": "ES",
+            "started_on": "2026-09-28",
+            "ended_on": "2026-10-03",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["id"] == visit_id
+    assert body["country_code"] == "ES"
+    assert body["started_on"] == "2026-09-28"
+    assert body["ended_on"] == "2026-10-03"
+
+
+def test_update_preserves_omitted_fields(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2026-09-28",
+        ended_on="2026-10-03",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": "ES"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["country_code"] == "ES"
+    assert body["started_on"] == "2026-09-28"
+    assert body["ended_on"] == "2026-10-03"
+
+
+def test_update_can_clear_end_date(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2026-09-28",
+        ended_on="2026-10-03",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"ended_on": None},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["started_on"] == "2026-09-28"
+    assert response.json()["ended_on"] is None
+
+
+def test_update_rejects_invalid_final_date_range(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2026-09-28",
+        ended_on="2026-10-03",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"started_on": "2026-10-05"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+    # The rejected update must not modify the persisted visit.
+    listing = visits_client.get("/api/v1/country-visits")
+
+    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
+
+    assert visit["started_on"] == "2026-09-28"
+    assert visit["ended_on"] == "2026-10-03"
+
+
+def test_update_rejects_empty_payload(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_rejects_user_id(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_rejects_unknown_country(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": "ZZ"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_delete_country_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.delete(
+        f"/api/v1/country-visits/{visit_id}",
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+    listing = visits_client.get("/api/v1/country-visits")
+
+    assert all(item["id"] != visit_id for item in listing.json()["items"])
+
+
+def test_delete_country_visit_twice_returns_404(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    first = visits_client.delete(
+        f"/api/v1/country-visits/{visit_id}",
+        headers={"Origin": "http://testserver"},
+    )
+
+    second = visits_client.delete(
+        f"/api/v1/country-visits/{visit_id}",
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert first.status_code == 204
+    assert second.status_code == 404
+
+
+def test_cannot_update_another_users_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client, username="anotheruser")
+
+    listing = visits_client.get("/api/v1/country-visits")
+
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+
+    other_visit_id = listing.json()["items"][0]["id"]
+
+    # Switch to the first user.
+    visits_client.cookies.clear()
+    login_web(visits_client, username="goncalo")
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{other_visit_id}",
+        json={"country_code": "PT"},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_cannot_delete_another_users_visit(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client, username="anotheruser")
+
+    listing = visits_client.get("/api/v1/country-visits")
+
+    other_visit_id = listing.json()["items"][0]["id"]
+
+    visits_client.cookies.clear()
+    login_web(visits_client, username="goncalo")
+
+    response = visits_client.delete(
+        f"/api/v1/country-visits/{other_visit_id}",
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 404
+
+    # Confirm the original owner's visit was not deleted.
+    visits_client.cookies.clear()
+    login_web(visits_client, username="anotheruser")
+
+    listing = visits_client.get("/api/v1/country-visits")
+
+    assert any(item["id"] == other_visit_id for item in listing.json()["items"])
+
+
+def test_update_requires_authentication(
+    visits_client: TestClient,
+) -> None:
+    response = visits_client.patch(
+        "/api/v1/country-visits/550e8400-e29b-41d4-a716-446655440000",
+        json={"country_code": "PT"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_delete_requires_authentication(
+    visits_client: TestClient,
+) -> None:
+    response = visits_client.delete(
+        "/api/v1/country-visits/550e8400-e29b-41d4-a716-446655440000",
+    )
+
+    assert response.status_code == 401
+
+
+def test_update_rejects_external_origin(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{visit_id}",
+        json={"country_code": "ES"},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_delete_rejects_external_origin(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit_for_test(visits_client)
+
+    response = visits_client.delete(
+        f"/api/v1/country-visits/{visit_id}",
         headers={"Origin": "https://evil.example"},
     )
 
