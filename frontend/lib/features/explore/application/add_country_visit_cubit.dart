@@ -3,11 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_exception.dart';
 import '../data/countries_repository.dart';
 import 'add_country_visit_state.dart';
+import '../domain/country_visit_date_validator.dart';
 
 class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
-  AddCountryVisitCubit({required CountriesRepository repository})
-    : _repository = repository,
-      super(const AddCountryVisitState());
+  AddCountryVisitCubit({required this._repository})
+    : super(const AddCountryVisitState());
 
   final CountriesRepository _repository;
 
@@ -33,24 +33,16 @@ class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
       return false;
     }
 
-    if (endedOn != null && startedOn == null) {
-      emit(
-        const AddCountryVisitState(
-          phase: AddCountryVisitPhase.failure,
-          errorMessage: 'An end date requires a start date.',
-        ),
-      );
+    final dateError = CountryVisitDateValidator.validate(
+      startedOn: startedOn,
+      endedOn: endedOn,
+    );
 
-      return false;
-    }
-
-    if (startedOn != null &&
-        endedOn != null &&
-        _dateOnly(endedOn).isBefore(_dateOnly(startedOn))) {
+    if (dateError != null) {
       emit(
-        const AddCountryVisitState(
+        AddCountryVisitState(
           phase: AddCountryVisitPhase.failure,
-          errorMessage: 'End date cannot be earlier than start date.',
+          errorMessage: dateError,
         ),
       );
 
@@ -100,9 +92,5 @@ class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
     if (state.phase != AddCountryVisitPhase.failure) return;
 
     emit(const AddCountryVisitState());
-  }
-
-  DateTime _dateOnly(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
   }
 }
