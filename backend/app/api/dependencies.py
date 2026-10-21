@@ -1,26 +1,22 @@
+"""Authentication and database dependencies."""
+
 from dataclasses import dataclass
-from typing import Annotated
 from datetime import UTC, datetime
+from typing import Annotated
 
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.access_tokens import AccessTokenService, InvalidAccessTokenError
 from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.auth_session import AuthSession, AuthSessionType
 from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
-from app.services.auth_sessions import AuthSessionService
+from app.services.auth_sessions import AuthSessionService, normalize_datetime
 
-from app.core.access_tokens import (
-    AccessTokenService,
-    InvalidAccessTokenError,
-)
-from app.models.auth_session import AuthSession, AuthSessionType
-from app.services.auth_sessions import normalize_datetime
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
 ApplicationSettings = Annotated[Settings, Depends(get_settings)]
@@ -32,23 +28,26 @@ class AuthenticatedUser:
     auth_session: AuthSession
 
 
-def get_authenticated_user(
-    session: DatabaseSession,
-    settings: ApplicationSettings,
-    credential: Annotated[
-        str | None,
-        Cookie(alias=WEB_SESSION_COOKIE),
-    ] = None,
-) -> AuthenticatedUser:
-    """Resolve the current authenticated Web user."""
+def _unauthorized(*, bearer: bool = False) -> HTTPException:
+    """Create a consistent authentication failure."""
 
-    unauthorized = HTTPException(
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required.",
+        headers={"WWW-Authenticate": "Bearer"} if bearer else None,
     )
 
+
+def _resolve_web_authentication(
+    *,
+    session: Session,
+    settings: Settings,
+    credential: str | None,
+) -> AuthenticatedUser:
+    """Validate a Web session cookie."""
+
     if not credential:
-        raise unauthorized
+        raise _unauthorized()
 
     session_service = AuthSessionService(
         session=session,
@@ -59,39 +58,26 @@ def get_authenticated_user(
     auth_session = session_service.resolve(credential)
 
     if auth_session is None or auth_session.session_type != AuthSessionType.WEB:
-        raise unauthorized
+        raise _unauthorized()
 
     user = session.get(User, auth_session.user_id)
 
     if user is None or not user.is_active:
-        raise unauthorized
+        raise _unauthorized()
 
     return AuthenticatedUser(
         user=user,
         auth_session=auth_session,
     )
 
-mobile_bearer_scheme = HTTPBearer(auto_error=False)
 
-
-def get_authenticated_mobile_user(
-    session: DatabaseSession,
-    settings: ApplicationSettings,
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None,
-        Depends(mobile_bearer_scheme),
-    ],
+def _resolve_mobile_authentication(
+    *,
+    session: Session,
+    settings: Settings,
+    token: str,
 ) -> AuthenticatedUser:
-    """Resolve an active Mobile session from a Bearer access token."""
-
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise unauthorized
+    """Validate a Mobile access token and its associated session."""
 
     if not settings.secret_key:
         raise HTTPException(
@@ -105,35 +91,69 @@ def get_authenticated_mobile_user(
     )
 
     try:
-        claims = token_service.validate(credentials.credentials)
+        claims = token_service.validate(token)
     except InvalidAccessTokenError as error:
-        raise unauthorized from error
+        raise _unauthorized(bearer=True) from error
 
     auth_session = AuthSessionRepository(session).get_by_id(claims.session_id)
 
-    if auth_session is None:
-        raise unauthorized
-
-    if auth_session.session_type != AuthSessionType.MOBILE:
-        raise unauthorized
-
-    if auth_session.user_id != claims.user_id:
-        raise unauthorized
-
-    if auth_session.revoked_at is not None:
-        raise unauthorized
-
-    if normalize_datetime(auth_session.expires_at) <= datetime.now(UTC):
-        raise unauthorized
+    if (
+        auth_session is None
+        or auth_session.session_type != AuthSessionType.MOBILE
+        or auth_session.user_id != claims.user_id
+        or auth_session.revoked_at is not None
+        or normalize_datetime(auth_session.expires_at) <= datetime.now(UTC)
+    ):
+        raise _unauthorized(bearer=True)
 
     user = session.get(User, claims.user_id)
 
     if user is None or not user.is_active:
-        raise unauthorized
+        raise _unauthorized(bearer=True)
 
     return AuthenticatedUser(
         user=user,
         auth_session=auth_session,
+    )
+
+
+def get_authenticated_user(
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+    credential: Annotated[
+        str | None,
+        Cookie(alias=WEB_SESSION_COOKIE),
+    ] = None,
+) -> AuthenticatedUser:
+    """Resolve the current authenticated Web user."""
+
+    return _resolve_web_authentication(
+        session=session,
+        settings=settings,
+        credential=credential,
+    )
+
+
+mobile_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_authenticated_mobile_user(
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(mobile_bearer_scheme),
+    ],
+) -> AuthenticatedUser:
+    """Resolve the current authenticated Mobile user."""
+
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise _unauthorized(bearer=True)
+
+    return _resolve_mobile_authentication(
+        session=session,
+        settings=settings,
+        token=credentials.credentials,
     )
 
 
@@ -146,16 +166,15 @@ CurrentAuthentication = Annotated[
 def get_current_user(
     authentication: CurrentAuthentication,
 ) -> User:
-    """Return the current active user."""
+    """Return the current active Web user."""
+
     return authentication.user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-def require_admin(
-    user: CurrentUser,
-) -> User:
+def require_admin(user: CurrentUser) -> User:
     """Require an authenticated administrator."""
 
     if not user.is_admin:
@@ -180,10 +199,51 @@ def get_current_mobile_user(
     authentication: CurrentMobileAuthentication,
 ) -> User:
     """Return the current active Mobile user."""
+
     return authentication.user
 
 
 CurrentMobileUser = Annotated[
     User,
     Depends(get_current_mobile_user),
+]
+
+
+def get_current_api_user(
+    session: DatabaseSession,
+    settings: ApplicationSettings,
+    authorization: Annotated[str | None, Header()] = None,
+    credential: Annotated[
+        str | None,
+        Cookie(alias=WEB_SESSION_COOKIE),
+    ] = None,
+) -> User:
+    """Authenticate domain API requests using Web or Mobile credentials."""
+
+    if authorization is not None:
+        scheme, separator, token = authorization.partition(" ")
+
+        if not separator or scheme.lower() != "bearer" or not token.strip():
+            raise _unauthorized(bearer=True)
+
+        authentication = _resolve_mobile_authentication(
+            session=session,
+            settings=settings,
+            token=token.strip(),
+        )
+
+        return authentication.user
+
+    authentication = _resolve_web_authentication(
+        session=session,
+        settings=settings,
+        credential=credential,
+    )
+
+    return authentication.user
+
+
+CurrentApiUser = Annotated[
+    User,
+    Depends(get_current_api_user),
 ]
