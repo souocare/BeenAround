@@ -43,6 +43,17 @@ class FakeExploreRepository implements CountriesRepository {
 
   @override
   Future<List<CountryVisit>> getCountryVisits() async => visits;
+
+  @override
+  Future<CountryVisit> updateCountryVisit({
+    required String visitId,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError(
+      'Country visit updates are not used by this test.',
+    );
+  }
 }
 
 const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');

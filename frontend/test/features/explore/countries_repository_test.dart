@@ -284,4 +284,133 @@ void main() {
       throwsA(isA<ApiException>()),
     );
   });
+  test('updates a country visit with exact dates', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+      expect(options.uri.path, '/api/v1/country-visits/visit-1');
+
+      expect(options.data, {
+        'started_on': '2026-10-10',
+        'ended_on': '2026-10-15',
+      });
+
+      expect((options.data as Map).containsKey('country_code'), isFalse);
+      expect((options.data as Map).containsKey('user_id'), isFalse);
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2026-10-10',
+        'ended_on': '2026-10-15',
+        'created_at': '2026-10-20T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      });
+    });
+
+    final visit = await repository.updateCountryVisit(
+      visitId: 'visit-1',
+      startedOn: DateTime(2026, 10, 10),
+      endedOn: DateTime(2026, 10, 15),
+    );
+
+    expect(visit.id, 'visit-1');
+    expect(visit.countryCode, 'PT');
+    expect(visit.startedOn, DateTime(2026, 10, 10));
+    expect(visit.endedOn, DateTime(2026, 10, 15));
+  });
+  test('clears the end date when updating a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      expect(options.data, {'started_on': '2026-10-10', 'ended_on': null});
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2026-10-10',
+        'ended_on': null,
+        'created_at': '2026-10-20T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      });
+    });
+
+    final visit = await repository.updateCountryVisit(
+      visitId: 'visit-1',
+      startedOn: DateTime(2026, 10, 10),
+    );
+
+    expect(visit.startedOn, DateTime(2026, 10, 10));
+    expect(visit.endedOn, isNull);
+  });
+  test('clears both dates when updating a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      expect(options.data, {'started_on': null, 'ended_on': null});
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': null,
+        'ended_on': null,
+        'created_at': '2026-10-20T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      });
+    });
+
+    final visit = await repository.updateCountryVisit(visitId: 'visit-1');
+
+    expect(visit.startedOn, isNull);
+    expect(visit.endedOn, isNull);
+  });
+  test('maps validation errors when updating a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      return jsonResponse({
+        'detail': 'End date cannot be earlier than start date.',
+      }, statusCode: 422);
+    });
+
+    await expectLater(
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        startedOn: DateTime(2026, 10, 15),
+        endedOn: DateTime(2026, 10, 10),
+      ),
+      throwsA(isA<ApiException>()),
+    );
+  });
+  test('maps not found errors when updating a visit', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      return jsonResponse({
+        'detail': 'Country visit not found.',
+      }, statusCode: 404);
+    });
+
+    await expectLater(
+      repository.updateCountryVisit(visitId: 'visit-1'),
+      throwsA(isA<ApiException>()),
+    );
+  });
+  test('rejects an empty update response', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      return ResponseBody.fromString(
+        '',
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['application/json'],
+        },
+      );
+    });
+
+    await expectLater(
+      repository.updateCountryVisit(visitId: 'visit-1'),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }

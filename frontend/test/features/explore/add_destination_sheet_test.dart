@@ -24,6 +24,17 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 
   @override
+  Future<CountryVisit> updateCountryVisit({
+    required String visitId,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError(
+      'Country visit updates are not used by this test.',
+    );
+  }
+
+  @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
     DateTime? startedOn,
