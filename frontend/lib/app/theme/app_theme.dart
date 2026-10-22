@@ -23,6 +23,10 @@ abstract final class AppTheme {
 
     final surface = isDark ? AppColors.darkSurface : AppColors.lightSurface;
 
+    final surfaceRecessed = isDark
+        ? AppColors.darkSurfaceRecessed
+        : AppColors.lightSurfaceRecessed;
+
     final surfaceElevated = isDark
         ? AppColors.darkSurfaceElevated
         : AppColors.lightSurfaceElevated;
@@ -52,6 +56,7 @@ abstract final class AppTheme {
           surfaceContainerLow: background,
           surfaceContainer: surface,
           surfaceContainerHigh: surfaceElevated,
+          surfaceContainerLowest: surfaceRecessed,
         );
 
     return ThemeData(

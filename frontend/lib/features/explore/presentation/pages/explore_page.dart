@@ -286,7 +286,7 @@ class _ExploreContentState extends State<_ExploreContent> {
               label: const Text('All'),
               selected: _filter == VisitedCountriesFilter.all,
               showCheckmark: false,
-              selectedColor: const Color(0xFFF4511E),
+              selectedColor: colors.secondary,
               backgroundColor: colors.surfaceContainerLow,
               side: BorderSide(
                 color: _filter == VisitedCountriesFilter.all
@@ -311,7 +311,7 @@ class _ExploreContentState extends State<_ExploreContent> {
               label: const Text('Multiple visits'),
               selected: _filter == VisitedCountriesFilter.multipleVisits,
               showCheckmark: false,
-              selectedColor: const Color(0xFFF4511E),
+              selectedColor: colors.secondary,
               backgroundColor: colors.surfaceContainerLow,
               side: BorderSide(
                 color: _filter == VisitedCountriesFilter.multipleVisits

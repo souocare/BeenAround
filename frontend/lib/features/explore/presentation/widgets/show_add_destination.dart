@@ -43,7 +43,7 @@ Future<bool> showAddDestination(BuildContext context) async {
     isDismissible: false,
     enableDrag: false,
     showDragHandle: false,
-    backgroundColor: Theme.of(context).colorScheme.surface,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),

@@ -34,4 +34,7 @@ abstract final class AppColors {
   // Semantic success colors.
   static const Color darkSuccess = Color(0xFF69C59B);
   static const Color lightSuccess = Color(0xFF237A55);
+
+  static const Color darkSurfaceRecessed = Color(0xFF0B0C11);
+  static const Color lightSurfaceRecessed = Color(0xFFF1EFED);
 }
