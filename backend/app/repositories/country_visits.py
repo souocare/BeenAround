@@ -1,7 +1,5 @@
 """Country visit database queries."""
 
-"""Country visit database queries."""
-
 from datetime import date
 from uuid import UUID
 

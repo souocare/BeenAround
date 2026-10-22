@@ -5,8 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.access_tokens import AccessTokenService
 from app.core.config import Settings, get_settings
 from app.core.security import hash_password
+from app.core.session_credentials import hash_session_credential
 from app.db.base import Base
 from app.db.session import create_database_engine, get_db
 from app.main import create_app
@@ -14,8 +16,6 @@ from app.models.auth_session import AuthSessionType
 from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
 from app.services.auth_sessions import AuthSessionService
-from app.core.access_tokens import AccessTokenService
-from app.core.session_credentials import hash_session_credential
 
 TEST_PASSWORD = "correct-password-123"
 
@@ -488,6 +488,7 @@ def test_mobile_session_cannot_authenticate_web_requests(
     assert response.status_code == 401
     assert response.json()["detail"] == "Authentication required."
 
+
 def test_mobile_login_returns_access_and_refresh_tokens(
     auth_client: tuple[TestClient, Session],
 ) -> None:
@@ -601,9 +602,6 @@ def test_mobile_login_does_not_create_web_cookie(
     me_response = client.get("/api/v1/auth/me")
 
     assert me_response.status_code == 401
-
-
-
 
 
 def test_mobile_me_requires_bearer_token(
@@ -983,6 +981,7 @@ def test_mobile_logout_revokes_session_and_access_token(
     )
 
     assert refresh_response.status_code == 401
+
 
 def test_mobile_logout_is_idempotent(
     auth_client: tuple[TestClient, Session],

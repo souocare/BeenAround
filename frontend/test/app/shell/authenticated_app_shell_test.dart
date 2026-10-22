@@ -31,6 +31,24 @@ class FakeCountriesRepository implements CountriesRepository {
       'Country visit creation is not used by this test.',
     );
   }
+
+  @override
+  Future<CountryVisit> updateCountryVisit({
+    required String visitId,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError(
+      'Country visit updates are not used by this test.',
+    );
+  }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) {
+    throw UnimplementedError(
+      'Country visit deletion is not used by this test.',
+    );
+  }
 }
 
 void main() {

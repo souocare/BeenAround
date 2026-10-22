@@ -15,8 +15,7 @@ class CountryVisit(TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "ended_on IS NULL OR "
-            "(started_on IS NOT NULL AND ended_on >= started_on)",
+            "ended_on IS NULL OR (started_on IS NOT NULL AND ended_on >= started_on)",
             name="ck_country_visits_valid_dates",
         ),
         Index(

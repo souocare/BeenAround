@@ -1,8 +1,8 @@
 """Tests for the versioned ISO 3166-1 country catalog."""
 
+import ast
 import json
 from pathlib import Path
-import ast
 
 import pytest
 from alembic import command
@@ -11,7 +11,6 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from app.models.country import Country
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = BACKEND_ROOT / "app" / "data" / "countries.json"

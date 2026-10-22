@@ -3,7 +3,6 @@ import 'package:beenaround/features/auth/presentation/authentication_gateway.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../core/config/server_config.dart';
 import '../../core/config/server_config_repository.dart';
 import '../../features/server_setup/application/server_setup_cubit.dart';
 import '../../features/server_setup/application/server_setup_state.dart';
@@ -125,70 +124,6 @@ class _BootstrapLoadingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(body: AppLoadingState());
-  }
-}
-
-class _BootstrapDestinationPage extends StatelessWidget {
-  const _BootstrapDestinationPage({
-    required this.title,
-    required this.message,
-    required this.serverConfig,
-  });
-
-  final String title;
-  final String message;
-  final ServerConfig? serverConfig;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.explore_outlined,
-                  size: 72,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (serverConfig != null) ...[
-                  const SizedBox(height: 24),
-                  Text(
-                    serverConfig!.baseUrl.toString(),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

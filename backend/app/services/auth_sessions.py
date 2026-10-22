@@ -4,12 +4,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.user import User
 from app.core.session_credentials import (
     generate_session_credential,
     hash_session_credential,
 )
 from app.models.auth_session import AuthSession, AuthSessionType
+from app.models.user import User
 from app.repositories.auth_sessions import AuthSessionRepository
 
 
@@ -18,8 +18,10 @@ class CreatedAuthSession:
     session: AuthSession
     credential: str
 
+
 class InvalidRefreshTokenError(ValueError):
     """Raised when a Mobile refresh credential cannot be used."""
+
 
 def normalize_datetime(value: datetime) -> datetime:
     """Normalize SQLite and timezone-aware datetimes to UTC."""
@@ -128,7 +130,6 @@ class AuthSessionService:
 
         return self.revoke(session_id=session_id, now=now)
 
-
     def rotate_mobile_credential(
         self,
         credential: str,
@@ -179,7 +180,6 @@ class AuthSessionService:
             credential=new_credential.value,
         )
 
-    
     def revoke_mobile_credential(
         self,
         credential: str,

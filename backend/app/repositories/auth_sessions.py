@@ -1,13 +1,10 @@
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import update
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.auth_session import AuthSession
-
-from app.models.auth_session import AuthSessionType
+from app.models.auth_session import AuthSession, AuthSessionType
 
 
 class AuthSessionRepository:
@@ -64,7 +61,6 @@ class AuthSessionRepository:
         result = self._session.execute(statement)
 
         return result.rowcount == 1
-
 
     def revoke_mobile_by_credential_hash(
         self,

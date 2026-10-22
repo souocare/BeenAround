@@ -5,13 +5,7 @@ from pathlib import Path
 
 import pycountry
 
-
-OUTPUT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "app"
-    / "data"
-    / "countries.json"
-)
+OUTPUT_PATH = Path(__file__).resolve().parents[1] / "app" / "data" / "countries.json"
 
 
 def main() -> None:

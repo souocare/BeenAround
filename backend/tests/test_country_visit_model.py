@@ -15,9 +15,7 @@ from app.models.user import User
 
 @pytest.fixture
 def database_engine(tmp_path: Path):
-    engine = create_database_engine(
-        f"sqlite:///{tmp_path / 'country_visits.db'}"
-    )
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'country_visits.db'}")
 
     Base.metadata.create_all(engine)
 
@@ -257,17 +255,15 @@ def test_different_users_can_visit_same_country(database_engine) -> None:
 
         session.commit()
 
-        assert session.scalar(
-            select(CountryVisit).where(
-                CountryVisit.user_id == user_a.id
-            )
-        ) is not None
+        assert (
+            session.scalar(select(CountryVisit).where(CountryVisit.user_id == user_a.id))
+            is not None
+        )
 
-        assert session.scalar(
-            select(CountryVisit).where(
-                CountryVisit.user_id == user_b.id
-            )
-        ) is not None
+        assert (
+            session.scalar(select(CountryVisit).where(CountryVisit.user_id == user_b.id))
+            is not None
+        )
 
 
 def test_deleting_user_deletes_country_visits(database_engine) -> None:

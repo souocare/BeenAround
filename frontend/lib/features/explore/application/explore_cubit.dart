@@ -5,11 +5,10 @@ import '../data/countries_repository.dart';
 import 'explore_state.dart';
 
 class ExploreCubit extends Cubit<ExploreState> {
-  ExploreCubit({required CountriesRepository repository})
-    : _repository = repository,
-      super(const ExploreState());
+  ExploreCubit({required this._repository}) : super(const ExploreState());
 
   final CountriesRepository _repository;
+  CountriesRepository get repository => _repository;
 
   int _requestGeneration = 0;
 

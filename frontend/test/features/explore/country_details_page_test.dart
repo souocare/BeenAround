@@ -23,6 +23,11 @@ class FakeCountriesRepository implements CountriesRepository {
   DateTime? receivedStartedOn;
   DateTime? receivedEndedOn;
 
+  int deleteCalls = 0;
+  String? receivedDeletedVisitId;
+
+  Future<void> Function()? deleteHandler;
+
   Future<CountryVisit> Function()? updateHandler;
 
   @override
@@ -80,10 +85,16 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 
   @override
-  Future<void> deleteCountryVisit({required String visitId}) {
-    throw UnimplementedError(
-      'Country visit deletion is not used by this test.',
-    );
+  Future<void> deleteCountryVisit({required String visitId}) async {
+    deleteCalls++;
+    receivedDeletedVisitId = visitId;
+
+    if (deleteHandler != null) {
+      await deleteHandler!();
+      return;
+    }
+
+    visits.removeWhere((visit) => visit.id == visitId);
   }
 }
 
@@ -214,7 +225,10 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit visit'));
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     expect(find.text('Edit Visit'), findsOneWidget);
@@ -246,7 +260,10 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit visit'));
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editVisitClearDates')));
@@ -287,7 +304,10 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit visit'));
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editVisitStartDate')));
@@ -339,7 +359,10 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit visit'));
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editVisitSaveButton')));
@@ -370,11 +393,157 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit visit'));
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     expect(find.byType(Dialog), findsOneWidget);
     expect(find.text('Edit Visit'), findsOneWidget);
     expect(find.text('10/10/2026'), findsOneWidget);
+  });
+  testWidgets('canceling deletion preserves the visit', (tester) async {
+    final repository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: [visit(id: 'visit-1', countryCode: 'PT')],
+    );
+
+    await pumpExplore(
+      tester,
+      visits: repository.visits,
+      repository: repository,
+    );
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete visit?'), findsOneWidget);
+    expect(find.text('This action cannot be undone.'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 0);
+    expect(find.text('Visit 1'), findsOneWidget);
+  });
+  testWidgets('deletes one visit and preserves the others', (tester) async {
+    final repository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: [
+        visit(
+          id: 'visit-1',
+          countryCode: 'PT',
+          startedOn: DateTime(2024, 6, 2),
+        ),
+        visit(
+          id: 'visit-2',
+          countryCode: 'PT',
+          startedOn: DateTime(2026, 10, 10),
+        ),
+      ],
+    );
+
+    await pumpExplore(
+      tester,
+      visits: repository.visits,
+      repository: repository,
+    );
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Visit actions').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteVisit')));
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.visits, hasLength(1));
+
+    expect(find.text('Visit history'), findsOneWidget);
+    expect(find.text('Total visits'), findsOneWidget);
+    expect(find.text('Visit 1'), findsOneWidget);
+    expect(find.text('Visit 2'), findsNothing);
+  });
+  testWidgets('deleting the last visit returns to Explore', (tester) async {
+    final repository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: [visit(id: 'visit-1', countryCode: 'PT')],
+    );
+
+    await pumpExplore(
+      tester,
+      visits: repository.visits,
+      repository: repository,
+    );
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteVisit')));
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.visits, isEmpty);
+
+    expect(find.text('Visit history'), findsNothing);
+    expect(find.byTooltip('Visit actions'), findsNothing);
+
+    // Explore must no longer display Portugal as a visited country.
+    expect(find.text('Portugal'), findsNothing);
+  });
+  testWidgets('keeps confirmation open when deletion fails', (tester) async {
+    final repository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: [visit(id: 'visit-1', countryCode: 'PT')],
+    );
+
+    repository.deleteHandler = () async {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Server unavailable.',
+      );
+    };
+
+    await pumpExplore(
+      tester,
+      visits: repository.visits,
+      repository: repository,
+    );
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Visit actions'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteVisit')));
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(find.text('Delete visit?'), findsOneWidget);
+    expect(find.text('Server unavailable.'), findsOneWidget);
+
+    expect(repository.visits, hasLength(1));
   });
 }

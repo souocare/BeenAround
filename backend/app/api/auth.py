@@ -8,23 +8,26 @@ from app.api.dependencies import (
     CurrentMobileUser,
     CurrentUser,
 )
+from app.core.access_tokens import AccessTokenService
 from app.core.auth_constants import WEB_SESSION_COOKIE
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.auth_session import AuthSessionType
 from app.repositories.auth_sessions import AuthSessionRepository
-from app.schemas.auth import LoginRequest, LoginResponse, MobileLogoutRequest
+from app.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    MobileLoginResponse,
+    MobileLogoutRequest,
+    MobileRefreshRequest,
+    MobileRefreshResponse,
+)
 from app.schemas.setup import SetupResponse
-from app.services.auth_sessions import AuthSessionService
+from app.services.auth_sessions import AuthSessionService, InvalidRefreshTokenError
 from app.services.authentication import (
     AuthenticationService,
     InvalidCredentialsError,
 )
-from app.core.access_tokens import AccessTokenService
-from app.schemas.auth import LoginRequest, LoginResponse, MobileLoginResponse
-from app.schemas.auth import MobileRefreshRequest, MobileRefreshResponse
-from app.services.auth_sessions import InvalidRefreshTokenError
-
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -117,6 +120,7 @@ def logout(
 
     response.headers["Cache-Control"] = "no-store"
 
+
 @router.post(
     "/mobile/login",
     response_model=MobileLoginResponse,
@@ -177,6 +181,7 @@ def mobile_login(
         expires_in=int(token_service.expiration.total_seconds()),
         user=SetupResponse.model_validate(user),
     )
+
 
 @router.get(
     "/mobile/me",

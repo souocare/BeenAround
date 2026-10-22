@@ -42,7 +42,7 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
 
         return Scaffold(
           appBar: useTopNavigation ? _buildDesktopAppBar(context) : null,
-          body: _buildDestinationContent(context),
+          body: SafeArea(child: _buildDestinationContent(context)),
           bottomNavigationBar: useTopNavigation
               ? null
               : _buildMobileNavigation(),

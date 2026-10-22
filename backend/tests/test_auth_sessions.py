@@ -1,13 +1,13 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
-
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
+
 from app.core.session_credentials import (
     generate_session_credential,
     hash_session_credential,
@@ -21,8 +21,6 @@ from app.services.auth_sessions import (
     AuthSessionService,
     InvalidRefreshTokenError,
 )
-
-
 
 
 @pytest.fixture
@@ -214,7 +212,9 @@ def test_rotate_mobile_credential_rejects_web_session(session_environment) -> No
     session.rollback()
 
 
-def test_rotate_mobile_credential_rejects_revoked_session(session_environment) -> None:
+def test_repository_rotate_mobile_credential_rejects_revoked_session(
+    session_environment,
+) -> None:
     session, user_id = session_environment
 
     service = make_service(session)
@@ -238,7 +238,9 @@ def test_rotate_mobile_credential_rejects_revoked_session(session_environment) -
     session.rollback()
 
 
-def test_rotate_mobile_credential_rejects_expired_session(session_environment) -> None:
+def test_repository_rotate_mobile_credential_rejects_expired_session(
+    session_environment,
+) -> None:
     session, user_id = session_environment
 
     service = make_service(session)
@@ -381,12 +383,11 @@ def test_rotate_mobile_credential_rejects_empty_token(session_environment) -> No
     with pytest.raises(InvalidRefreshTokenError):
         service.rotate_mobile_credential("")
 
+
 def test_concurrent_mobile_refresh_allows_only_one_rotation(
     tmp_path: Path,
 ) -> None:
-    engine = create_database_engine(
-        f"sqlite:///{tmp_path / 'concurrent_sessions.db'}"
-    )
+    engine = create_database_engine(f"sqlite:///{tmp_path / 'concurrent_sessions.db'}")
     Base.metadata.create_all(engine)
 
     try:
@@ -426,10 +427,7 @@ def test_concurrent_mobile_refresh_allows_only_one_rotation(
                 return True
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(attempt_rotation)
-                for _ in range(2)
-            ]
+            futures = [executor.submit(attempt_rotation) for _ in range(2)]
 
             results = [future.result(timeout=15) for future in futures]
 
@@ -441,9 +439,7 @@ def test_concurrent_mobile_refresh_allows_only_one_rotation(
             saved = repository.get_by_id(created.session.id)
 
             assert saved is not None
-            assert saved.credential_hash != hash_session_credential(
-                original_credential
-            )
+            assert saved.credential_hash != hash_session_credential(original_credential)
 
     finally:
         engine.dispose()

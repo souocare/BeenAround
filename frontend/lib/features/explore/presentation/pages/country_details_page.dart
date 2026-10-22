@@ -6,6 +6,9 @@ import '../../application/explore_state.dart';
 import '../../domain/country.dart';
 import '../../domain/country_visit.dart';
 import '../widgets/show_edit_country_visit.dart';
+import '../widgets/show_delete_country_visit.dart';
+
+enum _VisitAction { edit, delete }
 
 class CountryDetailsPage extends StatelessWidget {
   const CountryDetailsPage({required this.country, super.key});
@@ -108,6 +111,32 @@ class CountryDetailsPage extends StatelessWidget {
                                     await exploreCubit.refresh();
                                   }
                                 },
+                                onDelete: () async {
+                                  final exploreCubit = context
+                                      .read<ExploreCubit>();
+
+                                  final deleted = await showDeleteCountryVisit(
+                                    context,
+                                    country: country,
+                                    visit: visits[index],
+                                  );
+
+                                  if (!deleted || exploreCubit.isClosed) return;
+
+                                  await exploreCubit.refresh();
+
+                                  if (!context.mounted) return;
+
+                                  // If this was the last visit, return to Explore.
+                                  final remainingVisits = exploreCubit.state
+                                      .visitsForCountry(country.code);
+
+                                  if (exploreCubit.state.phase ==
+                                          ExplorePhase.ready &&
+                                      remainingVisits.isEmpty) {
+                                    Navigator.of(context).pop();
+                                  }
+                                },
                               ),
                             ),
                       ],
@@ -146,11 +175,14 @@ class _VisitCard extends StatelessWidget {
     required this.visit,
     required this.number,
     required this.onEdit,
+    required this.onDelete,
   });
 
   final CountryVisit visit;
   final int number;
   final VoidCallback onEdit;
+
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -159,10 +191,38 @@ class _VisitCard extends StatelessWidget {
         leading: CircleAvatar(child: Text('$number')),
         title: Text('Visit $number'),
         subtitle: Text(_formatVisitDates(visit)),
-        trailing: IconButton(
-          tooltip: 'Edit visit',
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: onEdit,
+        trailing: PopupMenuButton<_VisitAction>(
+          tooltip: 'Visit actions',
+          onSelected: (action) {
+            switch (action) {
+              case _VisitAction.edit:
+                onEdit();
+              case _VisitAction.delete:
+                onDelete();
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: _VisitAction.edit,
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined),
+                  SizedBox(width: 12),
+                  Text('Edit visit'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: _VisitAction.delete,
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline),
+                  SizedBox(width: 12),
+                  Text('Delete visit'),
+                ],
+              ),
+            ),
+          ],
         ),
         isThreeLine: false,
       ),
