@@ -345,10 +345,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // Abrir o dropdown.
-    await tester.tap(sortField);
+    final sortButton = find.byKey(const Key('visitedCountriesSort'));
+
+    await tester.ensureVisible(sortButton);
     await tester.pumpAndSettle();
 
-    // Selecionar a ordenação pretendida.
+    await tester.tap(sortButton);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Most visited').last);
     await tester.pumpAndSettle();
 

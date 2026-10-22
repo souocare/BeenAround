@@ -1,6 +1,10 @@
+import 'package:beenaround/features/explore/application/country_visit_summary.dart';
 import 'package:beenaround/features/explore/application/visited_countries_filter.dart';
+import 'package:beenaround/features/explore/presentation/widgets/country_flag.dart';
 import 'package:beenaround/features/explore/presentation/widgets/show_add_destination.dart';
 import 'package:beenaround/features/map/presentation/widgets/world_overview_map.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -84,6 +88,8 @@ class _ExploreContentState extends State<_ExploreContent> {
 
   @override
   Widget build(BuildContext context) {
+    final useCupertinoSearch =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final state = widget.state;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -201,26 +207,74 @@ class _ExploreContentState extends State<_ExploreContent> {
 
         const SizedBox(height: 28),
 
-        AppSectionHeader(
-          title: 'Visited countries',
-          subtitle: state.visitedCountryCount == 0
-              ? 'Countries you visit will appear here.'
-              : '${state.visitedCountryCount} countries in your history',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your Travel History',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<VisitedCountriesSort>(
+              key: const Key('visitedCountriesSort'),
+              tooltip: 'Sort countries',
+              initialValue: _sort,
+              icon: const Icon(Icons.tune_rounded),
+              onSelected: (value) {
+                setState(() => _sort = value);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: VisitedCountriesSort.nameAscending,
+                  child: Text('Name A–Z'),
+                ),
+                PopupMenuItem(
+                  value: VisitedCountriesSort.nameDescending,
+                  child: Text('Name Z–A'),
+                ),
+                PopupMenuItem(
+                  value: VisitedCountriesSort.mostVisited,
+                  child: Text('Most visited'),
+                ),
+              ],
+            ),
+          ],
         ),
 
         const SizedBox(height: 16),
 
-        TextField(
-          key: const Key('visitedCountriesSearch'),
-          decoration: const InputDecoration(
-            hintText: 'Search visited countries...',
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(),
+        if (useCupertinoSearch)
+          CupertinoSearchTextField(
+            key: const Key('visitedCountriesSearch'),
+            placeholder: 'Search visited countries...',
+            onChanged: (value) {
+              setState(() => _query = value);
+            },
+          )
+        else
+          TextField(
+            key: const Key('visitedCountriesSearch'),
+            decoration: InputDecoration(
+              hintText: 'Search visited countries...',
+              prefixIcon: const Icon(Icons.search_rounded),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            onChanged: (value) {
+              setState(() => _query = value);
+            },
           ),
-          onChanged: (value) {
-            setState(() => _query = value);
-          },
-        ),
 
         const SizedBox(height: 12),
 
@@ -231,6 +285,24 @@ class _ExploreContentState extends State<_ExploreContent> {
             ChoiceChip(
               label: const Text('All'),
               selected: _filter == VisitedCountriesFilter.all,
+              showCheckmark: false,
+              selectedColor: const Color(0xFFF4511E),
+              backgroundColor: colors.surfaceContainerLow,
+              side: BorderSide(
+                color: _filter == VisitedCountriesFilter.all
+                    ? Colors.transparent
+                    : colors.outlineVariant,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              labelStyle: TextStyle(
+                color: _filter == VisitedCountriesFilter.all
+                    ? Colors.white
+                    : colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               onSelected: (_) {
                 setState(() => _filter = VisitedCountriesFilter.all);
               },
@@ -238,6 +310,24 @@ class _ExploreContentState extends State<_ExploreContent> {
             ChoiceChip(
               label: const Text('Multiple visits'),
               selected: _filter == VisitedCountriesFilter.multipleVisits,
+              showCheckmark: false,
+              selectedColor: const Color(0xFFF4511E),
+              backgroundColor: colors.surfaceContainerLow,
+              side: BorderSide(
+                color: _filter == VisitedCountriesFilter.multipleVisits
+                    ? Colors.transparent
+                    : colors.outlineVariant,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              labelStyle: TextStyle(
+                color: _filter == VisitedCountriesFilter.multipleVisits
+                    ? Colors.white
+                    : colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               onSelected: (_) {
                 setState(() => _filter = VisitedCountriesFilter.multipleVisits);
               },
@@ -246,36 +336,6 @@ class _ExploreContentState extends State<_ExploreContent> {
         ),
 
         const SizedBox(height: 12),
-
-        DropdownButtonFormField<VisitedCountriesSort>(
-          key: const Key('visitedCountriesSort'),
-          initialValue: _sort,
-          decoration: const InputDecoration(
-            labelText: 'Sort by',
-            border: OutlineInputBorder(),
-          ),
-          items: const [
-            DropdownMenuItem(
-              value: VisitedCountriesSort.nameAscending,
-              child: Text('Name A–Z'),
-            ),
-            DropdownMenuItem(
-              value: VisitedCountriesSort.nameDescending,
-              child: Text('Name Z–A'),
-            ),
-            DropdownMenuItem(
-              value: VisitedCountriesSort.mostVisited,
-              child: Text('Most visited'),
-            ),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-
-            setState(() => _sort = value);
-          },
-        ),
-
-        const SizedBox(height: 16),
 
         if (state.phase == ExplorePhase.loading)
           const Padding(
@@ -314,7 +374,9 @@ class _ExploreContentState extends State<_ExploreContent> {
               padding: const EdgeInsets.only(bottom: 8),
               child: _CountryCard(
                 country: country,
-                visitCount: state.visitsForCountry(country.code).length,
+                summary: summarizeCountryVisits(
+                  state.visitsForCountry(country.code),
+                ),
               ),
             ),
           ),
@@ -324,18 +386,52 @@ class _ExploreContentState extends State<_ExploreContent> {
 }
 
 class _CountryCard extends StatelessWidget {
-  const _CountryCard({required this.country, required this.visitCount});
+  const _CountryCard({required this.country, required this.summary});
 
   final Country country;
-  final int visitCount;
+  final CountryVisitSummary summary;
+
+  String get _subtitle {
+    final count = summary.visitCount;
+
+    final visitsLabel = '$count ${count == 1 ? 'visit' : 'visits'}';
+
+    final lastVisited = summary.lastVisitedOn;
+
+    if (lastVisited == null) {
+      return visitsLabel;
+    }
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    final dateLabel = '${months[lastVisited.month - 1]} ${lastVisited.year}';
+
+    return '$visitsLabel · Last visited $dateLabel';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Card(
-      child: ListTile(
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           final exploreCubit = context.read<ExploreCubit>();
 
@@ -348,19 +444,57 @@ class _CountryCard extends StatelessWidget {
             ),
           );
         },
-        leading: CircleAvatar(
-          backgroundColor: colors.primaryContainer,
-          child: Text(
-            country.code,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colors.onPrimaryContainer,
-              fontWeight: FontWeight.bold,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.45),
             ),
           ),
+          child: Row(
+            children: [
+              CountryFlag(countryCode: country.code),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      country.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      _subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colors.onSurfaceVariant,
+                size: 22,
+              ),
+            ],
+          ),
         ),
-        title: Text(country.name),
-        subtitle: Text('$visitCount ${visitCount == 1 ? 'visit' : 'visits'}'),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
