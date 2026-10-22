@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/presentation/widgets/adaptive_visit_date_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -5,6 +6,10 @@ import '../../application/explore_cubit.dart';
 import '../../domain/country.dart';
 import '../../application/add_country_visit_cubit.dart';
 import '../../application/add_country_visit_state.dart';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'country_flag.dart';
 
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({super.key});
@@ -23,7 +28,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
 
-    final selected = await showDatePicker(
+    final selected = await showAdaptiveVisitDatePicker(
       context: context,
       initialDate: _startedOn ?? now,
       firstDate: DateTime(1900),
@@ -46,7 +51,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   Future<void> _pickEndDate() async {
     if (_startedOn == null) return;
 
-    final selected = await showDatePicker(
+    final selected = await showAdaptiveVisitDatePicker(
       context: context,
       initialDate: _endedOn ?? _startedOn!,
       firstDate: _startedOn!,
@@ -163,13 +168,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         ),
         const SizedBox(height: 24),
-        const _OptionSelector(options: ['Country', 'City'], selectedIndex: 0),
+        _DestinationTypeSelector(selectedIndex: 0, onSelected: (_) {}),
         const SizedBox(height: 16),
-        const _OptionSelector(
-          options: ['Been', 'Lived', 'Wish'],
-          selectedIndex: 0,
-        ),
-        const SizedBox(height: 28),
+        const _DestinationStatusSelector(),
+        const SizedBox(height: 24),
         Text(
           'DESTINATION',
           style: theme.textTheme.labelSmall?.copyWith(
@@ -178,21 +180,14 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         ),
         const SizedBox(height: 10),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.place_outlined),
-            title: Text(_selectedCountry?.name ?? 'Select a country'),
-            subtitle: _selectedCountry == null
-                ? const Text('Search the country catalog')
-                : Text(_selectedCountry!.code),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              setState(() {
-                _selectingCountry = true;
-                _searchQuery = '';
-              });
-            },
-          ),
+        _DestinationCountryCard(
+          country: _selectedCountry,
+          onTap: () {
+            setState(() {
+              _selectingCountry = true;
+              _searchQuery = '';
+            });
+          },
         ),
         const SizedBox(height: 24),
         Text(
@@ -213,24 +208,18 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         Row(
           children: [
             Expanded(
-              child: Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  title: const Text('Start date'),
-                  subtitle: Text(_formatDate(_startedOn)),
-                  onTap: _pickStartDate,
-                ),
+              child: _VisitDateCard(
+                label: 'START DATE',
+                value: _formatDate(_startedOn),
+                onTap: _pickStartDate,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Expanded(
-              child: Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  title: const Text('End date'),
-                  subtitle: Text(_formatDate(_endedOn)),
-                  onTap: _startedOn == null ? null : _pickEndDate,
-                ),
+              child: _VisitDateCard(
+                label: 'END DATE',
+                value: _formatDate(_endedOn),
+                onTap: _startedOn == null ? null : _pickEndDate,
               ),
             ),
           ],
@@ -262,6 +251,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   Widget _buildCountryPicker(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final countries = context.read<ExploreCubit>().state.countries;
 
     final query = _searchQuery.trim().toLowerCase();
@@ -274,58 +264,150 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         })
         .toList(growable: false);
 
+    final useCupertinoSearch =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            key: const Key('destinationCountrySearch'),
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: 'Search countries...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear search',
-                      onPressed: () {
-                        setState(() => _searchQuery = '');
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (value) {
-              setState(() => _searchQuery = value);
-            },
+          padding: const EdgeInsets.fromLTRB(16, 16, 20, 8),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Back to Add Destination',
+                onPressed: () {
+                  setState(() {
+                    _selectingCountry = false;
+                    _searchQuery = '';
+                  });
+                },
+                icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+              ),
+
+              const SizedBox(width: 8),
+
+              Expanded(
+                child: Text(
+                  'Select Country',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: useCupertinoSearch
+              ? CupertinoSearchTextField(
+                  key: const Key('destinationCountrySearch'),
+                  autofocus: true,
+                  placeholder: 'Search countries...',
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                )
+              : TextField(
+                  key: const Key('destinationCountrySearch'),
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Search countries...',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                ),
+        ),
+
         Expanded(
           child: filtered.isEmpty
               ? Center(
                   child: Text(
                     'No countries found.',
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                 )
-              : ListView.builder(
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   itemCount: filtered.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final country = filtered[index];
 
-                    return ListTile(
-                      title: Text(country.name),
-                      subtitle: Text(country.code),
-                      trailing: _selectedCountry?.code == country.code
-                          ? const Icon(Icons.check)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedCountry = country;
-                          _selectingCountry = false;
-                          _searchQuery = '';
-                        });
-                      },
+                    final isSelected = _selectedCountry?.code == country.code;
+
+                    return Material(
+                      color: colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          setState(() {
+                            _selectedCountry = country;
+                            _selectingCountry = false;
+                            _searchQuery = '';
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? colors.primary
+                                  : colors.outline.withValues(alpha: 0.45),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              CountryFlag(countryCode: country.code, size: 36),
+                              const SizedBox(width: 12),
+
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      country.name,
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      country.code,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colors.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle
+                                    : Icons.chevron_right,
+                                color: isSelected
+                                    ? colors.primary
+                                    : colors.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -352,6 +434,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   onPressed:
                       _selectedCountry == null ||
                           state.isSubmitting ||
@@ -364,7 +456,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.check),
+                      : const Icon(Icons.check, size: 20),
                   label: Text(state.isSubmitting ? 'Saving...' : 'Save Visit'),
                 ),
               ),
@@ -372,49 +464,6 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         );
       },
-    );
-  }
-}
-
-class _OptionSelector extends StatelessWidget {
-  const _OptionSelector({required this.options, required this.selectedIndex});
-
-  final List<String> options;
-  final int selectedIndex;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Row(
-      children: [
-        for (var index = 0; index < options.length; index++) ...[
-          if (index > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              decoration: BoxDecoration(
-                color: index == selectedIndex
-                    ? colors.primaryContainer
-                    : colors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                options[index],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: index == selectedIndex
-                      ? colors.onPrimaryContainer
-                      : colors.onSurfaceVariant.withValues(alpha: 0.55),
-                  fontWeight: index == selectedIndex
-                      ? FontWeight.w600
-                      : FontWeight.normal,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
     );
   }
 }
@@ -439,6 +488,307 @@ class _ComingLaterCard extends StatelessWidget {
         leading: Icon(icon, color: colors.onSurfaceVariant),
         title: Text(title),
         subtitle: Text(subtitle),
+      ),
+    );
+  }
+}
+
+class _VisitDateCard extends StatelessWidget {
+  const _VisitDateCard({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 82),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 15,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: onTap == null
+                      ? colors.onSurfaceVariant
+                      : colors.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DestinationTypeSelector extends StatelessWidget {
+  const _DestinationTypeSelector({
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    const options = ['Country', 'City'];
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          for (var index = 0; index < options.length; index++)
+            Expanded(
+              child: InkWell(
+                onTap: index == 0 ? () => onSelected(index) : null,
+                borderRadius: BorderRadius.circular(11),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: selectedIndex == index
+                        ? colors.surfaceContainerHigh
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (selectedIndex == index) ...[
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                      ],
+                      Text(
+                        options[index],
+                        style: TextStyle(
+                          color: index == selectedIndex
+                              ? colors.onSurface
+                              : colors.onSurfaceVariant,
+                          fontWeight: index == selectedIndex
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationStatusSelector extends StatelessWidget {
+  const _DestinationStatusSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          for (final option in ['Been', 'Lived', 'Wish'])
+            Expanded(
+              child: Tooltip(
+                message: option == 'Been'
+                    ? 'Record a visit'
+                    : '$option coming later',
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (option == 'Been') ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: colors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          option,
+                          style: TextStyle(
+                            color: option == 'Been'
+                                ? colors.primary
+                                : colors.onSurfaceVariant,
+                            fontWeight: option == 'Been'
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 2,
+                      width: 34,
+                      decoration: BoxDecoration(
+                        color: option == 'Been'
+                            ? colors.primary
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationCountryCard extends StatelessWidget {
+  const _DestinationCountryCard({required this.country, required this.onTap});
+
+  final Country? country;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: country == null
+                    ? Container(
+                        width: 46,
+                        height: 46,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colors.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.place,
+                          color: colors.primary,
+                          size: 24,
+                        ),
+                      )
+                    : CountryFlag(countryCode: country!.code, size: 46),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      country?.name ?? 'Select a country',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      country == null
+                          ? 'Search the country catalog'
+                          : country!.code,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
+            ],
+          ),
+        ),
       ),
     );
   }

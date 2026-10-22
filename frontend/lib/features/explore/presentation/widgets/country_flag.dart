@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 class CountryFlag extends StatelessWidget {
-  const CountryFlag({required this.countryCode, super.key});
+  const CountryFlag({required this.countryCode, this.size = 48, super.key});
 
   final String countryCode;
+  final double size;
 
   String get _emoji {
     final code = countryCode.toUpperCase();
@@ -20,14 +21,14 @@ class CountryFlag extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
-      width: 48,
-      height: 48,
+      width: size,
+      height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(_emoji, style: const TextStyle(fontSize: 27)),
+      child: Text(_emoji, style: TextStyle(fontSize: size * 0.56)),
     );
   }
 }
