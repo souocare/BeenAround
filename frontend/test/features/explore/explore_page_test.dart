@@ -277,7 +277,12 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
-    await tester.tap(find.text('Multiple visits'));
+    final multipleVisitsChip = find.text('Multiple visits');
+
+    await tester.ensureVisible(multipleVisitsChip);
+    await tester.pumpAndSettle();
+
+    await tester.tap(multipleVisitsChip);
     await tester.pumpAndSettle();
 
     expect(find.text('Portugal'), findsOneWidget);
@@ -334,9 +339,16 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
-    await tester.tap(find.text('Name A–Z'));
+    final sortField = find.byKey(const Key('visitedCountriesSort'));
+
+    await tester.ensureVisible(sortField);
     await tester.pumpAndSettle();
 
+    // Abrir o dropdown.
+    await tester.tap(sortField);
+    await tester.pumpAndSettle();
+
+    // Selecionar a ordenação pretendida.
     await tester.tap(find.text('Most visited').last);
     await tester.pumpAndSettle();
 

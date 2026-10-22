@@ -1,5 +1,6 @@
 import 'package:beenaround/features/explore/application/visited_countries_filter.dart';
 import 'package:beenaround/features/explore/presentation/widgets/show_add_destination.dart';
+import 'package:beenaround/features/map/presentation/widgets/world_overview_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -100,17 +101,31 @@ class _ExploreContentState extends State<_ExploreContent> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
-              child: Text(
-                'Explore',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'BeenAround',
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.5,
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 16),
             IconButton.filled(
               tooltip: 'Add Destination',
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
               onPressed: () async {
                 final exploreCubit = context.read<ExploreCubit>();
 
@@ -120,43 +135,71 @@ class _ExploreContentState extends State<_ExploreContent> {
                   await exploreCubit.refresh();
                 }
               },
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add, size: 26),
             ),
           ],
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
 
-        Text(
-          'Your travel history, all in one place.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colors.onSurfaceVariant,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 600;
+            final horizontalOverflow = isCompact ? 20.0 : 0.0;
+            final mapWidth = constraints.maxWidth + horizontalOverflow * 2;
+
+            return SizedBox(
+              height: mapWidth / 1.9,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: -horizontalOverflow,
+                    width: mapWidth,
+                    height: mapWidth / 1.9,
+                    child: WorldOverviewMap(
+                      visitedCountryCodes: state.visitedCountryCodes,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 20),
+
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _CompactStatistic(
+                  icon: Icons.public_outlined,
+                  value: '${state.visitedCountryCount}',
+                  label: 'Countries visited',
+                ),
+              ),
+              Container(width: 1, height: 40, color: colors.outlineVariant),
+              Expanded(
+                child: _CompactStatistic(
+                  icon: Icons.place_outlined,
+                  value: '${state.totalVisits}',
+                  label: 'Total visits',
+                ),
+              ),
+            ],
           ),
         ),
 
         const SizedBox(height: 28),
-
-        Row(
-          children: [
-            Expanded(
-              child: _StatisticCard(
-                label: 'Countries visited',
-                value: '${state.visitedCountryCount}',
-                icon: Icons.public_outlined,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _StatisticCard(
-                label: 'Total visits',
-                value: '${state.totalVisits}',
-                icon: Icons.place_outlined,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 32),
 
         AppSectionHeader(
           title: 'Visited countries',
@@ -280,50 +323,6 @@ class _ExploreContentState extends State<_ExploreContent> {
   }
 }
 
-class _StatisticCard extends StatelessWidget {
-  const _StatisticCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: colors.primary),
-            const SizedBox(height: 16),
-            Text(
-              value,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _CountryCard extends StatelessWidget {
   const _CountryCard({required this.country, required this.visitCount});
 
@@ -395,6 +394,51 @@ class _RefreshError extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CompactStatistic extends StatelessWidget {
+  const _CompactStatistic({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: colors.primary),
+            const SizedBox(width: 8),
+            Text(
+              value,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colors.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

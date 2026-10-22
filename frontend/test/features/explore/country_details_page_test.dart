@@ -116,6 +116,20 @@ CountryVisit visit({
 
 void main() {
   const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');
+  Future<void> openPortugalDetails(WidgetTester tester) async {
+    final portugalFinder = find.text('Portugal');
+
+    await tester.scrollUntilVisible(
+      portugalFinder,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(portugalFinder);
+    await tester.pumpAndSettle();
+  }
 
   Future<void> pumpExplore(
     WidgetTester tester, {
@@ -159,8 +173,7 @@ void main() {
       visits: [visit(id: '1', countryCode: 'PT')],
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     expect(find.text('Visit history'), findsOneWidget);
     expect(find.text('Total visits'), findsOneWidget);
@@ -186,8 +199,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     expect(find.text('Visit 1'), findsOneWidget);
     expect(find.text('Visit 2'), findsOneWidget);
@@ -204,8 +216,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     expect(find.text('From 12/03/2025'), findsOneWidget);
   });
@@ -222,8 +233,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -257,8 +267,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -301,8 +310,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -356,8 +364,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -390,8 +397,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -415,8 +421,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -456,8 +461,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions').first);
     await tester.pumpAndSettle();
@@ -488,8 +492,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();
@@ -528,8 +531,7 @@ void main() {
       repository: repository,
     );
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
+    await openPortugalDetails(tester);
 
     await tester.tap(find.byTooltip('Visit actions'));
     await tester.pumpAndSettle();

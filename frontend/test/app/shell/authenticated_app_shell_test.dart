@@ -198,7 +198,7 @@ void main() {
 
       expect(find.byType(NavigationBar), findsNothing);
       expect(find.byType(AppBar), findsOneWidget);
-      expect(find.text('BeenAround'), findsOneWidget);
+      expect(find.text('BeenAround'), findsNWidgets(2));
 
       await tester.tap(find.widgetWithText(TextButton, 'Trips'));
       await tester.pumpAndSettle();
