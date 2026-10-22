@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../theme/theme_cubit.dart';
 import '../../features/explore/presentation/pages/explore_page.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthenticatedAppShell extends StatefulWidget {
   const AuthenticatedAppShell({
@@ -34,15 +36,75 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
     });
   }
 
+  Widget _buildIOSScaffold(BuildContext context, Widget content) {
+    final colors = Theme.of(context).colorScheme;
+
+    return AdaptiveScaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: content,
+      ),
+      minimizeBehavior: TabBarMinimizeBehavior.never,
+      bottomNavigationBar: AdaptiveBottomNavigationBar(
+        useNativeBottomBar: true,
+        selectedIndex: _selectedDestination.index,
+        selectedItemColor: colors.primary,
+        unselectedItemColor: colors.onSurfaceVariant,
+        onTap: (index) {
+          _selectDestination(AppDestination.values[index]);
+        },
+        items: const [
+          AdaptiveNavigationDestination(
+            icon: 'safari',
+            selectedIcon: 'safari.fill',
+            label: 'Explore',
+          ),
+          AdaptiveNavigationDestination(
+            icon: 'suitcase.rolling',
+            selectedIcon: 'suitcase.rolling.fill',
+            label: 'Trips',
+          ),
+          AdaptiveNavigationDestination(
+            icon: 'map',
+            selectedIcon: 'map.fill',
+            label: 'Map',
+          ),
+          AdaptiveNavigationDestination(
+            icon: 'chart.bar',
+            selectedIcon: 'chart.bar.fill',
+            label: 'Statistics',
+          ),
+          AdaptiveNavigationDestination(
+            icon: 'person.crop.circle',
+            selectedIcon: 'person.crop.circle.fill',
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final useTopNavigation = constraints.maxWidth >= _desktopBreakpoint;
 
+        final useNativeIOSNavigation =
+            !kIsWeb &&
+            defaultTargetPlatform == TargetPlatform.iOS &&
+            !useTopNavigation;
+
+        final content = SafeArea(child: _buildDestinationContent(context));
+
+        if (useNativeIOSNavigation) {
+          return _buildIOSScaffold(context, content);
+        }
+
         return Scaffold(
           appBar: useTopNavigation ? _buildDesktopAppBar(context) : null,
-          body: SafeArea(child: _buildDestinationContent(context)),
+          body: content,
           bottomNavigationBar: useTopNavigation
               ? null
               : _buildMobileNavigation(),

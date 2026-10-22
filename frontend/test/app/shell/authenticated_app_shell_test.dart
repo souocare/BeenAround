@@ -13,6 +13,8 @@ import 'package:beenaround/features/explore/application/explore_cubit.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/foundation.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   @override
@@ -494,6 +496,39 @@ void main() {
       expect(find.text('Countries visited'), findsOneWidget);
       expect(find.text('Total visits'), findsOneWidget);
       expect(find.text('No countries visited yet'), findsOneWidget);
+    });
+    testWidgets('iOS compact layout uses adaptive navigation', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+      await pumpShell(tester);
+
+      expect(find.byType(AdaptiveScaffold), findsOneWidget);
+
+      final scaffold = tester.widget<AdaptiveScaffold>(
+        find.byType(AdaptiveScaffold),
+      );
+
+      expect(scaffold.bottomNavigationBar, isNotNull);
+      expect(scaffold.bottomNavigationBar!.useNativeBottomBar, isTrue);
+      expect(scaffold.bottomNavigationBar!.selectedIndex, 0);
+
+      expect(find.text('Countries visited'), findsOneWidget);
+
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('iOS wide layout keeps desktop navigation', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+      try {
+        await pumpShell(tester, size: const Size(1200, 800));
+
+        expect(find.byType(AdaptiveScaffold), findsNothing);
+        expect(find.byType(AppBar), findsOneWidget);
+        expect(find.byType(NavigationBar), findsNothing);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
   });
 }

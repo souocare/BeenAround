@@ -39,6 +39,7 @@ dependencies:
   flutter_bloc: ^9.1.1
   flutter_secure_storage: ^11.2.0
   maplibre: ^0.3.6
+  adaptive_platform_ui: ^1.0.2
 
 dev_dependencies:
   flutter_test:
