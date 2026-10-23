@@ -33,6 +33,9 @@ def test_initial_migration_creates_alembic_version_table(
         try:
             tables = inspect(engine).get_table_names()
             assert "alembic_version" in tables
+            assert "countries" in tables
+            assert "country_visits" in tables
+            assert "cities" in tables
         finally:
             engine.dispose()
     finally:
