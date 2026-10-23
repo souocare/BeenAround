@@ -66,6 +66,7 @@ flutter:
   assets:
     - assets/geo/demo_countries.geojson
     - assets/geo/world_countries.geojson
+    - assets/geo/countries/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

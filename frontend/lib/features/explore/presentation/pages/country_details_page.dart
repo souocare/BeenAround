@@ -10,6 +10,7 @@ import '../widgets/country_flag.dart';
 import '../widgets/show_add_destination.dart';
 import '../widgets/show_delete_country_visit.dart';
 import '../widgets/show_edit_country_visit.dart';
+import '../../../map/presentation/widgets/country_map.dart';
 
 enum _CountryTab { overview, visits, cities, trips }
 
@@ -111,8 +112,9 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                         const SizedBox(height: 24),
 
                         // Country map will be integrated here.
-                        _CountryMapPlaceholder(
-                          countryName: widget.country.name,
+                        CountryMap(
+                          countryCode: widget.country.code,
+                          isVisited: isVisited,
                         ),
 
                         const SizedBox(height: 20),
@@ -136,7 +138,18 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                         const SizedBox(height: 24),
 
                         switch (_selectedTab) {
-                          _CountryTab.overview ||
+                          _CountryTab.overview => _VisitHistory(
+                            visits: visits.take(3).toList(),
+                            onEdit: _editVisit,
+                            onDelete: _deleteVisit,
+                            showViewAll: visits.length > 3,
+                            onViewAll: () {
+                              setState(() {
+                                _selectedTab = _CountryTab.visits;
+                              });
+                            },
+                          ),
+
                           _CountryTab.visits => _VisitHistory(
                             visits: visits,
                             onEdit: _editVisit,
@@ -224,114 +237,83 @@ class _CountryHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            CountryFlag(countryCode: country.code, size: 72),
+        CountryFlag(countryCode: country.code, size: 64),
 
-            const SizedBox(width: 16),
+        const SizedBox(width: 14),
 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    country.name,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        country.alpha3Code,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-
-                      Text(
-                        '·',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-
-                      Text(
-                        country.continent,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                country.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 5),
+
+              Text(
+                country.alpha3Code,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(width: 12),
 
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isVisited
-                    ? colors.primary.withValues(alpha: 0.14)
-                    : colors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isVisited
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    size: 16,
-                    color: isVisited ? colors.primary : colors.onSurfaceVariant,
-                  ),
-
-                  const SizedBox(width: 7),
-
-                  Text(
-                    isVisited ? 'Visited' : 'Not visited',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: isVisited
-                          ? colors.primary
-                          : colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+            Text(
+              country.continent,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
 
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '$visitCount ${visitCount == 1 ? 'visit' : 'visits'}',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+            const SizedBox(height: 8),
+
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isVisited
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 15,
+                  color: isVisited ? colors.primary : colors.onSurfaceVariant,
                 ),
+
+                const SizedBox(width: 5),
+
+                Text(
+                  isVisited ? 'Visited' : 'Not visited',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: isVisited ? colors.primary : colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              '$visitCount ${visitCount == 1 ? 'visit' : 'visits'}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colors.onSurfaceVariant,
               ),
             ),
           ],
@@ -404,38 +386,84 @@ class _CountryStatistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            icon: Icons.explore_outlined,
-            value: '$visitCount',
-            label: 'Total visits',
-          ),
-        ),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-        const SizedBox(width: 12),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _CountryStatItem(
+                    value: '$visitCount',
+                    label: 'VISITS',
+                  ),
+                ),
 
-        Expanded(
-          child: _StatCard(
-            icon: Icons.calendar_today_outlined,
-            value: lastVisited == null ? '—' : _formatDate(lastVisited!),
-            label: 'Last visited',
+                _StatDivider(color: colors.outlineVariant),
+
+                const Expanded(
+                  child: _CountryStatItem(value: '—', label: 'CITIES'),
+                ),
+
+                _StatDivider(color: colors.outlineVariant),
+
+                const Expanded(
+                  child: _CountryStatItem(value: '—', label: 'TRIPS'),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.outline.withValues(alpha: 0.18),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            child: Row(
+              children: [
+                Text(
+                  'LAST VISITED',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+
+                const Spacer(),
+
+                Text(
+                  lastVisited == null
+                      ? '—'
+                      : _formatStatisticsDate(lastVisited!),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+class _CountryStatItem extends StatelessWidget {
+  const _CountryStatItem({required this.value, required this.label});
 
-  final IconData icon;
   final String value;
   final String label;
 
@@ -444,38 +472,38 @@ class _StatCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: colors.primary, size: 22),
-
-            const SizedBox(height: 14),
-
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
+    return Column(
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
         ),
-      ),
+
+        const SizedBox(height: 2),
+
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
     );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  const _StatDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(height: 32, width: 1, color: color.withValues(alpha: 0.5));
   }
 }
 
@@ -491,37 +519,83 @@ class _CountryTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         children: [
           for (final tab in _CountryTab.values)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(switch (tab) {
-                  _CountryTab.overview => 'Overview',
-                  _CountryTab.visits => 'Visits',
-                  _CountryTab.cities => 'Cities',
-                  _CountryTab.trips => 'Trips',
-                }),
-                selected: selectedTab == tab,
-                onSelected: (_) => onSelected(tab),
-                selectedColor: colors.primary,
-                backgroundColor: colors.surfaceContainerHigh,
-                labelStyle: TextStyle(
-                  color: selectedTab == tab
-                      ? Colors.white
-                      : colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: _CountryTabButton(
+                  label: switch (tab) {
+                    _CountryTab.overview => 'Overview',
+                    _CountryTab.visits => 'Visits',
+                    _CountryTab.cities => 'Cities',
+                    _CountryTab.trips => 'Trips',
+                  },
+                  selected: selectedTab == tab,
+                  onTap: () => onSelected(tab),
                 ),
-                side: BorderSide.none,
-                showCheckmark: false,
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _CountryTabButton extends StatelessWidget {
+  const _CountryTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOut,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? colors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: selected ? colors.onPrimary : colors.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -536,24 +610,59 @@ class _VisitHistory extends StatelessWidget {
     required this.visits,
     required this.onEdit,
     required this.onDelete,
+    this.showViewAll = false,
+    this.onViewAll,
   });
 
   final List<CountryVisit> visits;
   final ValueChanged<CountryVisit> onEdit;
   final ValueChanged<CountryVisit> onDelete;
+  final bool showViewAll;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Visit history',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            Expanded(
+              child: Text(
+                'Visit History',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+
+            if (showViewAll)
+              TextButton(
+                onPressed: onViewAll,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('View All Visits'),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_rounded, size: 16),
+                  ],
+                ),
+              ),
+          ],
         ),
 
         const SizedBox(height: 16),
@@ -565,16 +674,34 @@ class _VisitHistory extends StatelessWidget {
             message: 'Add your first visit to start your travel history.',
           )
         else
-          for (var index = 0; index < visits.length; index++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _VisitCard(
-                visit: visits[index],
-                number: index + 1,
-                onEdit: () => onEdit(visits[index]),
-                onDelete: () => onDelete(visits[index]),
-              ),
+          Container(
+            decoration: BoxDecoration(
+              color: colors.surfaceContainer,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.outline.withValues(alpha: 0.18)),
             ),
+            child: Column(
+              children: [
+                for (var index = 0; index < visits.length; index++) ...[
+                  _VisitCard(
+                    visit: visits[index],
+                    number: index + 1,
+                    onEdit: () => onEdit(visits[index]),
+                    onDelete: () => onDelete(visits[index]),
+                  ),
+
+                  if (index < visits.length - 1)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: colors.outline.withValues(alpha: 0.25),
+                    ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -595,56 +722,88 @@ class _VisitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: CircleAvatar(
-          backgroundColor: colors.primary.withValues(alpha: 0.14),
-          foregroundColor: colors.primary,
-          child: Text('$number'),
-        ),
-        title: Text(
-          'Visit $number',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(_formatVisitDates(visit)),
-        trailing: PopupMenuButton<_VisitAction>(
-          tooltip: 'Visit actions',
-          onSelected: (action) {
-            switch (action) {
-              case _VisitAction.edit:
-                onEdit();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.calendar_today_outlined,
+              color: colors.primary,
+              size: 21,
+            ),
+          ),
 
-              case _VisitAction.delete:
-                onDelete();
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: _VisitAction.edit,
-              child: Row(
-                children: [
-                  Icon(Icons.edit_outlined),
-                  SizedBox(width: 12),
-                  Text('Edit visit'),
-                ],
-              ),
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Visit $number',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  _formatVisitDates(visit),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-            PopupMenuItem(
-              value: _VisitAction.delete,
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline),
-                  SizedBox(width: 12),
-                  Text('Delete visit'),
-                ],
+          ),
+
+          PopupMenuButton<_VisitAction>(
+            tooltip: 'Visit actions',
+            icon: Icon(Icons.more_vert_rounded, color: colors.onSurfaceVariant),
+            onSelected: (action) {
+              switch (action) {
+                case _VisitAction.edit:
+                  onEdit();
+
+                case _VisitAction.delete:
+                  onDelete();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _VisitAction.edit,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined),
+                    SizedBox(width: 12),
+                    Text('Edit visit'),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+              PopupMenuItem(
+                value: _VisitAction.delete,
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline),
+                    SizedBox(width: 12),
+                    Text('Delete visit'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -717,14 +876,20 @@ String _formatVisitDates(CountryVisit visit) {
   }
 
   if (start != null && end == null) {
-    return 'From ${_formatDate(start)}';
+    return 'From ${_formatStatisticsDate(start)}';
   }
 
   if (start == null && end != null) {
-    return 'Until ${_formatDate(end)}';
+    return 'Until ${_formatStatisticsDate(end)}';
   }
 
-  return '${_formatDate(start!)} – ${_formatDate(end!)}';
+  if (start!.year == end!.year && start.month == end.month) {
+    return '${start.day}–${end.day} '
+        '${_formatStatisticsDate(end).split(' ').skip(1).join(' ')}';
+  }
+
+  return '${_formatStatisticsDate(start)} – '
+      '${_formatStatisticsDate(end)}';
 }
 
 String _formatDate(DateTime date) {
@@ -732,4 +897,23 @@ String _formatDate(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
 
   return '$day/$month/${date.year}';
+}
+
+String _formatStatisticsDate(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
 }

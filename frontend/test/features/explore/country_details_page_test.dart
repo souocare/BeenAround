@@ -213,8 +213,8 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    expect(find.text('Visit history'), findsOneWidget);
-    expect(find.text('Total visits'), findsOneWidget);
+    expect(find.text('Visit History'), findsOneWidget);
+    expect(find.text('VISITS'), findsOneWidget);
     expect(find.text('Dates not specified'), findsOneWidget);
   });
 
@@ -242,8 +242,8 @@ void main() {
     expect(find.text('Visit 1'), findsOneWidget);
     expect(find.text('Visit 2'), findsOneWidget);
 
-    expect(find.text('10/10/2026 – 15/10/2026'), findsOneWidget);
-    expect(find.text('02/06/2024 – 08/06/2024'), findsOneWidget);
+    expect(find.text('10–15 Oct 2026'), findsOneWidget);
+    expect(find.text('2–8 Jun 2024'), findsOneWidget);
   });
 
   testWidgets('supports visits without an end date', (tester) async {
@@ -256,7 +256,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    expect(find.text('From 12/03/2025'), findsOneWidget);
+    expect(find.text('From 12 Mar 2025'), findsOneWidget);
   });
   testWidgets('opens edit visit with existing dates', (tester) async {
     await pumpExplore(
@@ -390,7 +390,7 @@ void main() {
     expect(repository.receivedStartedOn, DateTime(2026, 10, 12));
     expect(repository.receivedEndedOn, DateTime(2026, 10, 15));
 
-    expect(find.text('12/10/2026 – 15/10/2026'), findsOneWidget);
+    expect(find.text('12–15 Oct 2026'), findsOneWidget);
   });
   testWidgets('keeps edit form open when update fails', (tester) async {
     final repository = FakeCountriesRepository(
@@ -543,8 +543,8 @@ void main() {
     expect(repository.deleteCalls, 1);
     expect(repository.visits, hasLength(1));
 
-    expect(find.text('Visit history'), findsOneWidget);
-    expect(find.text('Total visits'), findsOneWidget);
+    expect(find.text('Visit History'), findsOneWidget);
+    expect(find.text('VISITS'), findsOneWidget);
     expect(find.text('Visit 1'), findsOneWidget);
     expect(find.text('Visit 2'), findsNothing);
   });
@@ -576,7 +576,7 @@ void main() {
     expect(repository.visits, isEmpty);
 
     // Country Details remains open.
-    expect(find.text('Visit history'), findsOneWidget);
+    expect(find.text('Visit History'), findsOneWidget);
     expect(find.text('No visits recorded for this country.'), findsOneWidget);
 
     expect(find.byTooltip('Visit actions'), findsNothing);
@@ -654,5 +654,42 @@ void main() {
     // The modal closes and Country Details reflects the new visit.
     expect(find.text('Add Destination'), findsNothing);
     expect(find.text('Visit 2'), findsOneWidget);
+  });
+  testWidgets('switches between country detail tabs', (tester) async {
+    await pumpExplore(
+      tester,
+      visits: [
+        visit(
+          id: 'visit-1',
+          countryCode: 'PT',
+          startedOn: DateTime(2026, 10, 10),
+        ),
+      ],
+    );
+
+    await openPortugalDetails(tester);
+
+    expect(find.text('Visit History'), findsOneWidget);
+
+    await tester.tap(find.text('Cities'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visited cities'), findsOneWidget);
+    expect(find.text('Visit History'), findsNothing);
+
+    await tester.tap(find.text('Trips'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Associated trips'), findsOneWidget);
+
+    await tester.tap(find.text('Visits'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visit History'), findsOneWidget);
+
+    await tester.tap(find.text('Overview'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Visit History'), findsOneWidget);
   });
 }
