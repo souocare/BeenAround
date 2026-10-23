@@ -63,9 +63,19 @@ class FakeExploreRepository implements CountriesRepository {
   }
 }
 
-const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');
+const portugal = Country(
+  code: 'PT',
+  name: 'Portugal',
+  alpha3Code: 'PRT',
+  continent: 'Europe',
+);
 
-const spain = Country(code: 'ES', name: 'Spain', alpha3Code: 'ESP');
+const spain = Country(
+  code: 'ES',
+  name: 'Spain',
+  alpha3Code: 'ESP',
+  continent: 'Europe',
+);
 
 CountryVisit visit(String id, String countryCode) {
   return CountryVisit(

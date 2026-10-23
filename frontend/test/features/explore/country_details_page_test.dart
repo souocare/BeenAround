@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/core/network/api_exception.dart';
+import 'package:beenaround/features/explore/presentation/widgets/edit_country_visit_sheet.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -75,13 +76,30 @@ class FakeCountriesRepository implements CountriesRepository {
     return updated;
   }
 
+  int createCalls = 0;
+  String? receivedCreatedCountryCode;
+
   @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    createCalls++;
+    receivedCreatedCountryCode = countryCode;
+
+    final created = CountryVisit(
+      id: 'created-$createCalls',
+      countryCode: countryCode,
+      startedOn: startedOn,
+      endedOn: endedOn,
+      createdAt: DateTime(2026, 10, 22),
+      updatedAt: DateTime(2026, 10, 22),
+    );
+
+    visits.add(created);
+
+    return created;
   }
 
   @override
@@ -115,7 +133,12 @@ CountryVisit visit({
 }
 
 void main() {
-  const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');
+  const portugal = Country(
+    code: 'PT',
+    name: 'Portugal',
+    alpha3Code: 'PRT',
+    continent: 'Europe',
+  );
   Future<void> openPortugalDetails(WidgetTester tester) async {
     final portugalFinder = find.text('Portugal');
 
@@ -128,6 +151,21 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(portugalFinder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openVisitActions(WidgetTester tester, {int index = 0}) async {
+    final actions = find.byTooltip('Visit actions').at(index);
+
+    await tester.scrollUntilVisible(
+      actions,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(actions);
     await tester.pumpAndSettle();
   }
 
@@ -235,16 +273,34 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit Visit'), findsOneWidget);
-    expect(find.text('10/10/2026'), findsOneWidget);
-    expect(find.text('15/10/2026'), findsOneWidget);
-    expect(find.text('Save Changes'), findsOneWidget);
+    final editSheet = find.byType(EditCountryVisitSheet);
+
+    expect(editSheet, findsOneWidget);
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('Edit Visit')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('10/10/2026')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('15/10/2026')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('Save Changes')),
+      findsOneWidget,
+    );
   });
   testWidgets('clears visit dates and refreshes country details', (
     tester,
@@ -269,8 +325,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
@@ -312,8 +367,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
@@ -366,8 +420,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
@@ -379,8 +432,19 @@ void main() {
     expect(find.text('Edit Visit'), findsOneWidget);
     expect(find.text('Server unavailable.'), findsOneWidget);
 
-    expect(find.text('10/10/2026'), findsOneWidget);
-    expect(find.text('15/10/2026'), findsOneWidget);
+    final editSheet = find.byType(EditCountryVisitSheet);
+
+    expect(editSheet, findsOneWidget);
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('10/10/2026')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: editSheet, matching: find.text('15/10/2026')),
+      findsOneWidget,
+    );
 
     expect(find.text('Save Changes'), findsOneWidget);
   });
@@ -399,15 +463,21 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
     expect(find.byType(Dialog), findsOneWidget);
     expect(find.text('Edit Visit'), findsOneWidget);
-    expect(find.text('10/10/2026'), findsOneWidget);
+
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.text('10/10/2026'),
+      ),
+      findsOneWidget,
+    );
   });
   testWidgets('canceling deletion preserves the visit', (tester) async {
     final repository = FakeCountriesRepository(
@@ -423,8 +493,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Delete visit'));
     await tester.pumpAndSettle();
@@ -463,8 +532,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions').first);
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Delete visit'));
     await tester.pumpAndSettle();
@@ -480,7 +548,9 @@ void main() {
     expect(find.text('Visit 1'), findsOneWidget);
     expect(find.text('Visit 2'), findsNothing);
   });
-  testWidgets('deleting the last visit returns to Explore', (tester) async {
+  testWidgets('deleting the last visit keeps country details open', (
+    tester,
+  ) async {
     final repository = FakeCountriesRepository(
       countries: [portugal],
       visits: [visit(id: 'visit-1', countryCode: 'PT')],
@@ -494,8 +564,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Delete visit'));
     await tester.pumpAndSettle();
@@ -506,11 +575,14 @@ void main() {
     expect(repository.deleteCalls, 1);
     expect(repository.visits, isEmpty);
 
-    expect(find.text('Visit history'), findsNothing);
+    // Country Details remains open.
+    expect(find.text('Visit history'), findsOneWidget);
+    expect(find.text('No visits recorded for this country.'), findsOneWidget);
+
     expect(find.byTooltip('Visit actions'), findsNothing);
 
-    // Explore must no longer display Portugal as a visited country.
-    expect(find.text('Portugal'), findsNothing);
+    // The user can immediately add another visit.
+    expect(find.byTooltip('Add country visit'), findsOneWidget);
   });
   testWidgets('keeps confirmation open when deletion fails', (tester) async {
     final repository = FakeCountriesRepository(
@@ -533,8 +605,7 @@ void main() {
 
     await openPortugalDetails(tester);
 
-    await tester.tap(find.byTooltip('Visit actions'));
-    await tester.pumpAndSettle();
+    await openVisitActions(tester);
 
     await tester.tap(find.text('Delete visit'));
     await tester.pumpAndSettle();
@@ -547,5 +618,41 @@ void main() {
     expect(find.text('Server unavailable.'), findsOneWidget);
 
     expect(repository.visits, hasLength(1));
+  });
+  testWidgets('adds a visit with the current country preselected', (
+    tester,
+  ) async {
+    final repository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: [visit(id: 'visit-1', countryCode: 'PT')],
+    );
+
+    await pumpExplore(
+      tester,
+      visits: repository.visits,
+      repository: repository,
+    );
+
+    await openPortugalDetails(tester);
+
+    await tester.tap(find.byTooltip('Add country visit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add Destination'), findsOneWidget);
+    expect(find.text('Save Visit'), findsOneWidget);
+
+    // The country is already selected.
+    expect(find.text('Select a country'), findsNothing);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(repository.receivedCreatedCountryCode, 'PT');
+    expect(repository.visits, hasLength(2));
+
+    // The modal closes and Country Details reflects the new visit.
+    expect(find.text('Add Destination'), findsNothing);
+    expect(find.text('Visit 2'), findsOneWidget);
   });
 }

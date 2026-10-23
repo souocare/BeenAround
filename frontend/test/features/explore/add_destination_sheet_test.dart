@@ -13,9 +13,14 @@ class FakeCountriesRepository implements CountriesRepository {
   final List<CountryVisit> createdVisits = [];
   @override
   Future<List<Country>> getCountries() async => const [
-    Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT'),
-    Country(code: 'ES', name: 'Spain', alpha3Code: 'ESP'),
-    Country(code: 'FR', name: 'France', alpha3Code: 'FRA'),
+    Country(
+      code: 'PT',
+      name: 'Portugal',
+      alpha3Code: 'PRT',
+      continent: 'Europe',
+    ),
+    Country(code: 'ES', name: 'Spain', alpha3Code: 'ESP', continent: 'Europe'),
+    Country(code: 'FR', name: 'France', alpha3Code: 'FRA', continent: 'Europe'),
   ];
 
   @override

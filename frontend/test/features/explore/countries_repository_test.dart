@@ -58,8 +58,18 @@ void main() {
 
         return jsonResponse({
           'items': [
-            {'code': 'PT', 'name': 'Portugal', 'alpha3_code': 'PRT'},
-            {'code': 'ES', 'name': 'Spain', 'alpha3_code': 'ESP'},
+            {
+              'code': 'PT',
+              'name': 'Portugal',
+              'alpha3_code': 'PRT',
+              'continent': 'Europe',
+            },
+            {
+              'code': 'ES',
+              'name': 'Spain',
+              'alpha3_code': 'ESP',
+              'continent': 'Europe',
+            },
           ],
           'total': 2,
         });

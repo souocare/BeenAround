@@ -12,7 +12,9 @@ import 'package:flutter/foundation.dart';
 import 'country_flag.dart';
 
 class AddDestinationSheet extends StatefulWidget {
-  const AddDestinationSheet({super.key});
+  const AddDestinationSheet({this.initialCountry, super.key});
+
+  final Country? initialCountry;
 
   @override
   State<AddDestinationSheet> createState() => _AddDestinationSheetState();
@@ -24,6 +26,12 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   String _searchQuery = '';
   DateTime? _startedOn;
   DateTime? _endedOn;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = widget.initialCountry;
+  }
 
   Future<void> _pickStartDate() async {
     final now = DateTime.now();

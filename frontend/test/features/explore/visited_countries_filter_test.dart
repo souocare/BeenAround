@@ -4,11 +4,26 @@ import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const portugal = Country(code: 'PT', name: 'Portugal', alpha3Code: 'PRT');
+const portugal = Country(
+  code: 'PT',
+  name: 'Portugal',
+  alpha3Code: 'PRT',
+  continent: 'Europe',
+);
 
-const spain = Country(code: 'ES', name: 'Spain', alpha3Code: 'ESP');
+const spain = Country(
+  code: 'ES',
+  name: 'Spain',
+  alpha3Code: 'ESP',
+  continent: 'Europe',
+);
 
-const france = Country(code: 'FR', name: 'France', alpha3Code: 'FRA');
+const france = Country(
+  code: 'FR',
+  name: 'France',
+  alpha3Code: 'FRA',
+  continent: 'Europe',
+);
 
 CountryVisit visit(String id, String countryCode) {
   return CountryVisit(

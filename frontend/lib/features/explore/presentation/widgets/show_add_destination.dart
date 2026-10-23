@@ -4,8 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../application/add_country_visit_cubit.dart';
 import '../../application/explore_cubit.dart';
 import 'add_destination_sheet.dart';
+import '../../domain/country.dart';
 
-Future<bool> showAddDestination(BuildContext context) async {
+Future<bool> showAddDestination(
+  BuildContext context, {
+  Country? initialCountry,
+}) async {
   final exploreCubit = context.read<ExploreCubit>();
   final repository = exploreCubit.repository;
 
@@ -19,7 +23,7 @@ Future<bool> showAddDestination(BuildContext context) async {
           create: (_) => AddCountryVisitCubit(repository: repository),
         ),
       ],
-      child: const AddDestinationSheet(),
+      child: AddDestinationSheet(initialCountry: initialCountry),
     );
   }
 
