@@ -38,6 +38,7 @@ def seed_country(session: Session) -> None:
             code="PT",
             name="Portugal",
             alpha3_code="PRT",
+            continent="Europe",
         )
     )
     session.commit()

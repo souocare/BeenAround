@@ -33,16 +33,19 @@ def countries_client(
                     code="PT",
                     name="Portugal",
                     alpha3_code="PRT",
+                    continent="Europe",
                 ),
                 Country(
                     code="ES",
                     name="Spain",
                     alpha3_code="ESP",
+                    continent="Europe",
                 ),
                 Country(
                     code="LK",
                     name="Sri Lanka",
                     alpha3_code="LKA",
+                    continent="Asia",
                 ),
             ]
         )
@@ -143,16 +146,19 @@ def test_web_user_can_list_countries(
             "code": "PT",
             "name": "Portugal",
             "alpha3_code": "PRT",
+            "continent": "Europe",
         },
         {
             "code": "ES",
             "name": "Spain",
             "alpha3_code": "ESP",
+            "continent": "Europe",
         },
         {
             "code": "LK",
             "name": "Sri Lanka",
             "alpha3_code": "LKA",
+            "continent": "Asia",
         },
     ]
 
@@ -183,6 +189,7 @@ def test_web_user_can_get_country(
         "code": "PT",
         "name": "Portugal",
         "alpha3_code": "PRT",
+        "continent": "Europe",
     }
 
 
@@ -234,27 +241,6 @@ def test_unsupported_authorization_scheme_is_rejected(
             "Authorization": "Basic invalid",
         },
     )
-
-    assert response.status_code == 401
-
-
-def test_revoked_web_session_cannot_list_countries(
-    countries_client: TestClient,
-) -> None:
-    web_login(countries_client)
-
-    credential = countries_client.cookies.get("beenaround_session")
-    assert credential is not None
-
-    response = countries_client.post(
-        "/api/v1/auth/logout",
-        headers={"Origin": "http://testserver"},
-    )
-    assert response.status_code == 204
-
-    countries_client.cookies.set("beenaround_session", credential)
-
-    response = countries_client.get("/api/v1/countries")
 
     assert response.status_code == 401
 

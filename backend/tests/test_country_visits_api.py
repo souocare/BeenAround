@@ -36,11 +36,13 @@ def visits_client(
                     code="PT",
                     name="Portugal",
                     alpha3_code="PRT",
+                    continent="Europe",
                 ),
                 Country(
                     code="ES",
                     name="Spain",
                     alpha3_code="ESP",
+                    continent="Europe",
                 ),
             ]
         )

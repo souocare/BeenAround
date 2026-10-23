@@ -14,6 +14,15 @@ from app.models.country import Country
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = BACKEND_ROOT / "app" / "data" / "countries.json"
+VALID_CONTINENTS = {
+    "Africa",
+    "Antarctica",
+    "Asia",
+    "Europe",
+    "North America",
+    "South America",
+    "Oceania",
+}
 
 
 def load_catalog() -> list[dict[str, str]]:
@@ -45,11 +54,13 @@ def test_country_catalog_entries_are_valid() -> None:
             "code",
             "name",
             "alpha3_code",
+            "continent",
         }
 
         assert len(country["code"]) == 2
         assert len(country["alpha3_code"]) == 3
         assert country["name"].strip()
+        assert country["continent"] in VALID_CONTINENTS
 
 
 @pytest.fixture
@@ -107,6 +118,7 @@ def test_migrated_countries_match_versioned_catalog(
         country["code"]: (
             country["name"],
             country["alpha3_code"],
+            country["continent"],
         )
         for country in load_catalog()
     }
@@ -116,6 +128,7 @@ def test_migrated_countries_match_versioned_catalog(
             country.code: (
                 country.name,
                 country.alpha3_code,
+                country.continent,
             )
             for country in session.scalars(select(Country))
         }
@@ -180,3 +193,20 @@ def test_initial_migration_snapshot_matches_catalog() -> None:
 
     assert len(snapshot) == 249
     assert snapshot == expected
+
+def test_migrated_continent_column_is_required(
+    migrated_database,
+) -> None:
+    """The continent column must not accept NULL values."""
+
+    from sqlalchemy import inspect
+
+    columns = inspect(migrated_database).get_columns("countries")
+
+    continent_column = next(
+        column
+        for column in columns
+        if column["name"] == "continent"
+    )
+
+    assert continent_column["nullable"] is False

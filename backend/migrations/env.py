@@ -42,14 +42,52 @@ def run_migrations_online() -> None:
 
     try:
         with connectable.connect() as connection:
-            context.configure(
-                connection=connection,
-                target_metadata=target_metadata,
-                compare_type=True,
-            )
+            is_sqlite = connection.dialect.name == "sqlite"
 
-            with context.begin_transaction():
-                context.run_migrations()
+            if is_sqlite:
+                # SQLite batch migrations may recreate referenced tables.
+                # Disable FK enforcement before starting a transaction.
+                connection.commit()
+                connection.exec_driver_sql("PRAGMA foreign_keys = OFF")
+                connection.commit()
+
+                foreign_keys_enabled = connection.exec_driver_sql(
+                    "PRAGMA foreign_keys"
+                ).scalar_one()
+
+                if foreign_keys_enabled != 0:
+                    raise RuntimeError(
+                        "Could not disable SQLite foreign key enforcement."
+                    )
+
+                connection.commit()
+
+            try:
+                context.configure(
+                    connection=connection,
+                    target_metadata=target_metadata,
+                    compare_type=True,
+                )
+
+                with context.begin_transaction():
+                    context.run_migrations()
+
+                if is_sqlite:
+                    violations = connection.exec_driver_sql(
+                        "PRAGMA foreign_key_check"
+                    ).fetchall()
+
+                    if violations:
+                        raise RuntimeError(
+                            "Foreign key violations after migration: "
+                            f"{violations}"
+                        )
+            finally:
+                if is_sqlite:
+                    connection.commit()
+                    connection.exec_driver_sql("PRAGMA foreign_keys = ON")
+                    connection.commit()
+
     finally:
         connectable.dispose()
 

@@ -2,1246 +2,1495 @@
   {
     "code": "AD",
     "alpha3_code": "AND",
-    "name": "Andorra"
+    "name": "Andorra",
+    "continent": "Europe"
   },
   {
     "code": "AE",
     "alpha3_code": "ARE",
-    "name": "United Arab Emirates"
+    "name": "United Arab Emirates",
+    "continent": "Asia"
   },
   {
     "code": "AF",
     "alpha3_code": "AFG",
-    "name": "Afghanistan"
+    "name": "Afghanistan",
+    "continent": "Asia"
   },
   {
     "code": "AG",
     "alpha3_code": "ATG",
-    "name": "Antigua and Barbuda"
+    "name": "Antigua and Barbuda",
+    "continent": "North America"
   },
   {
     "code": "AI",
     "alpha3_code": "AIA",
-    "name": "Anguilla"
+    "name": "Anguilla",
+    "continent": "North America"
   },
   {
     "code": "AL",
     "alpha3_code": "ALB",
-    "name": "Albania"
+    "name": "Albania",
+    "continent": "Europe"
   },
   {
     "code": "AM",
     "alpha3_code": "ARM",
-    "name": "Armenia"
+    "name": "Armenia",
+    "continent": "Asia"
   },
   {
     "code": "AO",
     "alpha3_code": "AGO",
-    "name": "Angola"
+    "name": "Angola",
+    "continent": "Africa"
   },
   {
     "code": "AQ",
     "alpha3_code": "ATA",
-    "name": "Antarctica"
+    "name": "Antarctica",
+    "continent": "Antarctica"
   },
   {
     "code": "AR",
     "alpha3_code": "ARG",
-    "name": "Argentina"
+    "name": "Argentina",
+    "continent": "South America"
   },
   {
     "code": "AS",
     "alpha3_code": "ASM",
-    "name": "American Samoa"
+    "name": "American Samoa",
+    "continent": "Oceania"
   },
   {
     "code": "AT",
     "alpha3_code": "AUT",
-    "name": "Austria"
+    "name": "Austria",
+    "continent": "Europe"
   },
   {
     "code": "AU",
     "alpha3_code": "AUS",
-    "name": "Australia"
+    "name": "Australia",
+    "continent": "Oceania"
   },
   {
     "code": "AW",
     "alpha3_code": "ABW",
-    "name": "Aruba"
+    "name": "Aruba",
+    "continent": "North America"
   },
   {
     "code": "AX",
     "alpha3_code": "ALA",
-    "name": "Åland Islands"
+    "name": "Åland Islands",
+    "continent": "Europe"
   },
   {
     "code": "AZ",
     "alpha3_code": "AZE",
-    "name": "Azerbaijan"
+    "name": "Azerbaijan",
+    "continent": "Asia"
   },
   {
     "code": "BA",
     "alpha3_code": "BIH",
-    "name": "Bosnia and Herzegovina"
+    "name": "Bosnia and Herzegovina",
+    "continent": "Europe"
   },
   {
     "code": "BB",
     "alpha3_code": "BRB",
-    "name": "Barbados"
+    "name": "Barbados",
+    "continent": "North America"
   },
   {
     "code": "BD",
     "alpha3_code": "BGD",
-    "name": "Bangladesh"
+    "name": "Bangladesh",
+    "continent": "Asia"
   },
   {
     "code": "BE",
     "alpha3_code": "BEL",
-    "name": "Belgium"
+    "name": "Belgium",
+    "continent": "Europe"
   },
   {
     "code": "BF",
     "alpha3_code": "BFA",
-    "name": "Burkina Faso"
+    "name": "Burkina Faso",
+    "continent": "Africa"
   },
   {
     "code": "BG",
     "alpha3_code": "BGR",
-    "name": "Bulgaria"
+    "name": "Bulgaria",
+    "continent": "Europe"
   },
   {
     "code": "BH",
     "alpha3_code": "BHR",
-    "name": "Bahrain"
+    "name": "Bahrain",
+    "continent": "Asia"
   },
   {
     "code": "BI",
     "alpha3_code": "BDI",
-    "name": "Burundi"
+    "name": "Burundi",
+    "continent": "Africa"
   },
   {
     "code": "BJ",
     "alpha3_code": "BEN",
-    "name": "Benin"
+    "name": "Benin",
+    "continent": "Africa"
   },
   {
     "code": "BL",
     "alpha3_code": "BLM",
-    "name": "Saint Barthélemy"
+    "name": "Saint Barthélemy",
+    "continent": "North America"
   },
   {
     "code": "BM",
     "alpha3_code": "BMU",
-    "name": "Bermuda"
+    "name": "Bermuda",
+    "continent": "North America"
   },
   {
     "code": "BN",
     "alpha3_code": "BRN",
-    "name": "Brunei Darussalam"
+    "name": "Brunei Darussalam",
+    "continent": "Asia"
   },
   {
     "code": "BO",
     "alpha3_code": "BOL",
-    "name": "Bolivia, Plurinational State of"
+    "name": "Bolivia, Plurinational State of",
+    "continent": "South America"
   },
   {
     "code": "BQ",
     "alpha3_code": "BES",
-    "name": "Bonaire, Sint Eustatius and Saba"
+    "name": "Bonaire, Sint Eustatius and Saba",
+    "continent": "North America"
   },
   {
     "code": "BR",
     "alpha3_code": "BRA",
-    "name": "Brazil"
+    "name": "Brazil",
+    "continent": "South America"
   },
   {
     "code": "BS",
     "alpha3_code": "BHS",
-    "name": "Bahamas"
+    "name": "Bahamas",
+    "continent": "North America"
   },
   {
     "code": "BT",
     "alpha3_code": "BTN",
-    "name": "Bhutan"
+    "name": "Bhutan",
+    "continent": "Asia"
   },
   {
     "code": "BV",
     "alpha3_code": "BVT",
-    "name": "Bouvet Island"
+    "name": "Bouvet Island",
+    "continent": "Antarctica"
   },
   {
     "code": "BW",
     "alpha3_code": "BWA",
-    "name": "Botswana"
+    "name": "Botswana",
+    "continent": "Africa"
   },
   {
     "code": "BY",
     "alpha3_code": "BLR",
-    "name": "Belarus"
+    "name": "Belarus",
+    "continent": "Europe"
   },
   {
     "code": "BZ",
     "alpha3_code": "BLZ",
-    "name": "Belize"
+    "name": "Belize",
+    "continent": "North America"
   },
   {
     "code": "CA",
     "alpha3_code": "CAN",
-    "name": "Canada"
+    "name": "Canada",
+    "continent": "North America"
   },
   {
     "code": "CC",
     "alpha3_code": "CCK",
-    "name": "Cocos (Keeling) Islands"
+    "name": "Cocos (Keeling) Islands",
+    "continent": "Asia"
   },
   {
     "code": "CD",
     "alpha3_code": "COD",
-    "name": "Congo, The Democratic Republic of the"
+    "name": "Congo, The Democratic Republic of the",
+    "continent": "Africa"
   },
   {
     "code": "CF",
     "alpha3_code": "CAF",
-    "name": "Central African Republic"
+    "name": "Central African Republic",
+    "continent": "Africa"
   },
   {
     "code": "CG",
     "alpha3_code": "COG",
-    "name": "Congo"
+    "name": "Congo",
+    "continent": "Africa"
   },
   {
     "code": "CH",
     "alpha3_code": "CHE",
-    "name": "Switzerland"
+    "name": "Switzerland",
+    "continent": "Europe"
   },
   {
     "code": "CI",
     "alpha3_code": "CIV",
-    "name": "Côte d'Ivoire"
+    "name": "Côte d'Ivoire",
+    "continent": "Africa"
   },
   {
     "code": "CK",
     "alpha3_code": "COK",
-    "name": "Cook Islands"
+    "name": "Cook Islands",
+    "continent": "Oceania"
   },
   {
     "code": "CL",
     "alpha3_code": "CHL",
-    "name": "Chile"
+    "name": "Chile",
+    "continent": "South America"
   },
   {
     "code": "CM",
     "alpha3_code": "CMR",
-    "name": "Cameroon"
+    "name": "Cameroon",
+    "continent": "Africa"
   },
   {
     "code": "CN",
     "alpha3_code": "CHN",
-    "name": "China"
+    "name": "China",
+    "continent": "Asia"
   },
   {
     "code": "CO",
     "alpha3_code": "COL",
-    "name": "Colombia"
+    "name": "Colombia",
+    "continent": "South America"
   },
   {
     "code": "CR",
     "alpha3_code": "CRI",
-    "name": "Costa Rica"
+    "name": "Costa Rica",
+    "continent": "North America"
   },
   {
     "code": "CU",
     "alpha3_code": "CUB",
-    "name": "Cuba"
+    "name": "Cuba",
+    "continent": "North America"
   },
   {
     "code": "CV",
     "alpha3_code": "CPV",
-    "name": "Cabo Verde"
+    "name": "Cabo Verde",
+    "continent": "Africa"
   },
   {
     "code": "CW",
     "alpha3_code": "CUW",
-    "name": "Curaçao"
+    "name": "Curaçao",
+    "continent": "North America"
   },
   {
     "code": "CX",
     "alpha3_code": "CXR",
-    "name": "Christmas Island"
+    "name": "Christmas Island",
+    "continent": "Asia"
   },
   {
     "code": "CY",
     "alpha3_code": "CYP",
-    "name": "Cyprus"
+    "name": "Cyprus",
+    "continent": "Asia"
   },
   {
     "code": "CZ",
     "alpha3_code": "CZE",
-    "name": "Czechia"
+    "name": "Czechia",
+    "continent": "Europe"
   },
   {
     "code": "DE",
     "alpha3_code": "DEU",
-    "name": "Germany"
+    "name": "Germany",
+    "continent": "Europe"
   },
   {
     "code": "DJ",
     "alpha3_code": "DJI",
-    "name": "Djibouti"
+    "name": "Djibouti",
+    "continent": "Africa"
   },
   {
     "code": "DK",
     "alpha3_code": "DNK",
-    "name": "Denmark"
+    "name": "Denmark",
+    "continent": "Europe"
   },
   {
     "code": "DM",
     "alpha3_code": "DMA",
-    "name": "Dominica"
+    "name": "Dominica",
+    "continent": "North America"
   },
   {
     "code": "DO",
     "alpha3_code": "DOM",
-    "name": "Dominican Republic"
+    "name": "Dominican Republic",
+    "continent": "North America"
   },
   {
     "code": "DZ",
     "alpha3_code": "DZA",
-    "name": "Algeria"
+    "name": "Algeria",
+    "continent": "Africa"
   },
   {
     "code": "EC",
     "alpha3_code": "ECU",
-    "name": "Ecuador"
+    "name": "Ecuador",
+    "continent": "South America"
   },
   {
     "code": "EE",
     "alpha3_code": "EST",
-    "name": "Estonia"
+    "name": "Estonia",
+    "continent": "Europe"
   },
   {
     "code": "EG",
     "alpha3_code": "EGY",
-    "name": "Egypt"
+    "name": "Egypt",
+    "continent": "Africa"
   },
   {
     "code": "EH",
     "alpha3_code": "ESH",
-    "name": "Western Sahara"
+    "name": "Western Sahara",
+    "continent": "Africa"
   },
   {
     "code": "ER",
     "alpha3_code": "ERI",
-    "name": "Eritrea"
+    "name": "Eritrea",
+    "continent": "Africa"
   },
   {
     "code": "ES",
     "alpha3_code": "ESP",
-    "name": "Spain"
+    "name": "Spain",
+    "continent": "Europe"
   },
   {
     "code": "ET",
     "alpha3_code": "ETH",
-    "name": "Ethiopia"
+    "name": "Ethiopia",
+    "continent": "Africa"
   },
   {
     "code": "FI",
     "alpha3_code": "FIN",
-    "name": "Finland"
+    "name": "Finland",
+    "continent": "Europe"
   },
   {
     "code": "FJ",
     "alpha3_code": "FJI",
-    "name": "Fiji"
+    "name": "Fiji",
+    "continent": "Oceania"
   },
   {
     "code": "FK",
     "alpha3_code": "FLK",
-    "name": "Falkland Islands (Malvinas)"
+    "name": "Falkland Islands (Malvinas)",
+    "continent": "South America"
   },
   {
     "code": "FM",
     "alpha3_code": "FSM",
-    "name": "Micronesia, Federated States of"
+    "name": "Micronesia, Federated States of",
+    "continent": "Oceania"
   },
   {
     "code": "FO",
     "alpha3_code": "FRO",
-    "name": "Faroe Islands"
+    "name": "Faroe Islands",
+    "continent": "Europe"
   },
   {
     "code": "FR",
     "alpha3_code": "FRA",
-    "name": "France"
+    "name": "France",
+    "continent": "Europe"
   },
   {
     "code": "GA",
     "alpha3_code": "GAB",
-    "name": "Gabon"
+    "name": "Gabon",
+    "continent": "Africa"
   },
   {
     "code": "GB",
     "alpha3_code": "GBR",
-    "name": "United Kingdom"
+    "name": "United Kingdom",
+    "continent": "Europe"
   },
   {
     "code": "GD",
     "alpha3_code": "GRD",
-    "name": "Grenada"
+    "name": "Grenada",
+    "continent": "North America"
   },
   {
     "code": "GE",
     "alpha3_code": "GEO",
-    "name": "Georgia"
+    "name": "Georgia",
+    "continent": "Asia"
   },
   {
     "code": "GF",
     "alpha3_code": "GUF",
-    "name": "French Guiana"
+    "name": "French Guiana",
+    "continent": "South America"
   },
   {
     "code": "GG",
     "alpha3_code": "GGY",
-    "name": "Guernsey"
+    "name": "Guernsey",
+    "continent": "Europe"
   },
   {
     "code": "GH",
     "alpha3_code": "GHA",
-    "name": "Ghana"
+    "name": "Ghana",
+    "continent": "Africa"
   },
   {
     "code": "GI",
     "alpha3_code": "GIB",
-    "name": "Gibraltar"
+    "name": "Gibraltar",
+    "continent": "Europe"
   },
   {
     "code": "GL",
     "alpha3_code": "GRL",
-    "name": "Greenland"
+    "name": "Greenland",
+    "continent": "North America"
   },
   {
     "code": "GM",
     "alpha3_code": "GMB",
-    "name": "Gambia"
+    "name": "Gambia",
+    "continent": "Africa"
   },
   {
     "code": "GN",
     "alpha3_code": "GIN",
-    "name": "Guinea"
+    "name": "Guinea",
+    "continent": "Africa"
   },
   {
     "code": "GP",
     "alpha3_code": "GLP",
-    "name": "Guadeloupe"
+    "name": "Guadeloupe",
+    "continent": "North America"
   },
   {
     "code": "GQ",
     "alpha3_code": "GNQ",
-    "name": "Equatorial Guinea"
+    "name": "Equatorial Guinea",
+    "continent": "Africa"
   },
   {
     "code": "GR",
     "alpha3_code": "GRC",
-    "name": "Greece"
+    "name": "Greece",
+    "continent": "Europe"
   },
   {
     "code": "GS",
     "alpha3_code": "SGS",
-    "name": "South Georgia and the South Sandwich Islands"
+    "name": "South Georgia and the South Sandwich Islands",
+    "continent": "Antarctica"
   },
   {
     "code": "GT",
     "alpha3_code": "GTM",
-    "name": "Guatemala"
+    "name": "Guatemala",
+    "continent": "North America"
   },
   {
     "code": "GU",
     "alpha3_code": "GUM",
-    "name": "Guam"
+    "name": "Guam",
+    "continent": "Oceania"
   },
   {
     "code": "GW",
     "alpha3_code": "GNB",
-    "name": "Guinea-Bissau"
+    "name": "Guinea-Bissau",
+    "continent": "Africa"
   },
   {
     "code": "GY",
     "alpha3_code": "GUY",
-    "name": "Guyana"
+    "name": "Guyana",
+    "continent": "South America"
   },
   {
     "code": "HK",
     "alpha3_code": "HKG",
-    "name": "Hong Kong"
+    "name": "Hong Kong",
+    "continent": "Asia"
   },
   {
     "code": "HM",
     "alpha3_code": "HMD",
-    "name": "Heard Island and McDonald Islands"
+    "name": "Heard Island and McDonald Islands",
+    "continent": "Antarctica"
   },
   {
     "code": "HN",
     "alpha3_code": "HND",
-    "name": "Honduras"
+    "name": "Honduras",
+    "continent": "North America"
   },
   {
     "code": "HR",
     "alpha3_code": "HRV",
-    "name": "Croatia"
+    "name": "Croatia",
+    "continent": "Europe"
   },
   {
     "code": "HT",
     "alpha3_code": "HTI",
-    "name": "Haiti"
+    "name": "Haiti",
+    "continent": "North America"
   },
   {
     "code": "HU",
     "alpha3_code": "HUN",
-    "name": "Hungary"
+    "name": "Hungary",
+    "continent": "Europe"
   },
   {
     "code": "ID",
     "alpha3_code": "IDN",
-    "name": "Indonesia"
+    "name": "Indonesia",
+    "continent": "Asia"
   },
   {
     "code": "IE",
     "alpha3_code": "IRL",
-    "name": "Ireland"
+    "name": "Ireland",
+    "continent": "Europe"
   },
   {
     "code": "IL",
     "alpha3_code": "ISR",
-    "name": "Israel"
+    "name": "Israel",
+    "continent": "Asia"
   },
   {
     "code": "IM",
     "alpha3_code": "IMN",
-    "name": "Isle of Man"
+    "name": "Isle of Man",
+    "continent": "Europe"
   },
   {
     "code": "IN",
     "alpha3_code": "IND",
-    "name": "India"
+    "name": "India",
+    "continent": "Asia"
   },
   {
     "code": "IO",
     "alpha3_code": "IOT",
-    "name": "British Indian Ocean Territory"
+    "name": "British Indian Ocean Territory",
+    "continent": "Africa"
   },
   {
     "code": "IQ",
     "alpha3_code": "IRQ",
-    "name": "Iraq"
+    "name": "Iraq",
+    "continent": "Asia"
   },
   {
     "code": "IR",
     "alpha3_code": "IRN",
-    "name": "Iran, Islamic Republic of"
+    "name": "Iran, Islamic Republic of",
+    "continent": "Asia"
   },
   {
     "code": "IS",
     "alpha3_code": "ISL",
-    "name": "Iceland"
+    "name": "Iceland",
+    "continent": "Europe"
   },
   {
     "code": "IT",
     "alpha3_code": "ITA",
-    "name": "Italy"
+    "name": "Italy",
+    "continent": "Europe"
   },
   {
     "code": "JE",
     "alpha3_code": "JEY",
-    "name": "Jersey"
+    "name": "Jersey",
+    "continent": "Europe"
   },
   {
     "code": "JM",
     "alpha3_code": "JAM",
-    "name": "Jamaica"
+    "name": "Jamaica",
+    "continent": "North America"
   },
   {
     "code": "JO",
     "alpha3_code": "JOR",
-    "name": "Jordan"
+    "name": "Jordan",
+    "continent": "Asia"
   },
   {
     "code": "JP",
     "alpha3_code": "JPN",
-    "name": "Japan"
+    "name": "Japan",
+    "continent": "Asia"
   },
   {
     "code": "KE",
     "alpha3_code": "KEN",
-    "name": "Kenya"
+    "name": "Kenya",
+    "continent": "Africa"
   },
   {
     "code": "KG",
     "alpha3_code": "KGZ",
-    "name": "Kyrgyzstan"
+    "name": "Kyrgyzstan",
+    "continent": "Asia"
   },
   {
     "code": "KH",
     "alpha3_code": "KHM",
-    "name": "Cambodia"
+    "name": "Cambodia",
+    "continent": "Asia"
   },
   {
     "code": "KI",
     "alpha3_code": "KIR",
-    "name": "Kiribati"
+    "name": "Kiribati",
+    "continent": "Oceania"
   },
   {
     "code": "KM",
     "alpha3_code": "COM",
-    "name": "Comoros"
+    "name": "Comoros",
+    "continent": "Africa"
   },
   {
     "code": "KN",
     "alpha3_code": "KNA",
-    "name": "Saint Kitts and Nevis"
+    "name": "Saint Kitts and Nevis",
+    "continent": "North America"
   },
   {
     "code": "KP",
     "alpha3_code": "PRK",
-    "name": "Korea, Democratic People's Republic of"
+    "name": "Korea, Democratic People's Republic of",
+    "continent": "Asia"
   },
   {
     "code": "KR",
     "alpha3_code": "KOR",
-    "name": "Korea, Republic of"
+    "name": "Korea, Republic of",
+    "continent": "Asia"
   },
   {
     "code": "KW",
     "alpha3_code": "KWT",
-    "name": "Kuwait"
+    "name": "Kuwait",
+    "continent": "Asia"
   },
   {
     "code": "KY",
     "alpha3_code": "CYM",
-    "name": "Cayman Islands"
+    "name": "Cayman Islands",
+    "continent": "North America"
   },
   {
     "code": "KZ",
     "alpha3_code": "KAZ",
-    "name": "Kazakhstan"
+    "name": "Kazakhstan",
+    "continent": "Asia"
   },
   {
     "code": "LA",
     "alpha3_code": "LAO",
-    "name": "Lao People's Democratic Republic"
+    "name": "Lao People's Democratic Republic",
+    "continent": "Asia"
   },
   {
     "code": "LB",
     "alpha3_code": "LBN",
-    "name": "Lebanon"
+    "name": "Lebanon",
+    "continent": "Asia"
   },
   {
     "code": "LC",
     "alpha3_code": "LCA",
-    "name": "Saint Lucia"
+    "name": "Saint Lucia",
+    "continent": "North America"
   },
   {
     "code": "LI",
     "alpha3_code": "LIE",
-    "name": "Liechtenstein"
+    "name": "Liechtenstein",
+    "continent": "Europe"
   },
   {
     "code": "LK",
     "alpha3_code": "LKA",
-    "name": "Sri Lanka"
+    "name": "Sri Lanka",
+    "continent": "Asia"
   },
   {
     "code": "LR",
     "alpha3_code": "LBR",
-    "name": "Liberia"
+    "name": "Liberia",
+    "continent": "Africa"
   },
   {
     "code": "LS",
     "alpha3_code": "LSO",
-    "name": "Lesotho"
+    "name": "Lesotho",
+    "continent": "Africa"
   },
   {
     "code": "LT",
     "alpha3_code": "LTU",
-    "name": "Lithuania"
+    "name": "Lithuania",
+    "continent": "Europe"
   },
   {
     "code": "LU",
     "alpha3_code": "LUX",
-    "name": "Luxembourg"
+    "name": "Luxembourg",
+    "continent": "Europe"
   },
   {
     "code": "LV",
     "alpha3_code": "LVA",
-    "name": "Latvia"
+    "name": "Latvia",
+    "continent": "Europe"
   },
   {
     "code": "LY",
     "alpha3_code": "LBY",
-    "name": "Libya"
+    "name": "Libya",
+    "continent": "Africa"
   },
   {
     "code": "MA",
     "alpha3_code": "MAR",
-    "name": "Morocco"
+    "name": "Morocco",
+    "continent": "Africa"
   },
   {
     "code": "MC",
     "alpha3_code": "MCO",
-    "name": "Monaco"
+    "name": "Monaco",
+    "continent": "Europe"
   },
   {
     "code": "MD",
     "alpha3_code": "MDA",
-    "name": "Moldova, Republic of"
+    "name": "Moldova, Republic of",
+    "continent": "Europe"
   },
   {
     "code": "ME",
     "alpha3_code": "MNE",
-    "name": "Montenegro"
+    "name": "Montenegro",
+    "continent": "Europe"
   },
   {
     "code": "MF",
     "alpha3_code": "MAF",
-    "name": "Saint Martin (French part)"
+    "name": "Saint Martin (French part)",
+    "continent": "North America"
   },
   {
     "code": "MG",
     "alpha3_code": "MDG",
-    "name": "Madagascar"
+    "name": "Madagascar",
+    "continent": "Africa"
   },
   {
     "code": "MH",
     "alpha3_code": "MHL",
-    "name": "Marshall Islands"
+    "name": "Marshall Islands",
+    "continent": "Oceania"
   },
   {
     "code": "MK",
     "alpha3_code": "MKD",
-    "name": "North Macedonia"
+    "name": "North Macedonia",
+    "continent": "Europe"
   },
   {
     "code": "ML",
     "alpha3_code": "MLI",
-    "name": "Mali"
+    "name": "Mali",
+    "continent": "Africa"
   },
   {
     "code": "MM",
     "alpha3_code": "MMR",
-    "name": "Myanmar"
+    "name": "Myanmar",
+    "continent": "Asia"
   },
   {
     "code": "MN",
     "alpha3_code": "MNG",
-    "name": "Mongolia"
+    "name": "Mongolia",
+    "continent": "Asia"
   },
   {
     "code": "MO",
     "alpha3_code": "MAC",
-    "name": "Macao"
+    "name": "Macao",
+    "continent": "Asia"
   },
   {
     "code": "MP",
     "alpha3_code": "MNP",
-    "name": "Northern Mariana Islands"
+    "name": "Northern Mariana Islands",
+    "continent": "Oceania"
   },
   {
     "code": "MQ",
     "alpha3_code": "MTQ",
-    "name": "Martinique"
+    "name": "Martinique",
+    "continent": "North America"
   },
   {
     "code": "MR",
     "alpha3_code": "MRT",
-    "name": "Mauritania"
+    "name": "Mauritania",
+    "continent": "Africa"
   },
   {
     "code": "MS",
     "alpha3_code": "MSR",
-    "name": "Montserrat"
+    "name": "Montserrat",
+    "continent": "North America"
   },
   {
     "code": "MT",
     "alpha3_code": "MLT",
-    "name": "Malta"
+    "name": "Malta",
+    "continent": "Europe"
   },
   {
     "code": "MU",
     "alpha3_code": "MUS",
-    "name": "Mauritius"
+    "name": "Mauritius",
+    "continent": "Africa"
   },
   {
     "code": "MV",
     "alpha3_code": "MDV",
-    "name": "Maldives"
+    "name": "Maldives",
+    "continent": "Asia"
   },
   {
     "code": "MW",
     "alpha3_code": "MWI",
-    "name": "Malawi"
+    "name": "Malawi",
+    "continent": "Africa"
   },
   {
     "code": "MX",
     "alpha3_code": "MEX",
-    "name": "Mexico"
+    "name": "Mexico",
+    "continent": "North America"
   },
   {
     "code": "MY",
     "alpha3_code": "MYS",
-    "name": "Malaysia"
+    "name": "Malaysia",
+    "continent": "Asia"
   },
   {
     "code": "MZ",
     "alpha3_code": "MOZ",
-    "name": "Mozambique"
+    "name": "Mozambique",
+    "continent": "Africa"
   },
   {
     "code": "NA",
     "alpha3_code": "NAM",
-    "name": "Namibia"
+    "name": "Namibia",
+    "continent": "Africa"
   },
   {
     "code": "NC",
     "alpha3_code": "NCL",
-    "name": "New Caledonia"
+    "name": "New Caledonia",
+    "continent": "Oceania"
   },
   {
     "code": "NE",
     "alpha3_code": "NER",
-    "name": "Niger"
+    "name": "Niger",
+    "continent": "Africa"
   },
   {
     "code": "NF",
     "alpha3_code": "NFK",
-    "name": "Norfolk Island"
+    "name": "Norfolk Island",
+    "continent": "Oceania"
   },
   {
     "code": "NG",
     "alpha3_code": "NGA",
-    "name": "Nigeria"
+    "name": "Nigeria",
+    "continent": "Africa"
   },
   {
     "code": "NI",
     "alpha3_code": "NIC",
-    "name": "Nicaragua"
+    "name": "Nicaragua",
+    "continent": "North America"
   },
   {
     "code": "NL",
     "alpha3_code": "NLD",
-    "name": "Netherlands"
+    "name": "Netherlands",
+    "continent": "Europe"
   },
   {
     "code": "NO",
     "alpha3_code": "NOR",
-    "name": "Norway"
+    "name": "Norway",
+    "continent": "Europe"
   },
   {
     "code": "NP",
     "alpha3_code": "NPL",
-    "name": "Nepal"
+    "name": "Nepal",
+    "continent": "Asia"
   },
   {
     "code": "NR",
     "alpha3_code": "NRU",
-    "name": "Nauru"
+    "name": "Nauru",
+    "continent": "Oceania"
   },
   {
     "code": "NU",
     "alpha3_code": "NIU",
-    "name": "Niue"
+    "name": "Niue",
+    "continent": "Oceania"
   },
   {
     "code": "NZ",
     "alpha3_code": "NZL",
-    "name": "New Zealand"
+    "name": "New Zealand",
+    "continent": "Oceania"
   },
   {
     "code": "OM",
     "alpha3_code": "OMN",
-    "name": "Oman"
+    "name": "Oman",
+    "continent": "Asia"
   },
   {
     "code": "PA",
     "alpha3_code": "PAN",
-    "name": "Panama"
+    "name": "Panama",
+    "continent": "North America"
   },
   {
     "code": "PE",
     "alpha3_code": "PER",
-    "name": "Peru"
+    "name": "Peru",
+    "continent": "South America"
   },
   {
     "code": "PF",
     "alpha3_code": "PYF",
-    "name": "French Polynesia"
+    "name": "French Polynesia",
+    "continent": "Oceania"
   },
   {
     "code": "PG",
     "alpha3_code": "PNG",
-    "name": "Papua New Guinea"
+    "name": "Papua New Guinea",
+    "continent": "Oceania"
   },
   {
     "code": "PH",
     "alpha3_code": "PHL",
-    "name": "Philippines"
+    "name": "Philippines",
+    "continent": "Asia"
   },
   {
     "code": "PK",
     "alpha3_code": "PAK",
-    "name": "Pakistan"
+    "name": "Pakistan",
+    "continent": "Asia"
   },
   {
     "code": "PL",
     "alpha3_code": "POL",
-    "name": "Poland"
+    "name": "Poland",
+    "continent": "Europe"
   },
   {
     "code": "PM",
     "alpha3_code": "SPM",
-    "name": "Saint Pierre and Miquelon"
+    "name": "Saint Pierre and Miquelon",
+    "continent": "North America"
   },
   {
     "code": "PN",
     "alpha3_code": "PCN",
-    "name": "Pitcairn"
+    "name": "Pitcairn",
+    "continent": "Oceania"
   },
   {
     "code": "PR",
     "alpha3_code": "PRI",
-    "name": "Puerto Rico"
+    "name": "Puerto Rico",
+    "continent": "North America"
   },
   {
     "code": "PS",
     "alpha3_code": "PSE",
-    "name": "Palestine, State of"
+    "name": "Palestine, State of",
+    "continent": "Asia"
   },
   {
     "code": "PT",
     "alpha3_code": "PRT",
-    "name": "Portugal"
+    "name": "Portugal",
+    "continent": "Europe"
   },
   {
     "code": "PW",
     "alpha3_code": "PLW",
-    "name": "Palau"
+    "name": "Palau",
+    "continent": "Oceania"
   },
   {
     "code": "PY",
     "alpha3_code": "PRY",
-    "name": "Paraguay"
+    "name": "Paraguay",
+    "continent": "South America"
   },
   {
     "code": "QA",
     "alpha3_code": "QAT",
-    "name": "Qatar"
+    "name": "Qatar",
+    "continent": "Asia"
   },
   {
     "code": "RE",
     "alpha3_code": "REU",
-    "name": "Réunion"
+    "name": "Réunion",
+    "continent": "Africa"
   },
   {
     "code": "RO",
     "alpha3_code": "ROU",
-    "name": "Romania"
+    "name": "Romania",
+    "continent": "Europe"
   },
   {
     "code": "RS",
     "alpha3_code": "SRB",
-    "name": "Serbia"
+    "name": "Serbia",
+    "continent": "Europe"
   },
   {
     "code": "RU",
     "alpha3_code": "RUS",
-    "name": "Russian Federation"
+    "name": "Russian Federation",
+    "continent": "Europe"
   },
   {
     "code": "RW",
     "alpha3_code": "RWA",
-    "name": "Rwanda"
+    "name": "Rwanda",
+    "continent": "Africa"
   },
   {
     "code": "SA",
     "alpha3_code": "SAU",
-    "name": "Saudi Arabia"
+    "name": "Saudi Arabia",
+    "continent": "Asia"
   },
   {
     "code": "SB",
     "alpha3_code": "SLB",
-    "name": "Solomon Islands"
+    "name": "Solomon Islands",
+    "continent": "Oceania"
   },
   {
     "code": "SC",
     "alpha3_code": "SYC",
-    "name": "Seychelles"
+    "name": "Seychelles",
+    "continent": "Africa"
   },
   {
     "code": "SD",
     "alpha3_code": "SDN",
-    "name": "Sudan"
+    "name": "Sudan",
+    "continent": "Africa"
   },
   {
     "code": "SE",
     "alpha3_code": "SWE",
-    "name": "Sweden"
+    "name": "Sweden",
+    "continent": "Europe"
   },
   {
     "code": "SG",
     "alpha3_code": "SGP",
-    "name": "Singapore"
+    "name": "Singapore",
+    "continent": "Asia"
   },
   {
     "code": "SH",
     "alpha3_code": "SHN",
-    "name": "Saint Helena, Ascension and Tristan da Cunha"
+    "name": "Saint Helena, Ascension and Tristan da Cunha",
+    "continent": "Africa"
   },
   {
     "code": "SI",
     "alpha3_code": "SVN",
-    "name": "Slovenia"
+    "name": "Slovenia",
+    "continent": "Europe"
   },
   {
     "code": "SJ",
     "alpha3_code": "SJM",
-    "name": "Svalbard and Jan Mayen"
+    "name": "Svalbard and Jan Mayen",
+    "continent": "Europe"
   },
   {
     "code": "SK",
     "alpha3_code": "SVK",
-    "name": "Slovakia"
+    "name": "Slovakia",
+    "continent": "Europe"
   },
   {
     "code": "SL",
     "alpha3_code": "SLE",
-    "name": "Sierra Leone"
+    "name": "Sierra Leone",
+    "continent": "Africa"
   },
   {
     "code": "SM",
     "alpha3_code": "SMR",
-    "name": "San Marino"
+    "name": "San Marino",
+    "continent": "Europe"
   },
   {
     "code": "SN",
     "alpha3_code": "SEN",
-    "name": "Senegal"
+    "name": "Senegal",
+    "continent": "Africa"
   },
   {
     "code": "SO",
     "alpha3_code": "SOM",
-    "name": "Somalia"
+    "name": "Somalia",
+    "continent": "Africa"
   },
   {
     "code": "SR",
     "alpha3_code": "SUR",
-    "name": "Suriname"
+    "name": "Suriname",
+    "continent": "South America"
   },
   {
     "code": "SS",
     "alpha3_code": "SSD",
-    "name": "South Sudan"
+    "name": "South Sudan",
+    "continent": "Africa"
   },
   {
     "code": "ST",
     "alpha3_code": "STP",
-    "name": "Sao Tome and Principe"
+    "name": "Sao Tome and Principe",
+    "continent": "Africa"
   },
   {
     "code": "SV",
     "alpha3_code": "SLV",
-    "name": "El Salvador"
+    "name": "El Salvador",
+    "continent": "North America"
   },
   {
     "code": "SX",
     "alpha3_code": "SXM",
-    "name": "Sint Maarten (Dutch part)"
+    "name": "Sint Maarten (Dutch part)",
+    "continent": "North America"
   },
   {
     "code": "SY",
     "alpha3_code": "SYR",
-    "name": "Syrian Arab Republic"
+    "name": "Syrian Arab Republic",
+    "continent": "Asia"
   },
   {
     "code": "SZ",
     "alpha3_code": "SWZ",
-    "name": "Eswatini"
+    "name": "Eswatini",
+    "continent": "Africa"
   },
   {
     "code": "TC",
     "alpha3_code": "TCA",
-    "name": "Turks and Caicos Islands"
+    "name": "Turks and Caicos Islands",
+    "continent": "North America"
   },
   {
     "code": "TD",
     "alpha3_code": "TCD",
-    "name": "Chad"
+    "name": "Chad",
+    "continent": "Africa"
   },
   {
     "code": "TF",
     "alpha3_code": "ATF",
-    "name": "French Southern Territories"
+    "name": "French Southern Territories",
+    "continent": "Africa"
   },
   {
     "code": "TG",
     "alpha3_code": "TGO",
-    "name": "Togo"
+    "name": "Togo",
+    "continent": "Africa"
   },
   {
     "code": "TH",
     "alpha3_code": "THA",
-    "name": "Thailand"
+    "name": "Thailand",
+    "continent": "Asia"
   },
   {
     "code": "TJ",
     "alpha3_code": "TJK",
-    "name": "Tajikistan"
+    "name": "Tajikistan",
+    "continent": "Asia"
   },
   {
     "code": "TK",
     "alpha3_code": "TKL",
-    "name": "Tokelau"
+    "name": "Tokelau",
+    "continent": "Oceania"
   },
   {
     "code": "TL",
     "alpha3_code": "TLS",
-    "name": "Timor-Leste"
+    "name": "Timor-Leste",
+    "continent": "Asia"
   },
   {
     "code": "TM",
     "alpha3_code": "TKM",
-    "name": "Turkmenistan"
+    "name": "Turkmenistan",
+    "continent": "Asia"
   },
   {
     "code": "TN",
     "alpha3_code": "TUN",
-    "name": "Tunisia"
+    "name": "Tunisia",
+    "continent": "Africa"
   },
   {
     "code": "TO",
     "alpha3_code": "TON",
-    "name": "Tonga"
+    "name": "Tonga",
+    "continent": "Oceania"
   },
   {
     "code": "TR",
     "alpha3_code": "TUR",
-    "name": "Türkiye"
+    "name": "Türkiye",
+    "continent": "Asia"
   },
   {
     "code": "TT",
     "alpha3_code": "TTO",
-    "name": "Trinidad and Tobago"
+    "name": "Trinidad and Tobago",
+    "continent": "North America"
   },
   {
     "code": "TV",
     "alpha3_code": "TUV",
-    "name": "Tuvalu"
+    "name": "Tuvalu",
+    "continent": "Oceania"
   },
   {
     "code": "TW",
     "alpha3_code": "TWN",
-    "name": "Taiwan, Province of China"
+    "name": "Taiwan, Province of China",
+    "continent": "Asia"
   },
   {
     "code": "TZ",
     "alpha3_code": "TZA",
-    "name": "Tanzania, United Republic of"
+    "name": "Tanzania, United Republic of",
+    "continent": "Africa"
   },
   {
     "code": "UA",
     "alpha3_code": "UKR",
-    "name": "Ukraine"
+    "name": "Ukraine",
+    "continent": "Europe"
   },
   {
     "code": "UG",
     "alpha3_code": "UGA",
-    "name": "Uganda"
+    "name": "Uganda",
+    "continent": "Africa"
   },
   {
     "code": "UM",
     "alpha3_code": "UMI",
-    "name": "United States Minor Outlying Islands"
+    "name": "United States Minor Outlying Islands",
+    "continent": "Oceania"
   },
   {
     "code": "US",
     "alpha3_code": "USA",
-    "name": "United States"
+    "name": "United States",
+    "continent": "North America"
   },
   {
     "code": "UY",
     "alpha3_code": "URY",
-    "name": "Uruguay"
+    "name": "Uruguay",
+    "continent": "South America"
   },
   {
     "code": "UZ",
     "alpha3_code": "UZB",
-    "name": "Uzbekistan"
+    "name": "Uzbekistan",
+    "continent": "Asia"
   },
   {
     "code": "VA",
     "alpha3_code": "VAT",
-    "name": "Holy See (Vatican City State)"
+    "name": "Holy See (Vatican City State)",
+    "continent": "Europe"
   },
   {
     "code": "VC",
     "alpha3_code": "VCT",
-    "name": "Saint Vincent and the Grenadines"
+    "name": "Saint Vincent and the Grenadines",
+    "continent": "North America"
   },
   {
     "code": "VE",
     "alpha3_code": "VEN",
-    "name": "Venezuela, Bolivarian Republic of"
+    "name": "Venezuela, Bolivarian Republic of",
+    "continent": "South America"
   },
   {
     "code": "VG",
     "alpha3_code": "VGB",
-    "name": "Virgin Islands, British"
+    "name": "Virgin Islands, British",
+    "continent": "North America"
   },
   {
     "code": "VI",
     "alpha3_code": "VIR",
-    "name": "Virgin Islands, U.S."
+    "name": "Virgin Islands, U.S.",
+    "continent": "North America"
   },
   {
     "code": "VN",
     "alpha3_code": "VNM",
-    "name": "Viet Nam"
+    "name": "Viet Nam",
+    "continent": "Asia"
   },
   {
     "code": "VU",
     "alpha3_code": "VUT",
-    "name": "Vanuatu"
+    "name": "Vanuatu",
+    "continent": "Oceania"
   },
   {
     "code": "WF",
     "alpha3_code": "WLF",
-    "name": "Wallis and Futuna"
+    "name": "Wallis and Futuna",
+    "continent": "Oceania"
   },
   {
     "code": "WS",
     "alpha3_code": "WSM",
-    "name": "Samoa"
+    "name": "Samoa",
+    "continent": "Oceania"
   },
   {
     "code": "YE",
     "alpha3_code": "YEM",
-    "name": "Yemen"
+    "name": "Yemen",
+    "continent": "Asia"
   },
   {
     "code": "YT",
     "alpha3_code": "MYT",
-    "name": "Mayotte"
+    "name": "Mayotte",
+    "continent": "Africa"
   },
   {
     "code": "ZA",
     "alpha3_code": "ZAF",
-    "name": "South Africa"
+    "name": "South Africa",
+    "continent": "Africa"
   },
   {
     "code": "ZM",
     "alpha3_code": "ZMB",
-    "name": "Zambia"
+    "name": "Zambia",
+    "continent": "Africa"
   },
   {
     "code": "ZW",
     "alpha3_code": "ZWE",
-    "name": "Zimbabwe"
+    "name": "Zimbabwe",
+    "continent": "Africa"
   }
 ]

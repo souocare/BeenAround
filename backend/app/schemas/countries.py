@@ -11,6 +11,7 @@ class CountryResponse(BaseModel):
     code: str
     name: str
     alpha3_code: str
+    continent: str
 
 
 class CountryListResponse(BaseModel):
