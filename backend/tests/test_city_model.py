@@ -42,6 +42,7 @@ def make_city(
     latitude: float = 38.7167,
     longitude: float = -9.1333,
     population: int | None = 500000,
+    feature_code: str = "PPL",
 ) -> City:
     return City(
         id=city_id,
@@ -51,6 +52,7 @@ def make_city(
         latitude=latitude,
         longitude=longitude,
         population=population,
+        feature_code=feature_code,
     )
 
 
@@ -225,3 +227,17 @@ def test_coordinate_boundaries_are_allowed(
 
         session.add(make_city(latitude=latitude, longitude=longitude))
         session.commit()
+
+def test_city_requires_feature_code(database_engine) -> None:
+    with Session(database_engine) as session:
+        seed_country(session)
+
+        city = make_city()
+        city.feature_code = None
+
+        session.add(city)
+
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+        session.rollback()

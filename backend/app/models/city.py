@@ -61,3 +61,8 @@ class City(Base):
         BigInteger,
         nullable=True,
     )
+
+    feature_code: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+    )
