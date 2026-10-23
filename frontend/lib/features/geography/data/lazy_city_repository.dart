@@ -1,0 +1,101 @@
+import '../domain/city_repository.dart';
+import '../domain/city_search_result.dart';
+import 'city_repository_handle.dart';
+
+typedef CityRepositoryHandleFactory = Future<CityRepositoryHandle> Function();
+
+class LazyCityRepository implements CityRepository {
+  LazyCityRepository({required CityRepositoryHandleFactory createHandle})
+    : _createHandle = createHandle;
+
+  final CityRepositoryHandleFactory _createHandle;
+
+  Future<CityRepositoryHandle>? _pendingHandle;
+  CityRepositoryHandle? _handle;
+
+  bool _closed = false;
+
+  @override
+  Future<CitySearchResult> search({
+    String? query,
+    String? countryCode,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    if (_closed) {
+      throw StateError('City repository is closed.');
+    }
+
+    final handle = await _getHandle();
+
+    if (_closed) {
+      throw StateError('City repository is closed.');
+    }
+
+    return handle.repository.search(
+      query: query,
+      countryCode: countryCode,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  Future<CityRepositoryHandle> _getHandle() async {
+    final existing = _handle;
+
+    if (existing != null) {
+      return existing;
+    }
+
+    final pending = _pendingHandle;
+
+    if (pending != null) {
+      return pending;
+    }
+
+    final initialization = _createHandle();
+
+    _pendingHandle = initialization;
+
+    try {
+      final handle = await initialization;
+
+      if (_closed) {
+        await handle.close();
+        throw StateError('City repository is closed.');
+      }
+
+      _handle = handle;
+
+      return handle;
+    } catch (_) {
+      _pendingHandle = null;
+      rethrow;
+    }
+  }
+
+  Future<void> close() async {
+    if (_closed) return;
+
+    _closed = true;
+
+    final handle = _handle;
+
+    if (handle != null) {
+      await handle.close();
+      return;
+    }
+
+    // If initialization is still running, _getHandle()
+    // will close the handle when initialization completes.
+    final pending = _pendingHandle;
+
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {
+        // Initialization failure requires no resource cleanup.
+      }
+    }
+  }
+}

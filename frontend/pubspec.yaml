@@ -40,6 +40,9 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   maplibre: ^0.3.6
   adaptive_platform_ui: ^1.0.2
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  sqlite3: ^3.5.2
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +70,7 @@ flutter:
     - assets/geo/demo_countries.geojson
     - assets/geo/world_countries.geojson
     - assets/geo/countries/
+    - assets/geo/cities_catalog.sqlite
 
   # To add assets to your application, add an assets section, like this:
   # assets:

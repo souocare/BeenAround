@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:beenaround/app/widgets/app_error_state.dart';
 import 'package:beenaround/app/widgets/app_loading_state.dart';
+import 'package:beenaround/features/auth/domain/authenticated_user.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -15,6 +18,12 @@ import 'pages/login_page.dart';
 import '../../../app/shell/authenticated_app_shell.dart';
 import '../../explore/application/explore_cubit.dart';
 import '../../explore/data/countries_repository.dart';
+import '../../geography/data/city_repository_factory.dart';
+import '../../geography/data/city_repository_handle.dart';
+import '../../geography/domain/city_repository.dart';
+import '../../geography/data/city_repository_factory.dart';
+import '../../geography/data/lazy_city_repository.dart';
+import '../../geography/domain/city_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -133,15 +142,11 @@ class _AuthenticationGatewayState extends State<AuthenticationGateway> {
                 return const _AuthenticationLoadingPage();
               }
 
-              return BlocProvider(
+              return _AuthenticatedSession(
                 key: ValueKey(user.id),
-                create: (_) => ExploreCubit(
-                  repository: ApiCountriesRepository(apiClient: _apiClient),
-                )..load(),
-                child: AuthenticatedAppShell(
-                  user: user,
-                  onLogout: _authCubit.logout,
-                ),
+                apiClient: _apiClient,
+                user: user,
+                onLogout: _authCubit.logout,
               );
 
             case AuthPhase.unavailable:
@@ -187,6 +192,57 @@ class _AuthenticationUnavailablePage extends StatelessWidget {
         message: 'Please try again to reconnect to your BeenAround server.',
         icon: Icons.cloud_off_outlined,
         onRetry: onRetry,
+      ),
+    );
+  }
+}
+
+class _AuthenticatedSession extends StatefulWidget {
+  const _AuthenticatedSession({
+    required this.apiClient,
+    required this.user,
+    required this.onLogout,
+    super.key,
+  });
+
+  final ApiClient apiClient;
+  final AuthenticatedUser user;
+  final Future<void> Function() onLogout;
+
+  @override
+  State<_AuthenticatedSession> createState() => _AuthenticatedSessionState();
+}
+
+class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
+  late final LazyCityRepository _cityRepository;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _cityRepository = LazyCityRepository(
+      createHandle: () => createCityRepository(apiClient: widget.apiClient),
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_cityRepository.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepositoryProvider<CityRepository>.value(
+      value: _cityRepository,
+      child: BlocProvider(
+        create: (_) => ExploreCubit(
+          repository: ApiCountriesRepository(apiClient: widget.apiClient),
+        )..load(),
+        child: AuthenticatedAppShell(
+          user: widget.user,
+          onLogout: widget.onLogout,
+        ),
       ),
     );
   }
