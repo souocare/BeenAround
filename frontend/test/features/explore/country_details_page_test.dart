@@ -8,6 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/presentation/widgets/edit_country_visit_sheet.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -116,6 +118,33 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 }
 
+class FakeCityVisitsRepository implements CityVisitsRepository {
+  @override
+  Future<List<CityVisit>> getCityVisits() async => const [];
+
+  @override
+  Future<CityVisit> createCityVisit({
+    required int cityId,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) {
+    throw UnimplementedError('City visit creation is not used by these tests.');
+  }
+
+  @override
+  Future<CityVisit> updateCityVisit({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) {
+    throw UnimplementedError('City visit updates are not used by these tests.');
+  }
+
+  @override
+  Future<void> deleteCityVisit({required String visitId}) {
+    throw UnimplementedError('City visit deletion is not used by these tests.');
+  }
+}
+
 CountryVisit visit({
   required String id,
   required String countryCode,
@@ -194,10 +223,13 @@ void main() {
     await cubit.load();
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: BlocProvider.value(
-          value: cubit,
-          child: const Scaffold(body: ExplorePage()),
+      RepositoryProvider<CityVisitsRepository>.value(
+        value: FakeCityVisitsRepository(),
+        child: MaterialApp(
+          home: BlocProvider.value(
+            value: cubit,
+            child: const Scaffold(body: ExplorePage()),
+          ),
         ),
       ),
     );

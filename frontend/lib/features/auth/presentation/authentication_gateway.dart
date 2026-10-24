@@ -24,6 +24,8 @@ import '../../geography/domain/city_repository.dart';
 import '../../geography/data/city_repository_factory.dart';
 import '../../geography/data/lazy_city_repository.dart';
 import '../../geography/domain/city_repository.dart';
+import '../../geography/data/remote/api_city_visits_repository.dart';
+import '../../geography/domain/city_visits_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -233,8 +235,13 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider<CityRepository>.value(
-      value: _cityRepository,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<CityRepository>.value(value: _cityRepository),
+        RepositoryProvider<CityVisitsRepository>(
+          create: (_) => ApiCityVisitsRepository(apiClient: widget.apiClient),
+        ),
+      ],
       child: BlocProvider(
         create: (_) => ExploreCubit(
           repository: ApiCountriesRepository(apiClient: widget.apiClient),

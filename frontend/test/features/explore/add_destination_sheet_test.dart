@@ -6,6 +6,11 @@ import 'package:beenaround/features/explore/presentation/pages/explore_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
@@ -70,11 +75,131 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 }
 
+class FakeCityRepository implements CityRepository {
+  int searchCalls = 0;
+
+  @override
+  Future<CitySearchResult> search({
+    String? query,
+    String? countryCode,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    searchCalls++;
+
+    const cities = [
+      City(
+        id: 2267057,
+        name: 'Lisbon',
+        asciiName: 'Lisbon',
+        countryCode: 'PT',
+        countryName: 'Portugal',
+        latitude: 38.7167,
+        longitude: -9.1333,
+        population: 517802,
+        featureCode: 'PPLC',
+      ),
+      City(
+        id: 3117735,
+        name: 'Madrid',
+        asciiName: 'Madrid',
+        countryCode: 'ES',
+        countryName: 'Spain',
+        latitude: 40.4165,
+        longitude: -3.7026,
+        population: 3255944,
+        featureCode: 'PPLC',
+      ),
+    ];
+
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+
+    final matches = cities
+        .where((city) {
+          final matchesName =
+              normalizedQuery.isEmpty ||
+              city.name.toLowerCase().contains(normalizedQuery);
+
+          final matchesCountry =
+              countryCode == null ||
+              city.countryCode == countryCode.toUpperCase();
+
+          return matchesName && matchesCountry;
+        })
+        .toList(growable: false);
+
+    return CitySearchResult(
+      items: matches,
+      total: matches.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
+}
+
+class FakeCityVisitsRepository implements CityVisitsRepository {
+  int createCalls = 0;
+  int? lastCreatedCityId;
+
+  DateTime? lastStartedOn;
+  DateTime? lastEndedOn;
+
+  final List<CityVisit> createdVisits = [];
+
+  @override
+  Future<List<CityVisit>> getCityVisits() async {
+    return List.unmodifiable(createdVisits);
+  }
+
+  @override
+  Future<CityVisit> createCityVisit({
+    required int cityId,
+    DateTime? startedOn,
+    DateTime? endedOn,
+  }) async {
+    createCalls++;
+    lastCreatedCityId = cityId;
+    lastStartedOn = startedOn;
+    lastEndedOn = endedOn;
+
+    final visit = CityVisit(
+      id: 'city-visit-$createCalls',
+      cityId: cityId,
+      cityName: cityId == 2267057 ? 'Lisbon' : 'Madrid',
+      countryCode: cityId == 2267057 ? 'PT' : 'ES',
+      countryName: cityId == 2267057 ? 'Portugal' : 'Spain',
+      startedOn: startedOn,
+      endedOn: endedOn,
+      createdAt: DateTime(2026, 10, 24),
+      updatedAt: DateTime(2026, 10, 24),
+    );
+
+    createdVisits.add(visit);
+
+    return visit;
+  }
+
+  @override
+  Future<CityVisit> updateCityVisit({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteCityVisit({required String visitId}) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   Future<void> pumpExplore(
     WidgetTester tester, {
     double width = 390,
     FakeCountriesRepository? repository,
+    FakeCityRepository? cityRepository,
+    FakeCityVisitsRepository? cityVisitsRepository,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 844);
@@ -91,9 +216,19 @@ void main() {
     await cubit.load();
 
     await tester.pumpWidget(
-      BlocProvider.value(
-        value: cubit,
-        child: const MaterialApp(home: Scaffold(body: ExplorePage())),
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CityRepository>.value(
+            value: cityRepository ?? FakeCityRepository(),
+          ),
+          RepositoryProvider<CityVisitsRepository>.value(
+            value: cityVisitsRepository ?? FakeCityVisitsRepository(),
+          ),
+        ],
+        child: BlocProvider.value(
+          value: cubit,
+          child: const MaterialApp(home: Scaffold(body: ExplorePage())),
+        ),
       ),
     );
 
@@ -220,10 +355,20 @@ void main() {
       await cubit.load();
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: BlocProvider.value(
-            value: cubit,
-            child: const Scaffold(body: ExplorePage()),
+        MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<CityRepository>.value(
+              value: FakeCityRepository(),
+            ),
+            RepositoryProvider<CityVisitsRepository>.value(
+              value: FakeCityVisitsRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            home: BlocProvider.value(
+              value: cubit,
+              child: const Scaffold(body: ExplorePage()),
+            ),
           ),
         ),
       );
@@ -246,4 +391,90 @@ void main() {
       expect(find.text('Save Visit'), findsOneWidget);
     },
   );
+  testWidgets('switches from Country to City', (tester) async {
+    await pumpExplore(tester);
+
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select a city'), findsOneWidget);
+    expect(find.text('Select a country'), findsNothing);
+  });
+  testWidgets('searches and selects a city', (tester) async {
+    final cityRepository = FakeCityRepository();
+
+    await pumpExplore(tester, cityRepository: cityRepository);
+
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(cityRepository.searchCalls, 1);
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Madrid'), findsNothing);
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal'), findsOneWidget);
+  });
+  testWidgets('creates a city visit without creating a country visit', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(cityVisitsRepository.createCalls, 1);
+    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
 }

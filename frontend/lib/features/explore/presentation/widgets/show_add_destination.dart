@@ -5,6 +5,8 @@ import '../../application/add_country_visit_cubit.dart';
 import '../../application/explore_cubit.dart';
 import 'add_destination_sheet.dart';
 import '../../domain/country.dart';
+import '../../application/add_city_visit_cubit.dart';
+import '../../../geography/domain/city_visits_repository.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -12,6 +14,7 @@ Future<bool> showAddDestination(
 }) async {
   final exploreCubit = context.read<ExploreCubit>();
   final repository = exploreCubit.repository;
+  final cityVisitsRepository = context.read<CityVisitsRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
 
@@ -21,6 +24,9 @@ Future<bool> showAddDestination(
         BlocProvider<ExploreCubit>.value(value: exploreCubit),
         BlocProvider<AddCountryVisitCubit>(
           create: (_) => AddCountryVisitCubit(repository: repository),
+        ),
+        BlocProvider<AddCityVisitCubit>(
+          create: (_) => AddCityVisitCubit(repository: cityVisitsRepository),
         ),
       ],
       child: AddDestinationSheet(initialCountry: initialCountry),

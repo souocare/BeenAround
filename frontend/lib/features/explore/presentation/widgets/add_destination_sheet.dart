@@ -11,6 +11,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'country_flag.dart';
 
+import 'dart:async';
+
+import '../../application/add_city_visit_cubit.dart';
+import '../../application/add_city_visit_state.dart';
+import '../../../geography/domain/city.dart';
+import '../../../geography/domain/city_repository.dart';
+
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({this.initialCountry, super.key});
 
@@ -24,8 +31,31 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   Country? _selectedCountry;
   bool _selectingCountry = false;
   String _searchQuery = '';
-  DateTime? _startedOn;
-  DateTime? _endedOn;
+  DateTime? _countryStartedOn;
+  DateTime? _countryEndedOn;
+
+  DateTime? _cityStartedOn;
+  DateTime? _cityEndedOn;
+
+  bool get _isCountry => _selectedDestinationType == 0;
+
+  DateTime? get _startedOn => _isCountry ? _countryStartedOn : _cityStartedOn;
+
+  DateTime? get _endedOn => _isCountry ? _countryEndedOn : _cityEndedOn;
+
+  int _selectedDestinationType = 0;
+
+  City? _selectedCity;
+  bool _selectingCity = false;
+
+  String _citySearchQuery = '';
+  List<City> _cityResults = const [];
+
+  bool _citySearchLoading = false;
+  String? _citySearchError;
+
+  Timer? _citySearchDebounce;
+  int _citySearchGeneration = 0;
 
   @override
   void initState() {
@@ -34,11 +64,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickStartDate() async {
-    final now = DateTime.now();
-
     final selected = await showAdaptiveVisitDatePicker(
       context: context,
-      initialDate: _startedOn ?? now,
+      initialDate: _startedOn ?? DateTime.now(),
       firstDate: DateTime(1900),
       lastDate: DateTime(2100),
     );
@@ -46,33 +74,47 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     if (!mounted || selected == null) return;
 
     setState(() {
-      _startedOn = selected;
+      if (_isCountry) {
+        _countryStartedOn = selected;
 
-      if (_endedOn != null && _endedOn!.isBefore(selected)) {
-        _endedOn = null;
+        if (_countryEndedOn != null && _countryEndedOn!.isBefore(selected)) {
+          _countryEndedOn = null;
+        }
+      } else {
+        _cityStartedOn = selected;
+
+        if (_cityEndedOn != null && _cityEndedOn!.isBefore(selected)) {
+          _cityEndedOn = null;
+        }
       }
     });
 
-    context.read<AddCountryVisitCubit>().clearError();
+    _clearActiveError();
   }
 
   Future<void> _pickEndDate() async {
-    if (_startedOn == null) return;
+    final startDate = _startedOn;
+
+    if (startDate == null) return;
 
     final selected = await showAdaptiveVisitDatePicker(
       context: context,
-      initialDate: _endedOn ?? _startedOn!,
-      firstDate: _startedOn!,
+      initialDate: _endedOn ?? startDate,
+      firstDate: startDate,
       lastDate: DateTime(2100),
     );
 
     if (!mounted || selected == null) return;
 
     setState(() {
-      _endedOn = selected;
+      if (_isCountry) {
+        _countryEndedOn = selected;
+      } else {
+        _cityEndedOn = selected;
+      }
     });
 
-    context.read<AddCountryVisitCubit>().clearError();
+    _clearActiveError();
   }
 
   String _formatDate(DateTime? date) {
@@ -84,13 +126,38 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     return '$day/$month/${date.year}';
   }
 
+  void _clearActiveError() {
+    if (_isCountry) {
+      context.read<AddCountryVisitCubit>().clearError();
+    } else {
+      context.read<AddCityVisitCubit>().clearError();
+    }
+  }
+
   Future<void> _saveVisit() async {
-    final country = _selectedCountry;
+    if (_selectedDestinationType == 0) {
+      final country = _selectedCountry;
 
-    if (country == null) return;
+      if (country == null) return;
 
-    final success = await context.read<AddCountryVisitCubit>().submit(
-      countryCode: country.code,
+      final success = await context.read<AddCountryVisitCubit>().submit(
+        countryCode: country.code,
+        startedOn: _startedOn,
+        endedOn: _endedOn,
+      );
+
+      if (!mounted || !success) return;
+
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    final city = _selectedCity;
+
+    if (city == null) return;
+
+    final success = await context.read<AddCityVisitCubit>().submit(
+      cityId: city.id,
       startedOn: _startedOn,
       endedOn: _endedOn,
     );
@@ -98,6 +165,233 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     if (!mounted || !success) return;
 
     Navigator.of(context).pop(true);
+  }
+
+  void _onCitySearchChanged(String value) {
+    _citySearchDebounce?.cancel();
+
+    final query = value.trim();
+    final generation = ++_citySearchGeneration;
+
+    setState(() {
+      _citySearchQuery = value;
+      _citySearchError = null;
+      _cityResults = const [];
+      _citySearchLoading = query.isNotEmpty;
+    });
+
+    if (query.isEmpty) return;
+
+    _citySearchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => _searchCities(query, generation),
+    );
+  }
+
+  Future<void> _searchCities(String query, int generation) async {
+    try {
+      final result = await context.read<CityRepository>().search(
+        query: query,
+        limit: 20,
+      );
+
+      if (!mounted || generation != _citySearchGeneration) return;
+
+      setState(() {
+        _cityResults = result.items;
+        _citySearchLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _citySearchGeneration) return;
+
+      setState(() {
+        _citySearchLoading = false;
+        _citySearchError = 'Unable to search cities. Please try again.';
+      });
+    }
+  }
+
+  void _selectDestinationType(int index) {
+    if (_isAnySubmissionInProgress) return;
+
+    if (_selectedDestinationType == index) return;
+
+    _citySearchDebounce?.cancel();
+    _citySearchGeneration++;
+
+    setState(() {
+      _selectedDestinationType = index;
+
+      _selectingCountry = false;
+      _selectingCity = false;
+
+      _searchQuery = '';
+      _citySearchLoading = false;
+    });
+
+    _clearActiveError();
+  }
+
+  Widget _buildCityPicker(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final useCupertinoSearch =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 20, 8),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Back to Add Destination',
+                onPressed: () {
+                  _citySearchDebounce?.cancel();
+                  _citySearchGeneration++;
+
+                  setState(() {
+                    _selectingCity = false;
+                    _citySearchLoading = false;
+                  });
+                },
+                icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Select City',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: useCupertinoSearch
+              ? CupertinoSearchTextField(
+                  key: const Key('destinationCitySearch'),
+                  autofocus: true,
+                  placeholder: 'Search cities...',
+                  onChanged: _onCitySearchChanged,
+                )
+              : TextField(
+                  key: const Key('destinationCitySearch'),
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Search cities...',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: _onCitySearchChanged,
+                ),
+        ),
+        Expanded(
+          child: _citySearchLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _citySearchError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _citySearchError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.error),
+                    ),
+                  ),
+                )
+              : _citySearchQuery.trim().isEmpty
+              ? Center(
+                  child: Text(
+                    'Search for a city to add to your history.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : _cityResults.isEmpty
+              ? const Center(child: Text('No cities found.'))
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  itemCount: _cityResults.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final city = _cityResults[index];
+                    final isSelected = _selectedCity?.id == city.id;
+
+                    return Material(
+                      color: colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          _citySearchDebounce?.cancel();
+                          _citySearchGeneration++;
+
+                          setState(() {
+                            _selectedCity = city;
+                            _selectingCity = false;
+                            _citySearchLoading = false;
+                          });
+
+                          context.read<AddCityVisitCubit>().clearError();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_city_outlined,
+                                color: colors.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      city.name,
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      city.countryName,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colors.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle
+                                    : Icons.chevron_right,
+                                color: isSelected
+                                    ? colors.primary
+                                    : colors.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -125,13 +419,20 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             child: Row(
               children: [
                 BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
-                  builder: (context, state) {
-                    return IconButton(
-                      tooltip: 'Close',
-                      onPressed: state.isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      icon: const Icon(Icons.close),
+                  builder: (context, countryState) {
+                    return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
+                      builder: (context, cityState) {
+                        final isSubmitting =
+                            countryState.isSubmitting || cityState.isSubmitting;
+
+                        return IconButton(
+                          tooltip: 'Close',
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(false),
+                          icon: const Icon(Icons.close),
+                        );
+                      },
                     );
                   },
                 ),
@@ -150,9 +451,11 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           Expanded(
             child: _selectingCountry
                 ? _buildCountryPicker(context)
+                : _selectingCity
+                ? _buildCityPicker(context)
                 : _buildForm(context, theme, colors),
           ),
-          if (!_selectingCountry) _buildFooter(context),
+          if (!_selectingCountry && !_selectingCity) _buildFooter(context),
         ],
       ),
     );
@@ -176,7 +479,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         ),
         const SizedBox(height: 24),
-        _DestinationTypeSelector(selectedIndex: 0, onSelected: (_) {}),
+        _DestinationTypeSelector(
+          selectedIndex: _selectedDestinationType,
+          onSelected: _selectDestinationType,
+        ),
         const SizedBox(height: 16),
         const _DestinationStatusSelector(),
         const SizedBox(height: 24),
@@ -188,15 +494,25 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         ),
         const SizedBox(height: 10),
-        _DestinationCountryCard(
-          country: _selectedCountry,
-          onTap: () {
-            setState(() {
-              _selectingCountry = true;
-              _searchQuery = '';
-            });
-          },
-        ),
+        if (_selectedDestinationType == 0)
+          _DestinationCountryCard(
+            country: _selectedCountry,
+            onTap: () {
+              setState(() {
+                _selectingCountry = true;
+                _searchQuery = '';
+              });
+            },
+          )
+        else
+          _DestinationCityCard(
+            city: _selectedCity,
+            onTap: () {
+              setState(() {
+                _selectingCity = true;
+              });
+            },
+          ),
         const SizedBox(height: 24),
         Text(
           'WHEN DID YOU VISIT?',
@@ -238,11 +554,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             child: TextButton(
               onPressed: () {
                 setState(() {
-                  _startedOn = null;
-                  _endedOn = null;
+                  if (_isCountry) {
+                    _countryStartedOn = null;
+                    _countryEndedOn = null;
+                  } else {
+                    _cityStartedOn = null;
+                    _cityEndedOn = null;
+                  }
                 });
 
-                context.read<AddCountryVisitCubit>().clearError();
+                _clearActiveError();
               },
               child: const Text('Clear dates'),
             ),
@@ -426,53 +747,85 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   Widget _buildFooter(BuildContext context) {
     return BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
-      builder: (context, state) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (state.errorMessage != null) ...[
-                Text(
-                  state.errorMessage!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                const SizedBox(height: 12),
-              ],
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+      builder: (context, countryState) {
+        return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
+          builder: (context, cityState) {
+            final isCountry = _selectedDestinationType == 0;
+
+            final isSubmitting =
+                countryState.isSubmitting || cityState.isSubmitting;
+
+            final isSuccess = isCountry
+                ? countryState.phase == AddCountryVisitPhase.success
+                : cityState.phase == AddCityVisitPhase.success;
+
+            final errorMessage = isCountry
+                ? countryState.errorMessage
+                : cityState.errorMessage;
+
+            final hasSelection = isCountry
+                ? _selectedCountry != null
+                : _selectedCity != null;
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (errorMessage != null) ...[
+                    Text(
+                      errorMessage,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
-                    textStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 12),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(54),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      onPressed: !hasSelection || isSubmitting || isSuccess
+                          ? null
+                          : _saveVisit,
+                      icon: isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check, size: 20),
+                      label: Text(isSubmitting ? 'Saving...' : 'Save Visit'),
                     ),
                   ),
-                  onPressed:
-                      _selectedCountry == null ||
-                          state.isSubmitting ||
-                          state.phase == AddCountryVisitPhase.success
-                      ? null
-                      : _saveVisit,
-                  icon: state.isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check, size: 20),
-                  label: Text(state.isSubmitting ? 'Saving...' : 'Save Visit'),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  bool get _isAnySubmissionInProgress {
+    return context.read<AddCountryVisitCubit>().state.isSubmitting ||
+        context.read<AddCityVisitCubit>().state.isSubmitting;
+  }
+
+  @override
+  void dispose() {
+    _citySearchDebounce?.cancel();
+    _citySearchGeneration++;
+    super.dispose();
   }
 }
 
@@ -597,7 +950,7 @@ class _DestinationTypeSelector extends StatelessWidget {
           for (var index = 0; index < options.length; index++)
             Expanded(
               child: InkWell(
-                onTap: index == 0 ? () => onSelected(index) : null,
+                onTap: () => onSelected(index),
                 borderRadius: BorderRadius.circular(11),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
@@ -786,6 +1139,77 @@ class _DestinationCountryCard extends StatelessWidget {
                       country == null
                           ? 'Search the country catalog'
                           : country!.code,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DestinationCityCard extends StatelessWidget {
+  const _DestinationCityCard({required this.city, required this.onTap});
+
+  final City? city;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.location_city_outlined,
+                  color: colors.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      city?.name ?? 'Select a city',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      city?.countryName ?? 'Search the city catalog',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
