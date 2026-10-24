@@ -4,6 +4,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from app.domain.visit_dates import validate_visit_dates
 
 
 def normalize_country_code(value: str) -> str:
@@ -14,21 +15,6 @@ def normalize_country_code(value: str) -> str:
         raise ValueError("Country code must be a valid ISO alpha-2 code.")
 
     return code
-
-
-def validate_visit_dates(
-    started_on: date | None,
-    ended_on: date | None,
-) -> None:
-    """Validate the final date range of a country visit."""
-    if ended_on is None:
-        return
-
-    if started_on is None:
-        raise ValueError("End date requires a start date.")
-
-    if ended_on < started_on:
-        raise ValueError("End date cannot be earlier than start date.")
 
 
 class CountryVisitResponse(BaseModel):
