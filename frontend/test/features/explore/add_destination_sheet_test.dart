@@ -477,4 +477,144 @@ void main() {
 
     expect(find.text('Add Destination'), findsNothing);
   });
+  testWidgets(
+    'city search works when repositories are scoped below MaterialApp on mobile',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final countriesRepository = FakeCountriesRepository();
+      final cityRepository = FakeCityRepository();
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      final cubit = ExploreCubit(repository: countriesRepository);
+      addTearDown(cubit.close);
+
+      await cubit.load();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<CityRepository>.value(value: cityRepository),
+              RepositoryProvider<CityVisitsRepository>.value(
+                value: cityVisitsRepository,
+              ),
+            ],
+            child: BlocProvider.value(
+              value: cubit,
+              child: const Scaffold(body: ExplorePage()),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Add Destination'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('City'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select a city'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('destinationCitySearch')),
+        'Madrid',
+      );
+
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(cityRepository.searchCalls, 1);
+      expect(
+        find
+            .text('Madrid')
+            .evaluate()
+            .where((element) => element.widget is Text),
+        hasLength(1),
+      );
+      expect(find.text('Lisbon'), findsNothing);
+      expect(
+        find.text('Unable to search cities. Please try again.'),
+        findsNothing,
+      );
+    },
+  );
+  testWidgets(
+    'city search works when repositories are scoped below MaterialApp on desktop',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 844);
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final countriesRepository = FakeCountriesRepository();
+      final cityRepository = FakeCityRepository();
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      final cubit = ExploreCubit(repository: countriesRepository);
+      addTearDown(cubit.close);
+
+      await cubit.load();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<CityRepository>.value(value: cityRepository),
+              RepositoryProvider<CityVisitsRepository>.value(
+                value: cityVisitsRepository,
+              ),
+            ],
+            child: BlocProvider.value(
+              value: cubit,
+              child: const Scaffold(body: ExplorePage()),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Add Destination'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+
+      await tester.tap(find.text('City'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select a city'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('destinationCitySearch')),
+        'Madrid',
+      );
+
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(cityRepository.searchCalls, 1);
+      expect(
+        find
+            .text('Madrid')
+            .evaluate()
+            .where((element) => element.widget is Text),
+        hasLength(1),
+      );
+      expect(find.text('Lisbon'), findsNothing);
+      expect(
+        find.text('Unable to search cities. Please try again.'),
+        findsNothing,
+      );
+    },
+  );
 }

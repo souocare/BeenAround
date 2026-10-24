@@ -7,6 +7,7 @@ import 'add_destination_sheet.dart';
 import '../../domain/country.dart';
 import '../../application/add_city_visit_cubit.dart';
 import '../../../geography/domain/city_visits_repository.dart';
+import '../../../geography/domain/city_repository.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -15,21 +16,25 @@ Future<bool> showAddDestination(
   final exploreCubit = context.read<ExploreCubit>();
   final repository = exploreCubit.repository;
   final cityVisitsRepository = context.read<CityVisitsRepository>();
+  final cityRepository = context.read<CityRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
 
   Widget buildContent(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<ExploreCubit>.value(value: exploreCubit),
-        BlocProvider<AddCountryVisitCubit>(
-          create: (_) => AddCountryVisitCubit(repository: repository),
-        ),
-        BlocProvider<AddCityVisitCubit>(
-          create: (_) => AddCityVisitCubit(repository: cityVisitsRepository),
-        ),
-      ],
-      child: AddDestinationSheet(initialCountry: initialCountry),
+    return RepositoryProvider<CityRepository>.value(
+      value: cityRepository,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<ExploreCubit>.value(value: exploreCubit),
+          BlocProvider<AddCountryVisitCubit>(
+            create: (_) => AddCountryVisitCubit(repository: repository),
+          ),
+          BlocProvider<AddCityVisitCubit>(
+            create: (_) => AddCityVisitCubit(repository: cityVisitsRepository),
+          ),
+        ],
+        child: AddDestinationSheet(initialCountry: initialCountry),
+      ),
     );
   }
 
