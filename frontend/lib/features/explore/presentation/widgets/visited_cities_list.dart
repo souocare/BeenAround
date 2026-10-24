@@ -9,6 +9,7 @@ import '../../../../app/widgets/app_loading_state.dart';
 import '../../application/visited_cities_cubit.dart';
 import '../../application/visited_cities_state.dart';
 import '../../domain/visited_city.dart';
+import '../pages/city_details_page.dart';
 
 class VisitedCitiesList extends StatefulWidget {
   const VisitedCitiesList({super.key});
@@ -163,51 +164,73 @@ class _VisitedCityCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Container(
-      key: Key('visitedCityCard-${city.cityId}'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.location_city_outlined, color: colors.primary, size: 28),
+        onTap: () {
+          final cubit = context.read<VisitedCitiesCubit>();
 
-          const SizedBox(width: 14),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  city.cityName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  '${city.countryName} · '
-                  '${city.visitCount} '
-                  '${city.visitCount == 1 ? 'visit' : 'visits'}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => BlocProvider.value(
+                value: cubit,
+                child: CityDetailsPage(city: city),
+              ),
+            ),
+          );
+        },
+        child: Container(
+          key: Key('visitedCityCard-${city.cityId}'),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.45),
             ),
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(
+                Icons.location_city_outlined,
+                color: colors.primary,
+                size: 28,
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      city.cityName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      '${city.countryName} · '
+                      '${city.visitCount} '
+                      '${city.visitCount == 1 ? 'visit' : 'visits'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

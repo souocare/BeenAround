@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/explore/presentation/pages/city_details_page.dart';
 
 class FakeExploreRepository implements CountriesRepository {
   FakeExploreRepository({this.countries = const [], this.visits = const []});
@@ -72,6 +73,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   List<CityVisit> visits;
 
   int loadCalls = 0;
+  int deleteCalls = 0;
+  String? receivedDeletedVisitId;
 
   @override
   Future<List<CityVisit>> getCityVisits() async {
@@ -97,8 +100,11 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }
 
   @override
-  Future<void> deleteCityVisit({required String visitId}) {
-    throw UnimplementedError();
+  Future<void> deleteCityVisit({required String visitId}) async {
+    deleteCalls++;
+    receivedDeletedVisitId = visitId;
+
+    visits = visits.where((visit) => visit.id != visitId).toList();
   }
 }
 
@@ -153,6 +159,13 @@ void main() {
     ExploreCubit cubit, {
     FakeCityVisitsRepository? cityRepository,
   }) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     await tester.pumpWidget(
       RepositoryProvider<CityVisitsRepository>.value(
         value: cityRepository ?? FakeCityVisitsRepository(),
@@ -602,5 +615,187 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Lisbon'), findsOneWidget);
+  });
+  testWidgets('opens city details when tapping a visited city', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal], visits: []),
+    );
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'lisbon-visit',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit, cityRepository: cityRepository);
+
+    await tester.pumpAndSettle();
+
+    await openCitiesTab(tester);
+
+    final cityCard = find.byKey(const Key('visitedCityCard-2267057'));
+
+    await tester.ensureVisible(cityCard);
+    await tester.pumpAndSettle();
+
+    await tester.tap(cityCard);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CityDetailsPage), findsOneWidget);
+    expect(find.text('City Details'), findsOneWidget);
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisit-lisbon-visit')), findsOneWidget);
+  });
+  testWidgets('deleting last city visit removes city from Explore', (
+    tester,
+  ) async {
+    final countryRepository = FakeExploreRepository(
+      countries: [portugal],
+      visits: [visit('country-1', 'PT')],
+    );
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'lisbon-1',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    final cubit = ExploreCubit(repository: countryRepository);
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, cityRepository: cityRepository);
+
+    await openCitiesTab(tester);
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    // Abrir City Details.
+    await tester.tap(find.byKey(const Key('visitedCityCard-2267057')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('City Details'), findsOneWidget);
+
+    // Abrir menu da visita.
+    await tester.tap(find.byKey(const Key('cityVisitMenu-lisbon-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    // Confirmar eliminação.
+    await tester.tap(find.byKey(const Key('confirmDeleteCityVisit')));
+    await tester.pumpAndSettle();
+
+    // A última visita desapareceu.
+    expect(cityRepository.deleteCalls, 1);
+    expect(cityRepository.receivedDeletedVisitId, 'lisbon-1');
+
+    expect(cityRepository.visits, isEmpty);
+
+    // Regressámos ao Explore.
+    expect(find.text('City Details'), findsNothing);
+
+    // A cidade já não aparece na lista.
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsNothing);
+
+    expect(find.text('No cities visited yet'), findsOneWidget);
+
+    // O registo independente do país permanece.
+    expect(countryRepository.visits, hasLength(1));
+    expect(countryRepository.visits.single.id, 'country-1');
+  });
+  testWidgets('deleting one of multiple visits keeps city in Explore', (
+    tester,
+  ) async {
+    final countryRepository = FakeExploreRepository(
+      countries: [portugal],
+      visits: [visit('country-1', 'PT')],
+    );
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'lisbon-1',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+        cityVisit(
+          id: 'lisbon-2',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    final cubit = ExploreCubit(repository: countryRepository);
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, cityRepository: cityRepository);
+
+    await openCitiesTab(tester);
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    // Abrir City Details.
+    await tester.tap(find.byKey(const Key('visitedCityCard-2267057')));
+    await tester.pumpAndSettle();
+
+    // Eliminar apenas a primeira visita.
+    await tester.tap(find.byKey(const Key('cityVisitMenu-lisbon-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteCityVisit')));
+    await tester.pumpAndSettle();
+
+    expect(cityRepository.deleteCalls, 1);
+    expect(cityRepository.visits, hasLength(1));
+    expect(cityRepository.visits.single.id, 'lisbon-2');
+
+    // Continuamos no City Details.
+    expect(find.text('City Details'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisit-lisbon-1')), findsNothing);
+
+    expect(find.byKey(const Key('cityVisit-lisbon-2')), findsOneWidget);
+
+    // Regressar manualmente ao Explore.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // A cidade continua na lista.
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // A visita ao país permanece inalterada.
+    expect(countryRepository.visits, hasLength(1));
+    expect(countryRepository.visits.single.id, 'country-1');
   });
 }
