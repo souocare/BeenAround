@@ -11,17 +11,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = BACKEND_ROOT.parent
 FRONTEND_ROOT = PROJECT_ROOT / "frontend"
 
-SOURCE_PATH = (
-    FRONTEND_ROOT
-    / "assets/geo/source/ne_110m_admin_0_countries.shp"
-)
+SOURCE_PATH = FRONTEND_ROOT / "assets/geo/source/ne_110m_admin_0_countries.shp"
 
 CATALOG_PATH = BACKEND_ROOT / "app/data/countries.json"
 
-OUTPUT_PATH = (
-    FRONTEND_ROOT
-    / "assets/geo/world_countries.geojson"
-)
+OUTPUT_PATH = FRONTEND_ROOT / "assets/geo/world_countries.geojson"
 
 
 def load_country_catalog():
@@ -29,10 +23,7 @@ def load_country_catalog():
     with CATALOG_PATH.open(encoding="utf-8") as file:
         countries = json.load(file)
 
-    return {
-        country["alpha3_code"]: country["code"]
-        for country in countries
-    }
+    return {country["alpha3_code"]: country["code"] for country in countries}
 
 
 def resolve_country_code(properties, catalog):
@@ -111,11 +102,7 @@ def main():
         print("\nUnresolved Natural Earth features:")
 
         for country in unresolved:
-            print(
-                f"  {country['name']}: "
-                f"ISO_A3={country['iso_a3']}, "
-                f"ADM0_A3={country['adm0_a3']}"
-            )
+            print(f"  {country['name']}: ISO_A3={country['iso_a3']}, ADM0_A3={country['adm0_a3']}")
 
 
 if __name__ == "__main__":

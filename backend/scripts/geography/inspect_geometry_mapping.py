@@ -9,21 +9,13 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 CATALOG_PATH = BACKEND_ROOT / "app/data/countries.json"
 
-SHAPEFILE_PATH = (
-    BACKEND_ROOT
-    / "data/geography/source/ne_10m_admin_0_map_units.shp"
-)
+SHAPEFILE_PATH = BACKEND_ROOT / "data/geography/source/ne_10m_admin_0_map_units.shp"
 
 
 def main() -> None:
-    countries = json.loads(
-        CATALOG_PATH.read_text(encoding="utf-8")
-    )
+    countries = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
 
-    catalog_codes = {
-        country["code"]
-        for country in countries
-    }
+    catalog_codes = {country["code"] for country in countries}
 
     grouped = defaultdict(list)
 
@@ -60,11 +52,7 @@ def main() -> None:
     print("Missing countries:", missing)
     print()
 
-    duplicates = {
-        code: records
-        for code, records in grouped.items()
-        if len(records) > 1
-    }
+    duplicates = {code: records for code, records in grouped.items() if len(records) > 1}
 
     print("Countries with multiple records:", len(duplicates))
     print()
@@ -98,16 +86,9 @@ def main() -> None:
     ):
         records = grouped.get(code, [])
 
-        total_points = sum(
-            record["points"]
-            for record in records
-        )
+        total_points = sum(record["points"] for record in records)
 
-        print(
-            f"{code}: "
-            f"{len(records)} records, "
-            f"{total_points} points"
-        )
+        print(f"{code}: {len(records)} records, {total_points} points")
 
 
 if __name__ == "__main__":

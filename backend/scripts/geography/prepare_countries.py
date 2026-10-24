@@ -14,15 +14,9 @@ PROJECT_ROOT = BACKEND_ROOT.parent
 
 CATALOG_PATH = BACKEND_ROOT / "app/data/countries.json"
 
-SOURCE_PATH = (
-    BACKEND_ROOT
-    / "data/geography/source/ne_10m_admin_0_map_units.shp"
-)
+SOURCE_PATH = BACKEND_ROOT / "data/geography/source/ne_10m_admin_0_map_units.shp"
 
-OUTPUT_PATH = (
-    PROJECT_ROOT
-    / "frontend/assets/geo/countries_detailed.geojson"
-)
+OUTPUT_PATH = PROJECT_ROOT / "frontend/assets/geo/countries_detailed.geojson"
 
 
 def extract_polygons(geometry: dict) -> list:
@@ -41,14 +35,9 @@ def extract_polygons(geometry: dict) -> list:
 
 
 def main() -> None:
-    countries = json.loads(
-        CATALOG_PATH.read_text(encoding="utf-8")
-    )
+    countries = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
 
-    catalog = {
-        country["code"]: country
-        for country in countries
-    }
+    catalog = {country["code"]: country for country in countries}
 
     grouped = defaultdict(list)
 
@@ -68,9 +57,7 @@ def main() -> None:
     missing = sorted(set(catalog) - set(grouped))
 
     if missing:
-        raise ValueError(
-            f"Missing country geometries: {', '.join(missing)}"
-        )
+        raise ValueError(f"Missing country geometries: {', '.join(missing)}")
 
     features = []
 

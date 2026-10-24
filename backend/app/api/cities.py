@@ -29,11 +29,7 @@ def search_cities(
     """Search the shared city catalog."""
 
     normalized_query = q.strip() if q is not None else None
-    normalized_country = (
-        country_code.strip().upper()
-        if country_code is not None
-        else None
-    )
+    normalized_country = country_code.strip().upper() if country_code is not None else None
 
     if not normalized_query and not normalized_country:
         raise HTTPException(

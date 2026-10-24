@@ -240,9 +240,7 @@ def test_mobile_user_can_search_cities(cities_client: TestClient) -> None:
 def test_country_filter(cities_client: TestClient) -> None:
     web_login(cities_client)
 
-    response = cities_client.get(
-        "/api/v1/cities?q=Lisbon&country_code=PT"
-    )
+    response = cities_client.get("/api/v1/cities?q=Lisbon&country_code=PT")
 
     assert response.status_code == 200
     assert response.json()["total"] == 1
@@ -254,9 +252,7 @@ def test_country_filter_is_case_insensitive(
 ) -> None:
     web_login(cities_client)
 
-    response = cities_client.get(
-        "/api/v1/cities?q=Porto&country_code=pt"
-    )
+    response = cities_client.get("/api/v1/cities?q=Porto&country_code=pt")
 
     assert response.status_code == 200
     assert response.json()["total"] == 3
@@ -324,9 +320,7 @@ def test_prefix_matches_are_sorted_by_population(
 def test_pagination(cities_client: TestClient) -> None:
     web_login(cities_client)
 
-    response = cities_client.get(
-        "/api/v1/cities?q=Porto&limit=1&offset=1"
-    )
+    response = cities_client.get("/api/v1/cities?q=Porto&limit=1&offset=1")
 
     assert response.status_code == 200
 
@@ -400,9 +394,7 @@ def test_unknown_country_returns_empty_results(
 ) -> None:
     web_login(cities_client)
 
-    response = cities_client.get(
-        "/api/v1/cities?country_code=ZZ"
-    )
+    response = cities_client.get("/api/v1/cities?country_code=ZZ")
 
     assert response.status_code == 200
     assert response.json()["total"] == 0

@@ -41,6 +41,7 @@ def test_country_can_be_persisted(database_engine) -> None:
         assert country.alpha3_code == "PRT"
         assert country.continent == "Europe"
 
+
 def test_country_code_must_be_unique(database_engine) -> None:
     with Session(database_engine) as session:
         session.add(
@@ -119,6 +120,7 @@ def test_multiple_countries_can_be_persisted(database_engine) -> None:
     with Session(database_engine) as session:
         assert session.get(Country, "PT") is not None
         assert session.get(Country, "ES") is not None
+
 
 def test_country_continent_is_required(database_engine) -> None:
     """Countries cannot be persisted without a continent."""

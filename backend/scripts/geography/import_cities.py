@@ -118,9 +118,7 @@ def import_cities(
                     try:
                         city = parse_catalog_row(row)
                     except ValueError as exc:
-                        raise ValueError(
-                            f"Invalid city at CSV line {line_number}: {exc}"
-                        ) from exc
+                        raise ValueError(f"Invalid city at CSV line {line_number}: {exc}") from exc
 
                     batch.append(city)
 
@@ -155,11 +153,7 @@ def import_cities(
 def _upsert_batch(connection, city_table, batch: list[dict]) -> tuple[int, int]:
     ids = [city["id"] for city in batch]
 
-    existing_ids = set(
-        connection.scalars(
-            select(city_table.c.id).where(city_table.c.id.in_(ids))
-        )
-    )
+    existing_ids = set(connection.scalars(select(city_table.c.id).where(city_table.c.id.in_(ids))))
 
     statement = sqlite_insert(city_table).values(batch)
 
@@ -182,15 +176,12 @@ def _upsert_batch(connection, city_table, batch: list[dict]) -> tuple[int, int]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Import the prepared BeenAround city catalog."
-    )
+    parser = argparse.ArgumentParser(description="Import the prepared BeenAround city catalog.")
 
     parser.add_argument(
         "--catalog",
         type=Path,
-        default=Path(__file__).resolve().parents[2]
-        / "app/data/cities1000.csv.zip",
+        default=Path(__file__).resolve().parents[2] / "app/data/cities1000.csv.zip",
     )
 
     args = parser.parse_args()

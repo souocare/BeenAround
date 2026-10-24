@@ -194,6 +194,7 @@ def test_initial_migration_snapshot_matches_catalog() -> None:
     assert len(snapshot) == 249
     assert snapshot == expected
 
+
 def test_migrated_continent_column_is_required(
     migrated_database,
 ) -> None:
@@ -203,10 +204,6 @@ def test_migrated_continent_column_is_required(
 
     columns = inspect(migrated_database).get_columns("countries")
 
-    continent_column = next(
-        column
-        for column in columns
-        if column["name"] == "continent"
-    )
+    continent_column = next(column for column in columns if column["name"] == "continent")
 
     assert continent_column["nullable"] is False

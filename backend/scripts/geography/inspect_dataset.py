@@ -8,26 +8,16 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 CATALOG_PATH = BACKEND_ROOT / "app/data/countries.json"
 
-SHAPEFILE_PATH = (
-    BACKEND_ROOT
-    / "data/geography/source/ne_10m_admin_0_map_units.shp"
-)
+SHAPEFILE_PATH = BACKEND_ROOT / "data/geography/source/ne_10m_admin_0_map_units.shp"
 
 
 def main() -> None:
     countries = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
 
-    catalog_codes = {
-        country["code"]
-        for country in countries
-    }
+    catalog_codes = {country["code"] for country in countries}
 
     with shapefile.Reader(str(SHAPEFILE_PATH)) as reader:
-        fields = [
-            field[0]
-            for field in reader.fields
-            if field[0] != "DeletionFlag"
-        ]
+        fields = [field[0] for field in reader.fields if field[0] != "DeletionFlag"]
 
         print("Dataset records:", len(reader))
         print()

@@ -99,14 +99,10 @@ def main() -> None:
         for code, name, reason in unresolved:
             print(f"  {code}: {name} ({reason})")
 
-        raise SystemExit(
-            f"{len(unresolved)} countries remain unclassified."
-        )
+        raise SystemExit(f"{len(unresolved)} countries remain unclassified.")
 
     if len(countries) != 249:
-        raise SystemExit(
-            f"Expected 249 countries, found {len(countries)}."
-        )
+        raise SystemExit(f"Expected 249 countries, found {len(countries)}.")
 
     CATALOG_PATH.write_text(
         json.dumps(countries, ensure_ascii=False, indent=2) + "\n",

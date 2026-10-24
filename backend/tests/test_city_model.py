@@ -228,6 +228,7 @@ def test_coordinate_boundaries_are_allowed(
         session.add(make_city(latitude=latitude, longitude=longitude))
         session.commit()
 
+
 def test_city_requires_feature_code(database_engine) -> None:
     with Session(database_engine) as session:
         seed_country(session)

@@ -29,11 +29,7 @@ class CityRepository:
             conditions.append(City.country_code == country_code)
 
         if normalized_query:
-            escaped = (
-                normalized_query.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_")
-            )
+            escaped = normalized_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
             pattern = f"%{escaped}%"
 
@@ -44,11 +40,7 @@ class CityRepository:
                 )
             )
 
-        total = self.session.scalar(
-            select(func.count())
-            .select_from(City)
-            .where(*conditions)
-        )
+        total = self.session.scalar(select(func.count()).select_from(City).where(*conditions))
 
         statement = (
             select(City, Country.name)
@@ -90,8 +82,6 @@ class CityRepository:
                 City.id,
             )
 
-        rows = self.session.execute(
-            statement.limit(limit).offset(offset)
-        ).all()
+        rows = self.session.execute(statement.limit(limit).offset(offset)).all()
 
         return [(city, country_name) for city, country_name in rows], total or 0

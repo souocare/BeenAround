@@ -7,21 +7,13 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_ROOT.parent
 
-SOURCE_PATH = (
-    PROJECT_ROOT
-    / "frontend/assets/geo/countries_detailed_optimized.geojson"
-)
+SOURCE_PATH = PROJECT_ROOT / "frontend/assets/geo/countries_detailed_optimized.geojson"
 
-OUTPUT_DIR = (
-    PROJECT_ROOT
-    / "frontend/assets/geo/countries"
-)
+OUTPUT_DIR = PROJECT_ROOT / "frontend/assets/geo/countries"
 
 
 def main() -> None:
-    collection = json.loads(
-        SOURCE_PATH.read_text(encoding="utf-8")
-    )
+    collection = json.loads(SOURCE_PATH.read_text(encoding="utf-8"))
 
     features = collection["features"]
 
@@ -54,14 +46,9 @@ def main() -> None:
         )
 
     if len(generated_codes) != 249:
-        raise ValueError(
-            f"Expected 249 countries, found {len(generated_codes)}"
-        )
+        raise ValueError(f"Expected 249 countries, found {len(generated_codes)}")
 
-    total_bytes = sum(
-        path.stat().st_size
-        for path in OUTPUT_DIR.glob("*.geojson")
-    )
+    total_bytes = sum(path.stat().st_size for path in OUTPUT_DIR.glob("*.geojson"))
 
     print(f"Generated countries: {len(generated_codes)}")
     print(f"Output directory: {OUTPUT_DIR}")

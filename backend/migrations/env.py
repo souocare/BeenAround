@@ -58,9 +58,7 @@ def run_migrations_online() -> None:
                 ).scalar_one()
 
                 if foreign_keys_enabled != 0:
-                    raise RuntimeError(
-                        "Could not disable SQLite foreign key enforcement."
-                    )
+                    raise RuntimeError("Could not disable SQLite foreign key enforcement.")
 
                 connection.commit()
 
@@ -75,15 +73,10 @@ def run_migrations_online() -> None:
                     context.run_migrations()
 
                 if is_sqlite:
-                    violations = connection.exec_driver_sql(
-                        "PRAGMA foreign_key_check"
-                    ).fetchall()
+                    violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
 
                     if violations:
-                        raise RuntimeError(
-                            "Foreign key violations after migration: "
-                            f"{violations}"
-                        )
+                        raise RuntimeError(f"Foreign key violations after migration: {violations}")
             finally:
                 if is_sqlite:
                     connection.commit()

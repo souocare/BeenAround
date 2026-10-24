@@ -19,14 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     connection = op.get_bind()
 
-    existing_cities = connection.execute(
-        sa.text("SELECT COUNT(*) FROM cities")
-    ).scalar_one()
+    existing_cities = connection.execute(sa.text("SELECT COUNT(*) FROM cities")).scalar_one()
 
     if existing_cities:
         raise RuntimeError(
-            "Cannot add required city feature_code: "
-            "the cities table already contains records."
+            "Cannot add required city feature_code: the cities table already contains records."
         )
 
     op.add_column(
