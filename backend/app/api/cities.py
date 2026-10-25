@@ -3,10 +3,17 @@
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from typing import Literal
 
 from app.api.dependencies import CurrentApiUser, DatabaseSession
 from app.repositories.cities import CityRepository
-from app.schemas.cities import CityListResponse, CityResponse
+from app.schemas.cities import (
+    CityListResponse,
+    CityResponse,
+    CountryCityCountListResponse,
+    CountryCityCountResponse,
+)
+
 
 router = APIRouter(
     prefix="/cities",
@@ -25,6 +32,7 @@ def search_cities(
     country_code: Annotated[str | None, Query(min_length=2, max_length=2)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Literal["population", "name"] = "population",
 ) -> CityListResponse:
     """Search the shared city catalog."""
 
@@ -44,6 +52,7 @@ def search_cities(
         country_code=normalized_country,
         limit=limit,
         offset=offset,
+        sort=sort,
     )
 
     return CityListResponse(
@@ -64,4 +73,31 @@ def search_cities(
         total=total,
         limit=limit,
         offset=offset,
+        sort=sort,
+    )
+
+
+@router.get(
+    "/countries",
+    response_model=CountryCityCountListResponse,
+)
+def list_country_city_counts(
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> CountryCityCountListResponse:
+    """List catalog countries with their city counts."""
+
+    repository = CityRepository(session)
+
+    rows = repository.list_country_city_counts()
+
+    return CountryCityCountListResponse(
+        items=[
+            CountryCityCountResponse(
+                country_code=country_code,
+                country_name=country_name,
+                city_count=city_count,
+            )
+            for country_code, country_name, city_count in rows
+        ]
     )

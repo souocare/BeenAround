@@ -26,3 +26,17 @@ class CityListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class CountryCityCountResponse(BaseModel):
+    """Country and its number of catalog cities."""
+
+    country_code: str
+    country_name: str
+    city_count: int
+
+
+class CountryCityCountListResponse(BaseModel):
+    """Country city counts response."""
+
+    items: list[CountryCityCountResponse]

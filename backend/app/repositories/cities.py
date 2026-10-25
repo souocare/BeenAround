@@ -20,7 +20,10 @@ class CityRepository:
         country_code: str | None,
         limit: int,
         offset: int,
+        sort: str = "population",
     ) -> tuple[list[tuple[City, str]], int]:
+        if sort not in {"population", "name"}:
+            raise ValueError(f"Unsupported city sort: {sort}")
         conditions = []
 
         normalized_query = query.strip() if query else None
@@ -48,6 +51,20 @@ class CityRepository:
             .where(*conditions)
         )
 
+        if sort == "name":
+            sort_columns = (
+                func.lower(City.name),
+                City.name,
+                City.id,
+            )
+        else:
+            sort_columns = (
+                City.population.desc().nullslast(),
+                func.lower(City.name),
+                City.name,
+                City.id,
+            )
+
         if normalized_query:
             exact = normalized_query.casefold()
 
@@ -69,19 +86,29 @@ class CityRepository:
                 else_=2,
             )
 
-            statement = statement.order_by(
-                rank,
-                City.population.desc().nullslast(),
-                City.name,
-                City.id,
-            )
+            statement = statement.order_by(rank, *sort_columns)
         else:
-            statement = statement.order_by(
-                City.population.desc().nullslast(),
-                City.name,
-                City.id,
-            )
+            statement = statement.order_by(*sort_columns)
 
         rows = self.session.execute(statement.limit(limit).offset(offset)).all()
 
         return [(city, country_name) for city, country_name in rows], total or 0
+
+    def list_country_city_counts(self) -> list[tuple[str, str, int]]:
+        """Return all catalog countries with their city counts."""
+
+        statement = (
+            select(
+                Country.code,
+                Country.name,
+                func.count(City.id).label("city_count"),
+            )
+            .outerjoin(City, City.country_code == Country.code)
+            .group_by(Country.code, Country.name)
+            .order_by(Country.name, Country.code)
+        )
+
+        return [
+            (country_code, country_name, city_count)
+            for country_code, country_name, city_count in self.session.execute(statement).all()
+        ]

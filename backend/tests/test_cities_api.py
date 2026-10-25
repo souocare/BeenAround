@@ -442,3 +442,162 @@ def test_search_treats_sql_wildcards_as_literals(
     assert response.status_code == 200
     assert response.json()["total"] == 0
     assert response.json()["items"] == []
+
+
+def test_country_city_counts(cities_client: TestClient) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get("/api/v1/cities/countries")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "items": [
+            {
+                "country_code": "BR",
+                "country_name": "Brazil",
+                "city_count": 1,
+            },
+            {
+                "country_code": "FR",
+                "country_name": "France",
+                "city_count": 1,
+            },
+            {
+                "country_code": "PT",
+                "country_name": "Portugal",
+                "city_count": 4,
+            },
+            {
+                "country_code": "US",
+                "country_name": "United States",
+                "city_count": 1,
+            },
+        ]
+    }
+
+
+def test_country_city_counts_requires_authentication(
+    cities_client: TestClient,
+) -> None:
+    response = cities_client.get("/api/v1/cities/countries")
+
+    assert response.status_code == 401
+
+
+def test_sort_cities_by_population(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get(
+        "/api/v1/cities",
+        params={
+            "country_code": "PT",
+            "sort": "population",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert [item["name"] for item in response.json()["items"]] == [
+        "Lisbon",
+        "Porto",
+        "Porto Salvo",
+        "Porto Novo",
+    ]
+
+
+def test_sort_cities_by_name(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get(
+        "/api/v1/cities",
+        params={
+            "country_code": "PT",
+            "sort": "name",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert [item["name"] for item in response.json()["items"]] == [
+        "Lisbon",
+        "Porto",
+        "Porto Novo",
+        "Porto Salvo",
+    ]
+
+
+def test_search_preserves_relevance_when_sorted_by_name(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get(
+        "/api/v1/cities",
+        params={
+            "q": "Porto",
+            "sort": "name",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert [item["name"] for item in response.json()["items"]] == [
+        "Porto",
+        "Porto Novo",
+        "Porto Salvo",
+    ]
+
+
+def test_pagination_with_name_sort(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get(
+        "/api/v1/cities",
+        params={
+            "country_code": "PT",
+            "sort": "name",
+            "limit": 2,
+            "offset": 1,
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["total"] == 4
+    assert body["limit"] == 2
+    assert body["offset"] == 1
+
+    assert [item["name"] for item in body["items"]] == [
+        "Porto",
+        "Porto Novo",
+    ]
+
+
+@pytest.mark.parametrize(
+    "sort",
+    ["invalid", "date", "random", ""],
+)
+def test_invalid_city_sort_is_rejected(
+    cities_client: TestClient,
+    sort: str,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.get(
+        "/api/v1/cities",
+        params={
+            "country_code": "PT",
+            "sort": sort,
+        },
+    )
+
+    assert response.status_code == 422
