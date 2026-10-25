@@ -24,37 +24,45 @@ class CityBrowser extends StatefulWidget {
 }
 
 class _CityBrowserState extends State<CityBrowser> {
+  static const int _pageSize = 30;
+
   String _globalQuery = '';
   List<City> _globalCities = const [];
+  List<CountryCityCount> _countries = const [];
 
   bool _globalSearchLoading = false;
   String? _globalSearchError;
-  List<CountryCityCount> _countries = const [];
 
   CountryCityCount? _selectedCountry;
 
   bool _isLoading = true;
   String? _errorMessage;
-  static const int _pageSize = 30;
 
   List<City> _cities = const [];
-
   CitySort _citySort = CitySort.population;
-
   String _cityQuery = '';
 
   bool _citiesLoading = false;
-
   String? _citiesError;
 
   Timer? _searchDebounce;
-
   int _cityRequestGeneration = 0;
+
+  int _globalTotal = 0;
+  int _countryTotal = 0;
+
+  bool _globalLoadingMore = false;
+  bool _countryLoadingMore = false;
+
+  String? _globalLoadMoreError;
+  String? _countryLoadMoreError;
+
+  bool _globalPaginationExhausted = false;
+  bool _countryPaginationExhausted = false;
 
   @override
   void initState() {
     super.initState();
-
     _loadCountries();
   }
 
@@ -67,7 +75,14 @@ class _CityBrowserState extends State<CityBrowser> {
     setState(() {
       _globalQuery = value;
       _globalCities = const [];
+      _globalTotal = 0;
+
       _globalSearchError = null;
+      _globalLoadMoreError = null;
+
+      _globalLoadingMore = false;
+      _globalPaginationExhausted = false;
+
       _globalSearchLoading = query.isNotEmpty;
     });
 
@@ -92,8 +107,12 @@ class _CityBrowserState extends State<CityBrowser> {
 
       setState(() {
         _globalCities = result.items;
+        _globalTotal = result.total;
+
         _globalSearchLoading = false;
         _globalSearchError = null;
+
+        _globalPaginationExhausted = false;
       });
     } catch (_) {
       if (!mounted || generation != _cityRequestGeneration) return;
@@ -101,6 +120,51 @@ class _CityBrowserState extends State<CityBrowser> {
       setState(() {
         _globalSearchLoading = false;
         _globalSearchError = 'Unable to search cities. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _loadMoreGlobalCities() async {
+    if (_globalSearchLoading ||
+        _globalLoadingMore ||
+        _globalPaginationExhausted ||
+        _globalCities.length >= _globalTotal ||
+        _globalQuery.trim().isEmpty) {
+      return;
+    }
+
+    final generation = _cityRequestGeneration;
+    final query = _globalQuery.trim();
+    final offset = _globalCities.length;
+
+    setState(() {
+      _globalLoadingMore = true;
+      _globalLoadMoreError = null;
+    });
+
+    try {
+      final result = await context.read<CityRepository>().search(
+        query: query,
+        sort: CitySort.population,
+        limit: _pageSize,
+        offset: offset,
+      );
+
+      if (!mounted || generation != _cityRequestGeneration) return;
+
+      setState(() {
+        _globalCities = [..._globalCities, ...result.items];
+        _globalTotal = result.total;
+
+        _globalLoadingMore = false;
+        _globalPaginationExhausted = result.items.isEmpty;
+      });
+    } catch (_) {
+      if (!mounted || generation != _cityRequestGeneration) return;
+
+      setState(() {
+        _globalLoadingMore = false;
+        _globalLoadMoreError = 'Unable to load more cities.';
       });
     }
   }
@@ -156,10 +220,20 @@ class _CityBrowserState extends State<CityBrowser> {
       _globalSearchLoading = false;
       _globalSearchError = null;
 
+      _globalTotal = 0;
+      _globalLoadingMore = false;
+      _globalLoadMoreError = null;
+      _globalPaginationExhausted = false;
+
       _cityQuery = '';
       _cities = const [];
       _citiesError = null;
       _citiesLoading = true;
+
+      _countryTotal = 0;
+      _countryLoadingMore = false;
+      _countryLoadMoreError = null;
+      _countryPaginationExhausted = false;
     });
 
     _loadCities(generation);
@@ -183,8 +257,12 @@ class _CityBrowserState extends State<CityBrowser> {
 
       setState(() {
         _cities = result.items;
+        _countryTotal = result.total;
+
         _citiesLoading = false;
         _citiesError = null;
+
+        _countryPaginationExhausted = false;
       });
     } catch (_) {
       if (!mounted || generation != _cityRequestGeneration) return;
@@ -192,6 +270,55 @@ class _CityBrowserState extends State<CityBrowser> {
       setState(() {
         _citiesLoading = false;
         _citiesError = 'Unable to load cities. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _loadMoreCountryCities() async {
+    final country = _selectedCountry;
+
+    if (country == null ||
+        _citiesLoading ||
+        _countryLoadingMore ||
+        _countryPaginationExhausted ||
+        _cities.length >= _countryTotal) {
+      return;
+    }
+
+    final generation = _cityRequestGeneration;
+    final query = _cityQuery.trim();
+    final sort = _citySort;
+    final offset = _cities.length;
+
+    setState(() {
+      _countryLoadingMore = true;
+      _countryLoadMoreError = null;
+    });
+
+    try {
+      final result = await context.read<CityRepository>().search(
+        query: query.isEmpty ? null : query,
+        countryCode: country.countryCode,
+        sort: sort,
+        limit: _pageSize,
+        offset: offset,
+      );
+
+      if (!mounted || generation != _cityRequestGeneration) return;
+
+      setState(() {
+        _cities = [..._cities, ...result.items];
+        _countryTotal = result.total;
+
+        _countryLoadingMore = false;
+        _countryPaginationExhausted = result.items.isEmpty;
+      });
+    } catch (_) {
+      if (!mounted || generation != _cityRequestGeneration) return;
+
+      setState(() {
+        _countryLoadingMore = false;
+        _countryLoadMoreError = 'Unable to load more cities.';
       });
     }
   }
@@ -204,8 +331,14 @@ class _CityBrowserState extends State<CityBrowser> {
     setState(() {
       _cityQuery = value;
       _cities = const [];
+
       _citiesError = null;
       _citiesLoading = true;
+
+      _countryTotal = 0;
+      _countryLoadingMore = false;
+      _countryLoadMoreError = null;
+      _countryPaginationExhausted = false;
     });
 
     _searchDebounce = Timer(
@@ -224,8 +357,14 @@ class _CityBrowserState extends State<CityBrowser> {
     setState(() {
       _citySort = sort;
       _cities = const [];
+
       _citiesError = null;
       _citiesLoading = true;
+
+      _countryTotal = 0;
+      _countryLoadingMore = false;
+      _countryLoadMoreError = null;
+      _countryPaginationExhausted = false;
     });
 
     _loadCities(generation);
@@ -244,10 +383,20 @@ class _CityBrowserState extends State<CityBrowser> {
         _globalSearchLoading = false;
         _globalSearchError = null;
 
+        _globalTotal = 0;
+        _globalLoadingMore = false;
+        _globalLoadMoreError = null;
+        _globalPaginationExhausted = false;
+
         _cityQuery = '';
         _cities = const [];
         _citiesError = null;
         _citiesLoading = false;
+
+        _countryTotal = 0;
+        _countryLoadingMore = false;
+        _countryLoadMoreError = null;
+        _countryPaginationExhausted = false;
       });
 
       return;
@@ -483,6 +632,7 @@ class _CityBrowserState extends State<CityBrowser> {
                             setState(() {
                               _globalSearchLoading = true;
                               _globalSearchError = null;
+                              _globalPaginationExhausted = false;
                             });
 
                             _searchGlobalCities(
@@ -497,11 +647,21 @@ class _CityBrowserState extends State<CityBrowser> {
                           padding: EdgeInsets.all(16),
                           child: Text('No cities found.'),
                         )
-                      else
+                      else ...[
                         for (final city in _globalCities) ...[
                           _buildGlobalCityTile(city),
                           const SizedBox(height: 6),
                         ],
+                        _buildLoadMoreFooter(
+                          loaded: _globalCities.length,
+                          total: _globalTotal,
+                          isLoading: _globalLoadingMore,
+                          error: _globalLoadMoreError,
+                          exhausted: _globalPaginationExhausted,
+                          onLoadMore: _loadMoreGlobalCities,
+                          buttonKey: 'cityBrowserGlobalLoadMore',
+                        ),
+                      ],
                     ],
                     if (query.isEmpty && _countries.isEmpty)
                       const Center(
@@ -534,7 +694,6 @@ class _CityBrowserState extends State<CityBrowser> {
             onChanged: _onCityQueryChanged,
           ),
         ),
-
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
           child: Row(
@@ -568,7 +727,6 @@ class _CityBrowserState extends State<CityBrowser> {
             ],
           ),
         ),
-
         Expanded(child: _buildCitiesContent()),
       ],
     );
@@ -600,6 +758,7 @@ class _CityBrowserState extends State<CityBrowser> {
                   setState(() {
                     _citiesLoading = true;
                     _citiesError = null;
+                    _countryPaginationExhausted = false;
                   });
 
                   _loadCities(generation);
@@ -627,9 +786,21 @@ class _CityBrowserState extends State<CityBrowser> {
     return ListView.separated(
       key: const Key('cityBrowserCities'),
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      itemCount: _cities.length,
+      itemCount: _cities.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 6),
       itemBuilder: (context, index) {
+        if (index == _cities.length) {
+          return _buildLoadMoreFooter(
+            loaded: _cities.length,
+            total: _countryTotal,
+            isLoading: _countryLoadingMore,
+            error: _countryLoadMoreError,
+            exhausted: _countryPaginationExhausted,
+            onLoadMore: _loadMoreCountryCities,
+            buttonKey: 'cityBrowserCountryLoadMore',
+          );
+        }
+
         final city = _cities[index];
 
         return Material(
@@ -674,6 +845,52 @@ class _CityBrowserState extends State<CityBrowser> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoadMoreFooter({
+    required int loaded,
+    required int total,
+    required bool isLoading,
+    required String? error,
+    required bool exhausted,
+    required VoidCallback onLoadMore,
+    required String buttonKey,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (loaded == 0) return const SizedBox.shrink();
+
+    final canLoadMore = loaded < total && !exhausted;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          if (canLoadMore) ...[
+            if (error != null) ...[
+              Text(error, style: TextStyle(color: colors.error)),
+              const SizedBox(height: 8),
+            ],
+            if (isLoading)
+              const CircularProgressIndicator()
+            else
+              OutlinedButton(
+                key: Key(buttonKey),
+                onPressed: onLoadMore,
+                child: Text(error == null ? 'Load more' : 'Try again'),
+              ),
+            const SizedBox(height: 12),
+          ],
+          Text(
+            'Showing $loaded of $total',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

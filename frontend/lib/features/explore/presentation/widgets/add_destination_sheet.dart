@@ -218,24 +218,28 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
-                  builder: (context, countryState) {
-                    return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
-                      builder: (context, cityState) {
-                        final isSubmitting =
-                            countryState.isSubmitting || cityState.isSubmitting;
+                if (!_selectingCountry && !_selectingCity)
+                  BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
+                    builder: (context, countryState) {
+                      return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
+                        builder: (context, cityState) {
+                          final isSubmitting =
+                              countryState.isSubmitting ||
+                              cityState.isSubmitting;
 
-                        return IconButton(
-                          tooltip: 'Close',
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.of(context).pop(false),
-                          icon: const Icon(Icons.close),
-                        );
-                      },
-                    );
-                  },
-                ),
+                          return IconButton(
+                            tooltip: 'Close',
+                            onPressed: isSubmitting
+                                ? null
+                                : () => Navigator.of(context).pop(false),
+                            icon: const Icon(Icons.close),
+                          );
+                        },
+                      );
+                    },
+                  )
+                else
+                  const SizedBox(width: 48),
                 const Expanded(
                   child: Text(
                     'Add Destination',

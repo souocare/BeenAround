@@ -16,6 +16,7 @@ class FakeCityRepository implements CityRepository {
     this.loadError,
     this.pendingCountries,
     this.cities = const [],
+    this.searchOverride,
   });
 
   final List<CountryCityCount> countries;
@@ -25,6 +26,14 @@ class FakeCityRepository implements CityRepository {
   int countryCountCalls = 0;
 
   final List<City> cities;
+  final Future<CitySearchResult> Function({
+    String? query,
+    String? countryCode,
+    CitySort sort,
+    int limit,
+    int offset,
+  })?
+  searchOverride;
 
   int searchCalls = 0;
 
@@ -64,6 +73,15 @@ class FakeCityRepository implements CityRepository {
     lastSort = sort;
     lastLimit = limit;
     lastOffset = offset;
+    if (searchOverride != null) {
+      return searchOverride!(
+        query: query,
+        countryCode: countryCode,
+        sort: sort,
+        limit: limit,
+        offset: offset,
+      );
+    }
 
     final normalizedQuery = query?.trim().toLowerCase() ?? '';
 
@@ -128,6 +146,27 @@ void main() {
     featureCode: 'PPLC',
   );
 
+  List<City> generateCities({
+    required int count,
+    String countryCode = 'PT',
+    String countryName = 'Portugal',
+  }) {
+    return List.generate(
+      count,
+      (index) => City(
+        id: 100000 + index,
+        name: 'Test City ${index + 1}',
+        asciiName: 'Test City ${index + 1}',
+        countryCode: countryCode,
+        countryName: countryName,
+        latitude: 38.0,
+        longitude: -9.0,
+        population: 100000 - index,
+        featureCode: 'PPL',
+      ),
+    );
+  }
+
   Future<void> pumpBrowser(
     WidgetTester tester, {
     required CityRepository repository,
@@ -145,6 +184,43 @@ void main() {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> scrollToPaginationSummary(
+    WidgetTester tester, {
+    required String listKey,
+    required String summary,
+  }) async {
+    await tester.scrollUntilVisible(
+      find.text(summary),
+      300,
+      scrollable: find.descendant(
+        of: find.byKey(Key(listKey)),
+        matching: find.byType(Scrollable),
+      ),
+    );
+  }
+
+  Future<void> scrollToCountryLoadMore(WidgetTester tester) async {
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('cityBrowserCountryLoadMore')),
+      300,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('cityBrowserCities')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+  }
+
+  Future<void> scrollToGlobalLoadMore(WidgetTester tester) async {
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('cityBrowserGlobalLoadMore')),
+      300,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('cityBrowserCountries')),
+        matching: find.byType(Scrollable),
       ),
     );
   }
@@ -456,5 +532,444 @@ void main() {
     expect(repository.lastCountryCode, 'PT');
 
     expect(find.byKey(const Key('cityBrowserCountrySearch')), findsOneWidget);
+  });
+  testWidgets('loads country cities in pages of 30', (tester) async {
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      cities: generateCities(count: 65),
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 1);
+    expect(repository.lastOffset, 0);
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 60 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 3);
+    expect(repository.lastOffset, 60);
+
+    await scrollToPaginationSummary(
+      tester,
+      listKey: 'cityBrowserCities',
+      summary: 'Showing 65 of 65',
+    );
+
+    expect(find.text('Showing 65 of 65'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityBrowserCountryLoadMore')), findsNothing);
+  });
+  testWidgets('loads global search results in pages of 30', (tester) async {
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      cities: generateCities(count: 65),
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'Test City',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 1);
+    expect(repository.lastOffset, 0);
+
+    await scrollToGlobalLoadMore(tester);
+
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserGlobalLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    await scrollToGlobalLoadMore(tester);
+
+    expect(find.text('Showing 60 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserGlobalLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 3);
+    expect(repository.lastOffset, 60);
+
+    await scrollToPaginationSummary(
+      tester,
+      listKey: 'cityBrowserCountries',
+      summary: 'Showing 65 of 65',
+    );
+
+    expect(find.text('Showing 65 of 65'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityBrowserGlobalLoadMore')), findsNothing);
+  });
+  testWidgets('changing global query resets pagination', (tester) async {
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      cities: generateCities(count: 65),
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'Test City',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await scrollToGlobalLoadMore(tester);
+
+    await tester.tap(find.byKey(const Key('cityBrowserGlobalLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastOffset, 30);
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'Test City 1',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastOffset, 0);
+    expect(repository.lastQuery, 'Test City 1');
+
+    expect(find.text('Showing 11 of 11'), findsOneWidget);
+  });
+  testWidgets('changing sort resets country pagination', (tester) async {
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      cities: generateCities(count: 65),
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    await scrollToCountryLoadMore(tester);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastOffset, 30);
+
+    await tester.tap(find.byKey(const Key('cityBrowserSort')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Name A–Z').last);
+    await tester.pumpAndSettle();
+
+    expect(repository.lastOffset, 0);
+    expect(repository.lastSort, CitySort.name);
+
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+  });
+  testWidgets('preserves country cities when loading next page fails', (
+    tester,
+  ) async {
+    var failNextPage = true;
+
+    final allCities = generateCities(count: 65);
+
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      searchOverride:
+          ({
+            String? query,
+            String? countryCode,
+            CitySort sort = CitySort.population,
+            int limit = 20,
+            int offset = 0,
+          }) async {
+            if (offset == 30 && failNextPage) {
+              failNextPage = false;
+              throw Exception('Temporary API failure');
+            }
+
+            return CitySearchResult(
+              items: allCities.skip(offset).take(limit).toList(),
+              total: allCities.length,
+              limit: limit,
+              offset: offset,
+            );
+          },
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 1);
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    // Os resultados anteriores devem continuar disponíveis.
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    // O erro deve permitir repetir o pedido.
+    expect(find.text('Unable to load more cities.'), findsOneWidget);
+    expect(find.byKey(const Key('cityBrowserCountryLoadMore')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 3);
+    expect(repository.lastOffset, 30);
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 60 of 65'), findsOneWidget);
+    expect(find.text('Unable to load more cities.'), findsNothing);
+  });
+  testWidgets('prevents concurrent country pagination requests', (
+    tester,
+  ) async {
+    final nextPageCompleter = Completer<CitySearchResult>();
+    final allCities = generateCities(count: 65);
+
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      searchOverride:
+          ({
+            String? query,
+            String? countryCode,
+            CitySort sort = CitySort.population,
+            int limit = 20,
+            int offset = 0,
+          }) async {
+            if (offset == 30) {
+              return nextPageCompleter.future;
+            }
+
+            return CitySearchResult(
+              items: allCities.skip(offset).take(limit).toList(),
+              total: allCities.length,
+              limit: limit,
+              offset: offset,
+            );
+          },
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    await scrollToCountryLoadMore(tester);
+
+    // Primeiro pedido de paginação.
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pump();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    // O botão deixa de estar disponível enquanto o pedido decorre.
+    expect(find.byKey(const Key('cityBrowserCountryLoadMore')), findsNothing);
+
+    // Concluir o pedido pendente.
+    nextPageCompleter.complete(
+      CitySearchResult(
+        items: allCities.skip(30).take(30).toList(),
+        total: allCities.length,
+        limit: 30,
+        offset: 30,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Não houve pedidos duplicados.
+    expect(repository.searchCalls, 2);
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 60 of 65'), findsOneWidget);
+  });
+  testWidgets('ignores stale pagination results after changing country query', (
+    tester,
+  ) async {
+    final stalePageCompleter = Completer<CitySearchResult>();
+    final allCities = generateCities(count: 65);
+
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      searchOverride:
+          ({
+            String? query,
+            String? countryCode,
+            CitySort sort = CitySort.population,
+            int limit = 20,
+            int offset = 0,
+          }) async {
+            // Simula uma página antiga que demora a responder.
+            if (offset == 30 && (query == null || query.isEmpty)) {
+              return stalePageCompleter.future;
+            }
+
+            final normalizedQuery = query?.toLowerCase() ?? '';
+
+            final matches = allCities.where((city) {
+              return normalizedQuery.isEmpty ||
+                  city.name.toLowerCase().contains(normalizedQuery);
+            }).toList();
+
+            return CitySearchResult(
+              items: matches.skip(offset).take(limit).toList(),
+              total: matches.length,
+              limit: limit,
+              offset: offset,
+            );
+          },
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    await scrollToCountryLoadMore(tester);
+
+    // Inicia o carregamento da segunda página.
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pump();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    // O utilizador altera a pesquisa enquanto o pedido está pendente.
+    await tester.enterText(
+      find.byKey(const Key('cityBrowserCountrySearch')),
+      'Test City 1',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 3);
+    expect(repository.lastQuery, 'Test City 1');
+    expect(repository.lastOffset, 0);
+
+    await scrollToPaginationSummary(
+      tester,
+      listKey: 'cityBrowserCities',
+      summary: 'Showing 11 of 11',
+    );
+
+    expect(find.text('Showing 11 of 11'), findsOneWidget);
+
+    // A resposta antiga chega depois.
+    stalePageCompleter.complete(
+      CitySearchResult(
+        items: allCities.skip(30).take(30).toList(),
+        total: allCities.length,
+        limit: 30,
+        offset: 30,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 3);
+    expect(find.text('Showing 11 of 11'), findsOneWidget);
+    expect(find.byKey(const Key('cityBrowserCountryLoadMore')), findsNothing);
+  });
+  testWidgets('stops country pagination after an unexpected empty page', (
+    tester,
+  ) async {
+    final allCities = generateCities(count: 65);
+
+    final repository = FakeCityRepository(
+      countries: [portugal],
+      searchOverride:
+          ({
+            String? query,
+            String? countryCode,
+            CitySort sort = CitySort.population,
+            int limit = 20,
+            int offset = 0,
+          }) async {
+            if (offset == 30) {
+              return CitySearchResult(
+                items: const [],
+                total: 65,
+                limit: limit,
+                offset: offset,
+              );
+            }
+
+            return CitySearchResult(
+              items: allCities.skip(offset).take(limit).toList(),
+              total: allCities.length,
+              limit: limit,
+              offset: offset,
+            );
+          },
+    );
+
+    await pumpBrowser(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountry_PT')));
+    await tester.pumpAndSettle();
+
+    await scrollToCountryLoadMore(tester);
+
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityBrowserCountryLoadMore')));
+    await tester.pumpAndSettle();
+
+    expect(repository.searchCalls, 2);
+    expect(repository.lastOffset, 30);
+
+    // Os resultados existentes continuam disponíveis.
+    expect(find.text('Showing 30 of 65'), findsOneWidget);
+
+    // A paginação termina para evitar repetir o mesmo pedido.
+    expect(find.byKey(const Key('cityBrowserCountryLoadMore')), findsNothing);
   });
 }
