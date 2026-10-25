@@ -1,6 +1,8 @@
 import '../domain/city_repository.dart';
 import '../domain/city_search_result.dart';
 import 'city_repository_handle.dart';
+import '../domain/city_sort.dart';
+import '../domain/country_city_count.dart';
 
 typedef CityRepositoryHandleFactory = Future<CityRepositoryHandle> Function();
 
@@ -21,6 +23,7 @@ class LazyCityRepository implements CityRepository {
     String? countryCode,
     int limit = 20,
     int offset = 0,
+    CitySort sort = CitySort.population,
   }) async {
     if (_closed) {
       throw StateError('City repository is closed.');
@@ -37,7 +40,23 @@ class LazyCityRepository implements CityRepository {
       countryCode: countryCode,
       limit: limit,
       offset: offset,
+      sort: sort,
     );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    if (_closed) {
+      throw StateError('City repository is closed.');
+    }
+
+    final handle = await _getHandle();
+
+    if (_closed) {
+      throw StateError('City repository is closed.');
+    }
+
+    return handle.repository.listCountryCityCounts();
   }
 
   Future<CityRepositoryHandle> _getHandle() async {

@@ -11,6 +11,8 @@ import 'package:beenaround/features/geography/domain/city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_search_result.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
+import 'package:beenaround/features/geography/domain/country_city_count.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
@@ -84,6 +86,7 @@ class FakeCityRepository implements CityRepository {
     String? countryCode,
     int limit = 20,
     int offset = 0,
+    CitySort sort = CitySort.population,
   }) async {
     searchCalls++;
 
@@ -134,6 +137,11 @@ class FakeCityRepository implements CityRepository {
       limit: limit,
       offset: offset,
     );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    return const [];
   }
 }
 

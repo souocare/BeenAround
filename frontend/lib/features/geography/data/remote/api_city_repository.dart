@@ -5,6 +5,8 @@ import '../../../../core/network/api_error_mapper.dart';
 import '../../domain/city.dart';
 import '../../domain/city_repository.dart';
 import '../../domain/city_search_result.dart';
+import '../../domain/city_sort.dart';
+import '../../domain/country_city_count.dart';
 
 class ApiCityRepository implements CityRepository {
   const ApiCityRepository({required this.apiClient});
@@ -15,6 +17,7 @@ class ApiCityRepository implements CityRepository {
   Future<CitySearchResult> search({
     String? query,
     String? countryCode,
+    CitySort sort = CitySort.population,
     int limit = 20,
     int offset = 0,
   }) async {
@@ -38,7 +41,11 @@ class ApiCityRepository implements CityRepository {
       throw ArgumentError('Either query or countryCode must be provided.');
     }
 
-    final queryParameters = <String, dynamic>{'limit': limit, 'offset': offset};
+    final queryParameters = <String, dynamic>{
+      'limit': limit,
+      'offset': offset,
+      'sort': sort.name,
+    };
 
     if (hasQuery) {
       queryParameters['q'] = normalizedQuery;
@@ -92,6 +99,41 @@ class ApiCityRepository implements CityRepository {
         limit: responseLimit,
         offset: responseOffset,
       );
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    try {
+      final response = await apiClient.dio.get<Map<String, dynamic>>(
+        'cities/countries',
+      );
+
+      final data = response.data;
+
+      if (data == null || data['items'] is! List) {
+        throw const FormatException('Invalid country city counts response.');
+      }
+
+      final items = data['items'] as List;
+
+      return items
+          .map((item) {
+            if (item is! Map) {
+              throw const FormatException('Invalid country city count item.');
+            }
+
+            final json = Map<String, dynamic>.from(item);
+
+            return CountryCityCount(
+              countryCode: json['country_code'] as String,
+              countryName: json['country_name'] as String,
+              cityCount: json['city_count'] as int,
+            );
+          })
+          .toList(growable: false);
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }

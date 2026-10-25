@@ -10,6 +10,11 @@ import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/presentation/widgets/edit_country_visit_sheet.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
+import 'package:beenaround/features/geography/domain/country_city_count.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -145,6 +150,29 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }
 }
 
+class FakeCityRepository implements CityRepository {
+  @override
+  Future<CitySearchResult> search({
+    String? query,
+    String? countryCode,
+    CitySort sort = CitySort.population,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return CitySearchResult(
+      items: const <City>[],
+      total: 0,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    return const [];
+  }
+}
+
 CountryVisit visit({
   required String id,
   required String countryCode,
@@ -223,8 +251,13 @@ void main() {
     await cubit.load();
 
     await tester.pumpWidget(
-      RepositoryProvider<CityVisitsRepository>.value(
-        value: FakeCityVisitsRepository(),
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CityVisitsRepository>.value(
+            value: FakeCityVisitsRepository(),
+          ),
+          RepositoryProvider<CityRepository>.value(value: FakeCityRepository()),
+        ],
         child: MaterialApp(
           home: BlocProvider.value(
             value: cubit,

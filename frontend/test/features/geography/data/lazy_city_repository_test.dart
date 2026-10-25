@@ -4,15 +4,19 @@ import 'package:beenaround/features/geography/data/city_repository_handle.dart';
 import 'package:beenaround/features/geography/data/lazy_city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
+import 'package:beenaround/features/geography/domain/country_city_count.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCityRepository implements CityRepository {
   int searchCalls = 0;
+  int countryCityCountCalls = 0;
 
   @override
   Future<CitySearchResult> search({
     String? query,
     String? countryCode,
+    CitySort sort = CitySort.population,
     int limit = 20,
     int offset = 0,
   }) async {
@@ -24,6 +28,20 @@ class FakeCityRepository implements CityRepository {
       limit: limit,
       offset: offset,
     );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    countryCityCountCalls++;
+
+    return const [
+      CountryCityCount(
+        countryCode: 'PT',
+        countryName: 'Portugal',
+        cityCount: 4,
+      ),
+      CountryCityCount(countryCode: 'FR', countryName: 'France', cityCount: 1),
+    ];
   }
 }
 
@@ -85,6 +103,36 @@ void main() {
       await repository.close();
     });
 
+    test('initializes on the first country city counts request', () async {
+      var initializationCalls = 0;
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+          return handle;
+        },
+      );
+
+      expect(initializationCalls, 0);
+
+      final countries = await repository.listCountryCityCounts();
+
+      expect(initializationCalls, 1);
+      expect(fakeRepository.countryCityCountCalls, 1);
+      expect(fakeRepository.searchCalls, 0);
+
+      expect(countries.length, 2);
+      expect(countries.first.countryCode, 'PT');
+      expect(countries.first.cityCount, 4);
+
+      await repository.close();
+
+      expect(handle.closeCalls, 1);
+    });
+
     test('reuses the initialized repository', () async {
       var initializationCalls = 0;
 
@@ -106,6 +154,32 @@ void main() {
       expect(fakeRepository.searchCalls, 3);
 
       await repository.close();
+    });
+
+    test('reuses initialization between searches and country counts', () async {
+      var initializationCalls = 0;
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+          return handle;
+        },
+      );
+
+      await repository.listCountryCityCounts();
+      await repository.search(countryCode: 'PT');
+      await repository.listCountryCityCounts();
+
+      expect(initializationCalls, 1);
+      expect(fakeRepository.countryCityCountCalls, 2);
+      expect(fakeRepository.searchCalls, 1);
+
+      await repository.close();
+
+      expect(handle.closeCalls, 1);
     });
 
     test('shares initialization between concurrent searches', () async {
@@ -138,6 +212,40 @@ void main() {
       await repository.close();
     });
 
+    test('shares initialization between search and country counts', () async {
+      var initializationCalls = 0;
+
+      final completer = Completer<CityRepositoryHandle>();
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () {
+          initializationCalls++;
+          return completer.future;
+        },
+      );
+
+      final search = repository.search(query: 'Lisbon');
+      final counts = repository.listCountryCityCounts();
+
+      expect(initializationCalls, 1);
+
+      completer.complete(handle);
+
+      final results = await Future.wait<Object>([search, counts]);
+
+      expect(initializationCalls, 1);
+      expect(fakeRepository.searchCalls, 1);
+      expect(fakeRepository.countryCityCountCalls, 1);
+
+      expect(results[0], isA<CitySearchResult>());
+      expect(results[1], isA<List<CountryCityCount>>());
+
+      await repository.close();
+    });
+
     test('retries after initialization failure', () async {
       var initializationCalls = 0;
 
@@ -161,6 +269,33 @@ void main() {
 
       expect(result.total, 0);
       expect(initializationCalls, 2);
+
+      await repository.close();
+    });
+
+    test('retries country counts after initialization failure', () async {
+      var initializationCalls = 0;
+
+      final handle = FakeCityRepositoryHandle(FakeCityRepository());
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+
+          if (initializationCalls == 1) {
+            throw StateError('Initialization failed.');
+          }
+
+          return handle;
+        },
+      );
+
+      await expectLater(repository.listCountryCityCounts(), throwsStateError);
+
+      final countries = await repository.listCountryCityCounts();
+
+      expect(initializationCalls, 2);
+      expect(countries.length, 2);
 
       await repository.close();
     });
@@ -212,6 +347,31 @@ void main() {
       expect(handle.closeCalls, 1);
     });
 
+    test(
+      'closes resources if disposed during country counts initialization',
+      () async {
+        final completer = Completer<CityRepositoryHandle>();
+
+        final handle = FakeCityRepositoryHandle(FakeCityRepository());
+
+        final repository = LazyCityRepository(
+          createHandle: () => completer.future,
+        );
+
+        final counts = repository.listCountryCityCounts();
+
+        final closing = repository.close();
+
+        completer.complete(handle);
+
+        await expectLater(counts, throwsStateError);
+
+        await closing;
+
+        expect(handle.closeCalls, 1);
+      },
+    );
+
     test('rejects searches after closing', () async {
       var initializationCalls = 0;
 
@@ -229,6 +389,23 @@ void main() {
       expect(initializationCalls, 0);
     });
 
+    test('rejects country counts after closing', () async {
+      var initializationCalls = 0;
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+          return FakeCityRepositoryHandle(FakeCityRepository());
+        },
+      );
+
+      await repository.close();
+
+      await expectLater(repository.listCountryCityCounts(), throwsStateError);
+
+      expect(initializationCalls, 0);
+    });
+
     test('forwards search parameters correctly', () async {
       final fakeRepository = _RecordingCityRepository();
 
@@ -239,14 +416,49 @@ void main() {
       await repository.search(
         query: 'Lisbon',
         countryCode: 'PT',
+        sort: CitySort.name,
         limit: 15,
         offset: 30,
       );
 
       expect(fakeRepository.lastQuery, 'Lisbon');
       expect(fakeRepository.lastCountryCode, 'PT');
+      expect(fakeRepository.lastSort, CitySort.name);
       expect(fakeRepository.lastLimit, 15);
       expect(fakeRepository.lastOffset, 30);
+
+      await repository.close();
+    });
+
+    test('forwards default population sorting', () async {
+      final fakeRepository = _RecordingCityRepository();
+
+      final repository = LazyCityRepository(
+        createHandle: () async => FakeCityRepositoryHandle(fakeRepository),
+      );
+
+      await repository.search(countryCode: 'PT');
+
+      expect(fakeRepository.lastSort, CitySort.population);
+
+      await repository.close();
+    });
+
+    test('forwards country city counts correctly', () async {
+      final fakeRepository = _RecordingCityRepository();
+
+      final repository = LazyCityRepository(
+        createHandle: () async => FakeCityRepositoryHandle(fakeRepository),
+      );
+
+      final countries = await repository.listCountryCityCounts();
+
+      expect(fakeRepository.countryCityCountCalls, 1);
+
+      expect(countries, hasLength(1));
+      expect(countries.single.countryCode, 'PT');
+      expect(countries.single.countryName, 'Portugal');
+      expect(countries.single.cityCount, 4);
 
       await repository.close();
     });
@@ -256,18 +468,23 @@ void main() {
 class _RecordingCityRepository implements CityRepository {
   String? lastQuery;
   String? lastCountryCode;
+  CitySort? lastSort;
   int? lastLimit;
   int? lastOffset;
+
+  int countryCityCountCalls = 0;
 
   @override
   Future<CitySearchResult> search({
     String? query,
     String? countryCode,
+    CitySort sort = CitySort.population,
     int limit = 20,
     int offset = 0,
   }) async {
     lastQuery = query;
     lastCountryCode = countryCode;
+    lastSort = sort;
     lastLimit = limit;
     lastOffset = offset;
 
@@ -277,5 +494,18 @@ class _RecordingCityRepository implements CityRepository {
       limit: limit,
       offset: offset,
     );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    countryCityCountCalls++;
+
+    return const [
+      CountryCityCount(
+        countryCode: 'PT',
+        countryName: 'Portugal',
+        cityCount: 4,
+      ),
+    ];
   }
 }

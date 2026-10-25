@@ -1,0 +1,1 @@
+enum CitySort { population, name }

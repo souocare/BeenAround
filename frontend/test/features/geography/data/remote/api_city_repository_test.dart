@@ -7,6 +7,7 @@ import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/geography/data/remote/api_city_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
 
 class FakeCitiesHttpAdapter implements HttpClientAdapter {
   FakeCitiesHttpAdapter(this.handler);
@@ -331,6 +332,163 @@ void main() {
             (error) => error.type,
             'type',
             ApiErrorType.server,
+          ),
+        ),
+      );
+    });
+    test('sends alphabetical sorting to the API', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'GET');
+        expect(options.uri.path, '/api/v1/cities');
+        expect(options.uri.queryParameters['country_code'], 'PT');
+        expect(options.uri.queryParameters['sort'], 'name');
+
+        return jsonResponse(
+          citiesResponse([
+            cityJson(id: 1, name: 'Lisbon'),
+            cityJson(id: 2, name: 'Porto'),
+          ]),
+        );
+      });
+
+      final result = await repository.search(
+        countryCode: 'PT',
+        sort: CitySort.name,
+      );
+
+      expect(result.items.map((city) => city.name).toList(), [
+        'Lisbon',
+        'Porto',
+      ]);
+    });
+    test('uses population sorting by default', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.queryParameters['sort'], 'population');
+
+        return jsonResponse(citiesResponse([cityJson()]));
+      });
+
+      await repository.search(query: 'Lisbon');
+    });
+    test('combines sorting with search and pagination', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.queryParameters['q'], 'Porto');
+        expect(options.uri.queryParameters['country_code'], 'PT');
+        expect(options.uri.queryParameters['sort'], 'name');
+        expect(options.uri.queryParameters['limit'], '10');
+        expect(options.uri.queryParameters['offset'], '20');
+
+        return jsonResponse(
+          citiesResponse(
+            [cityJson(id: 2, name: 'Porto')],
+            total: 35,
+            limit: 10,
+            offset: 20,
+          ),
+        );
+      });
+
+      final result = await repository.search(
+        query: 'Porto',
+        countryCode: 'PT',
+        sort: CitySort.name,
+        limit: 10,
+        offset: 20,
+      );
+
+      expect(result.total, 35);
+      expect(result.limit, 10);
+      expect(result.offset, 20);
+    });
+    test('fetches country city counts', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'GET');
+        expect(options.uri.path, '/api/v1/cities/countries');
+
+        return jsonResponse({
+          'items': [
+            {
+              'country_code': 'FR',
+              'country_name': 'France',
+              'city_count': 1200,
+            },
+            {
+              'country_code': 'PT',
+              'country_name': 'Portugal',
+              'city_count': 850,
+            },
+          ],
+        });
+      });
+
+      final countries = await repository.listCountryCityCounts();
+
+      expect(countries, hasLength(2));
+
+      expect(countries[0].countryCode, 'FR');
+      expect(countries[0].countryName, 'France');
+      expect(countries[0].cityCount, 1200);
+
+      expect(countries[1].countryCode, 'PT');
+      expect(countries[1].countryName, 'Portugal');
+      expect(countries[1].cityCount, 850);
+    });
+    test('supports countries with zero cities', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [
+            {'country_code': 'IS', 'country_name': 'Iceland', 'city_count': 0},
+          ],
+        }),
+      );
+
+      final countries = await repository.listCountryCityCounts();
+
+      expect(countries.single.countryCode, 'IS');
+      expect(countries.single.cityCount, 0);
+    });
+    test('rejects malformed country city counts response', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'items': 'invalid'}),
+      );
+
+      await expectLater(
+        repository.listCountryCityCounts(),
+        throwsFormatException,
+      );
+    });
+    test('rejects malformed country city count items', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [
+            {
+              'country_code': 'PT',
+              'country_name': 'Portugal',
+              'city_count': 'invalid',
+            },
+          ],
+        }),
+      );
+
+      await expectLater(
+        repository.listCountryCityCounts(),
+        throwsA(isA<TypeError>()),
+      );
+    });
+    test('maps country city counts HTTP errors', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': 'Authentication required.',
+        }, statusCode: 401),
+      );
+
+      await expectLater(
+        repository.listCountryCityCounts(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.type,
+            'type',
+            ApiErrorType.unauthorized,
           ),
         ),
       );
