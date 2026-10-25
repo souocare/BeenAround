@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
+from app.domain.visit_date_constraints import precision_check, range_check
 
 from app.db.base import Base
 from app.db.mixins import TimestampMixin
@@ -15,7 +16,15 @@ class CountryVisit(TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "ended_on IS NULL OR (started_on IS NOT NULL AND ended_on >= started_on)",
+            precision_check("started_on", "started_on_precision"),
+            name="ck_country_visits_start_precision",
+        ),
+        CheckConstraint(
+            precision_check("ended_on", "ended_on_precision"),
+            name="ck_country_visits_end_precision",
+        ),
+        CheckConstraint(
+            range_check(),
             name="ck_country_visits_valid_dates",
         ),
         Index(
@@ -50,5 +59,15 @@ class CountryVisit(TimestampMixin, Base):
 
     ended_on: Mapped[date | None] = mapped_column(
         Date,
+        nullable=True,
+    )
+
+    started_on_precision: Mapped[str | None] = mapped_column(
+        String(5),
+        nullable=True,
+    )
+
+    ended_on_precision: Mapped[str | None] = mapped_column(
+        String(5),
         nullable=True,
     )
