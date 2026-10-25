@@ -16,7 +16,7 @@ import 'dart:async';
 import '../../application/add_city_visit_cubit.dart';
 import '../../application/add_city_visit_state.dart';
 import '../../../geography/domain/city.dart';
-import '../../../geography/domain/city_repository.dart';
+import 'city_browser.dart';
 
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({this.initialCountry, super.key});
@@ -47,12 +47,6 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   City? _selectedCity;
   bool _selectingCity = false;
-
-  String _citySearchQuery = '';
-  List<City> _cityResults = const [];
-
-  bool _citySearchLoading = false;
-  String? _citySearchError;
 
   Timer? _citySearchDebounce;
   int _citySearchGeneration = 0;
@@ -167,230 +161,36 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     Navigator.of(context).pop(true);
   }
 
-  void _onCitySearchChanged(String value) {
-    _citySearchDebounce?.cancel();
-
-    final query = value.trim();
-    final generation = ++_citySearchGeneration;
-
-    setState(() {
-      _citySearchQuery = value;
-      _citySearchError = null;
-      _cityResults = const [];
-      _citySearchLoading = query.isNotEmpty;
-    });
-
-    if (query.isEmpty) return;
-
-    _citySearchDebounce = Timer(
-      const Duration(milliseconds: 300),
-      () => _searchCities(query, generation),
-    );
-  }
-
-  Future<void> _searchCities(String query, int generation) async {
-    try {
-      final result = await context.read<CityRepository>().search(
-        query: query,
-        limit: 20,
-      );
-
-      if (!mounted || generation != _citySearchGeneration) return;
-
-      setState(() {
-        _cityResults = result.items;
-        _citySearchLoading = false;
-      });
-    } catch (_) {
-      if (!mounted || generation != _citySearchGeneration) return;
-
-      setState(() {
-        _citySearchLoading = false;
-        _citySearchError = 'Unable to search cities. Please try again.';
-      });
-    }
-  }
-
   void _selectDestinationType(int index) {
     if (_isAnySubmissionInProgress) return;
 
     if (_selectedDestinationType == index) return;
 
-    _citySearchDebounce?.cancel();
-    _citySearchGeneration++;
-
     setState(() {
       _selectedDestinationType = index;
-
       _selectingCountry = false;
       _selectingCity = false;
-
       _searchQuery = '';
-      _citySearchLoading = false;
     });
 
     _clearActiveError();
   }
 
   Widget _buildCityPicker(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    return CityBrowser(
+      onBack: () {
+        setState(() {
+          _selectingCity = false;
+        });
+      },
+      onCitySelected: (city) {
+        setState(() {
+          _selectedCity = city;
+          _selectingCity = false;
+        });
 
-    final useCupertinoSearch =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 20, 8),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back to Add Destination',
-                onPressed: () {
-                  _citySearchDebounce?.cancel();
-                  _citySearchGeneration++;
-
-                  setState(() {
-                    _selectingCity = false;
-                    _citySearchLoading = false;
-                  });
-                },
-                icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Select City',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: useCupertinoSearch
-              ? CupertinoSearchTextField(
-                  key: const Key('destinationCitySearch'),
-                  autofocus: true,
-                  placeholder: 'Search cities...',
-                  onChanged: _onCitySearchChanged,
-                )
-              : TextField(
-                  key: const Key('destinationCitySearch'),
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Search cities...',
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  onChanged: _onCitySearchChanged,
-                ),
-        ),
-        Expanded(
-          child: _citySearchLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _citySearchError != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _citySearchError!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: colors.error),
-                    ),
-                  ),
-                )
-              : _citySearchQuery.trim().isEmpty
-              ? Center(
-                  child: Text(
-                    'Search for a city to add to your history.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              : _cityResults.isEmpty
-              ? const Center(child: Text('No cities found.'))
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  itemCount: _cityResults.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 6),
-                  itemBuilder: (context, index) {
-                    final city = _cityResults[index];
-                    final isSelected = _selectedCity?.id == city.id;
-
-                    return Material(
-                      color: colors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          _citySearchDebounce?.cancel();
-                          _citySearchGeneration++;
-
-                          setState(() {
-                            _selectedCity = city;
-                            _selectingCity = false;
-                            _citySearchLoading = false;
-                          });
-
-                          context.read<AddCityVisitCubit>().clearError();
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.location_city_outlined,
-                                color: colors.primary,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      city.name,
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      city.countryName,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colors.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                isSelected
-                                    ? Icons.check_circle
-                                    : Icons.chevron_right,
-                                color: isSelected
-                                    ? colors.primary
-                                    : colors.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+        context.read<AddCityVisitCubit>().clearError();
+      },
     );
   }
 
@@ -819,13 +619,6 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   bool get _isAnySubmissionInProgress {
     return context.read<AddCountryVisitCubit>().state.isSubmitting ||
         context.read<AddCityVisitCubit>().state.isSubmitting;
-  }
-
-  @override
-  void dispose() {
-    _citySearchDebounce?.cancel();
-    _citySearchGeneration++;
-    super.dispose();
   }
 }
 

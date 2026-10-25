@@ -141,7 +141,14 @@ class FakeCityRepository implements CityRepository {
 
   @override
   Future<List<CountryCityCount>> listCountryCityCounts() async {
-    return const [];
+    return const [
+      CountryCityCount(
+        countryCode: 'PT',
+        countryName: 'Portugal',
+        cityCount: 1,
+      ),
+      CountryCityCount(countryCode: 'ES', countryName: 'Spain', cityCount: 1),
+    ];
   }
 }
 
