@@ -5,7 +5,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from app.domain.visit_dates import validate_visit_dates
+from app.domain.visit_dates import (
+    DatePrecision,
+    validate_partial_visit_dates,
+)
 
 
 class CityVisitResponse(BaseModel):
@@ -22,6 +25,8 @@ class CityVisitResponse(BaseModel):
     ended_on: date | None
     created_at: datetime
     updated_at: datetime
+    started_on_precision: DatePrecision | None
+    ended_on_precision: DatePrecision | None
 
 
 class CityVisitListResponse(BaseModel):
@@ -39,6 +44,8 @@ class CityVisitCreate(BaseModel):
     city_id: int
     started_on: date | None = None
     ended_on: date | None = None
+    started_on_precision: DatePrecision | None = None
+    ended_on_precision: DatePrecision | None = None
 
     @field_validator("city_id")
     @classmethod
@@ -50,7 +57,19 @@ class CityVisitCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_visit(self) -> "CityVisitCreate":
-        validate_visit_dates(self.started_on, self.ended_on)
+        if self.started_on is not None and "started_on_precision" not in self.model_fields_set:
+            self.started_on_precision = DatePrecision.DAY
+
+        if self.ended_on is not None and "ended_on_precision" not in self.model_fields_set:
+            self.ended_on_precision = DatePrecision.DAY
+
+        self.started_on, self.ended_on = validate_partial_visit_dates(
+            self.started_on,
+            self.started_on_precision,
+            self.ended_on,
+            self.ended_on_precision,
+        )
+
         return self
 
 
@@ -62,6 +81,8 @@ class CityVisitUpdate(BaseModel):
     city_id: int | None = None
     started_on: date | None = None
     ended_on: date | None = None
+    started_on_precision: DatePrecision | None = None
+    ended_on_precision: DatePrecision | None = None
 
     @field_validator("city_id")
     @classmethod
