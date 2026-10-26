@@ -123,3 +123,114 @@ def validate_visit_dates(
 
     if ended_on < started_on:
         raise ValueError("End date cannot be earlier than start date.")
+
+
+def resolve_partial_visit_update(
+    *,
+    current_started_on: date | None,
+    current_started_on_precision: DatePrecision | None,
+    current_ended_on: date | None,
+    current_ended_on_precision: DatePrecision | None,
+    changes: dict[str, date | DatePrecision | None],
+) -> tuple[
+    date | None,
+    DatePrecision | None,
+    date | None,
+    DatePrecision | None,
+]:
+    """Resolve a partial visit update without inventing date information."""
+
+    def resolve_date(
+        *,
+        field: str,
+        current_date: date | None,
+        current_precision: DatePrecision | None,
+    ) -> tuple[date | None, DatePrecision | None]:
+        precision_field = f"{field}_precision"
+
+        date_provided = field in changes
+        precision_provided = precision_field in changes
+
+        if not date_provided and not precision_provided:
+            return current_date, current_precision
+
+        if date_provided:
+            new_date = changes[field]
+
+            if new_date is None:
+                if precision_provided and changes[precision_field] is not None:
+                    raise ValueError("Date precision requires a date.")
+
+                return None, None
+
+            if not isinstance(new_date, date):
+                raise ValueError("Invalid date value.")
+
+            if precision_provided:
+                new_precision = changes[precision_field]
+            else:
+                new_precision = DatePrecision.DAY
+
+            if new_precision is not None and not isinstance(
+                new_precision,
+                DatePrecision,
+            ):
+                raise ValueError("Invalid date precision.")
+
+            normalized_date = normalize_partial_date(
+                new_date,
+                new_precision,
+            )
+
+            return normalized_date, new_precision
+
+        new_precision = changes[precision_field]
+
+        if new_precision is None:
+            raise ValueError("Date precision cannot be cleared independently.")
+
+        if not isinstance(new_precision, DatePrecision):
+            raise ValueError("Invalid date precision.")
+
+        if current_date is None or current_precision is None:
+            raise ValueError("Date precision requires an existing date.")
+
+        precision_rank = {
+            DatePrecision.YEAR: 1,
+            DatePrecision.MONTH: 2,
+            DatePrecision.DAY: 3,
+        }
+
+        if precision_rank[new_precision] > precision_rank[current_precision]:
+            raise ValueError("Increasing date precision requires a new date.")
+
+        return (
+            normalize_partial_date(current_date, new_precision),
+            new_precision,
+        )
+
+    started_on, started_precision = resolve_date(
+        field="started_on",
+        current_date=current_started_on,
+        current_precision=current_started_on_precision,
+    )
+
+    ended_on, ended_precision = resolve_date(
+        field="ended_on",
+        current_date=current_ended_on,
+        current_precision=current_ended_on_precision,
+    )
+
+    normalized_start, normalized_end = validate_partial_visit_dates(
+        started_on,
+        started_precision,
+        ended_on,
+        ended_precision,
+    )
+
+    return (
+        normalized_start,
+        started_precision,
+        normalized_end,
+        ended_precision,
+    )
