@@ -1,4 +1,3 @@
-import 'package:beenaround/features/explore/presentation/widgets/adaptive_visit_date_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,12 +10,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'country_flag.dart';
 
-import 'dart:async';
-
 import '../../application/add_city_visit_cubit.dart';
 import '../../application/add_city_visit_state.dart';
 import '../../../geography/domain/city.dart';
 import 'city_browser.dart';
+
+import '../../../../core/models/partial_visit_date.dart';
+import '../../../../core/models/visit_date_precision.dart';
+import 'partial_visit_date_picker.dart';
 
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({this.initialCountry, super.key});
@@ -33,9 +34,14 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   String _searchQuery = '';
   DateTime? _countryStartedOn;
   DateTime? _countryEndedOn;
+  VisitDatePrecision? _countryStartedOnPrecision;
+  VisitDatePrecision? _countryEndedOnPrecision;
 
   DateTime? _cityStartedOn;
   DateTime? _cityEndedOn;
+
+  VisitDatePrecision? _cityStartedOnPrecision;
+  VisitDatePrecision? _cityEndedOnPrecision;
 
   bool get _isCountry => _selectedDestinationType == 0;
 
@@ -43,13 +49,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   DateTime? get _endedOn => _isCountry ? _countryEndedOn : _cityEndedOn;
 
+  VisitDatePrecision? get _startedOnPrecision =>
+      _isCountry ? _countryStartedOnPrecision : _cityStartedOnPrecision;
+
+  VisitDatePrecision? get _endedOnPrecision =>
+      _isCountry ? _countryEndedOnPrecision : _cityEndedOnPrecision;
+
   int _selectedDestinationType = 0;
 
   City? _selectedCity;
   bool _selectingCity = false;
-
-  Timer? _citySearchDebounce;
-  int _citySearchGeneration = 0;
 
   @override
   void initState() {
@@ -58,28 +67,25 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickStartDate() async {
-    final selected = await showAdaptiveVisitDatePicker(
+    final selected = await showPartialVisitDatePicker(
       context: context,
-      initialDate: _startedOn ?? DateTime.now(),
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2100),
+      initialValue: _startedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _startedOn!,
+              precision: _startedOnPrecision ?? VisitDatePrecision.day,
+            ),
     );
 
     if (!mounted || selected == null) return;
 
     setState(() {
       if (_isCountry) {
-        _countryStartedOn = selected;
-
-        if (_countryEndedOn != null && _countryEndedOn!.isBefore(selected)) {
-          _countryEndedOn = null;
-        }
+        _countryStartedOn = selected.date;
+        _countryStartedOnPrecision = selected.precision;
       } else {
-        _cityStartedOn = selected;
-
-        if (_cityEndedOn != null && _cityEndedOn!.isBefore(selected)) {
-          _cityEndedOn = null;
-        }
+        _cityStartedOn = selected.date;
+        _cityStartedOnPrecision = selected.precision;
       }
     });
 
@@ -87,37 +93,46 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickEndDate() async {
-    final startDate = _startedOn;
-
-    if (startDate == null) return;
-
-    final selected = await showAdaptiveVisitDatePicker(
+    final selected = await showPartialVisitDatePicker(
       context: context,
-      initialDate: _endedOn ?? startDate,
-      firstDate: startDate,
-      lastDate: DateTime(2100),
+      initialValue: _endedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _endedOn!,
+              precision: _endedOnPrecision ?? VisitDatePrecision.day,
+            ),
     );
 
     if (!mounted || selected == null) return;
 
     setState(() {
       if (_isCountry) {
-        _countryEndedOn = selected;
+        _countryEndedOn = selected.date;
+        _countryEndedOnPrecision = selected.precision;
       } else {
-        _cityEndedOn = selected;
+        _cityEndedOn = selected.date;
+        _cityEndedOnPrecision = selected.precision;
       }
     });
 
     _clearActiveError();
   }
 
-  String _formatDate(DateTime? date) {
+  String _formatDate(DateTime? date, VisitDatePrecision? precision) {
     if (date == null) return 'Not set';
 
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
+    switch (precision ?? VisitDatePrecision.day) {
+      case VisitDatePrecision.day:
+        final day = date.day.toString().padLeft(2, '0');
+        final month = date.month.toString().padLeft(2, '0');
+        return '$day/$month/${date.year}';
 
-    return '$day/$month/${date.year}';
+      case VisitDatePrecision.month:
+        return MaterialLocalizations.of(context).formatMonthYear(date);
+
+      case VisitDatePrecision.year:
+        return '${date.year}';
+    }
   }
 
   void _clearActiveError() {
@@ -138,6 +153,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         countryCode: country.code,
         startedOn: _startedOn,
         endedOn: _endedOn,
+        startedOnPrecision: _startedOnPrecision,
+        endedOnPrecision: _endedOnPrecision,
       );
 
       if (!mounted || !success) return;
@@ -154,6 +171,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       cityId: city.id,
       startedOn: _startedOn,
       endedOn: _endedOn,
+      startedOnPrecision: _startedOnPrecision,
+      endedOnPrecision: _endedOnPrecision,
     );
 
     if (!mounted || !success) return;
@@ -338,7 +357,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             Expanded(
               child: _VisitDateCard(
                 label: 'START DATE',
-                value: _formatDate(_startedOn),
+                value: _formatDate(_startedOn, _startedOnPrecision),
                 onTap: _pickStartDate,
               ),
             ),
@@ -346,8 +365,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             Expanded(
               child: _VisitDateCard(
                 label: 'END DATE',
-                value: _formatDate(_endedOn),
-                onTap: _startedOn == null ? null : _pickEndDate,
+                value: _formatDate(_endedOn, _endedOnPrecision),
+                onTap: _pickEndDate,
               ),
             ),
           ],
@@ -361,9 +380,13 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                   if (_isCountry) {
                     _countryStartedOn = null;
                     _countryEndedOn = null;
+                    _countryStartedOnPrecision = null;
+                    _countryEndedOnPrecision = null;
                   } else {
                     _cityStartedOn = null;
                     _cityEndedOn = null;
+                    _cityStartedOnPrecision = null;
+                    _cityEndedOnPrecision = null;
                   }
                 });
 

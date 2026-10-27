@@ -7,6 +7,7 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
@@ -14,6 +15,8 @@ class FakeCountriesRepository implements CountriesRepository {
   String? receivedCountryCode;
   DateTime? receivedStartedOn;
   DateTime? receivedEndedOn;
+  VisitDatePrecision? receivedStartedOnPrecision;
+  VisitDatePrecision? receivedEndedOnPrecision;
 
   Future<CountryVisit> Function()? createHandler;
 
@@ -26,8 +29,7 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     throw UnimplementedError(
       'Country visit updates are not used by this test.',
@@ -46,12 +48,16 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     createCalls++;
 
     receivedCountryCode = countryCode;
     receivedStartedOn = startedOn;
     receivedEndedOn = endedOn;
+    receivedStartedOnPrecision = startedOnPrecision;
+    receivedEndedOnPrecision = endedOnPrecision;
 
     if (createHandler != null) {
       return createHandler!();
@@ -63,6 +69,8 @@ class FakeCountriesRepository implements CountriesRepository {
         countryCode: countryCode,
         startedOn: startedOn,
         endedOn: endedOn,
+        startedOnPrecision: startedOnPrecision,
+        endedOnPrecision: endedOnPrecision,
         createdAt: DateTime(2026, 10, 21),
         updatedAt: DateTime(2026, 10, 21),
       ),
@@ -148,19 +156,18 @@ void main() {
       await cubit.close();
     });
 
-    test('rejects end date without start date', () async {
+    test('allows an end date without a start date', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(
-        countryCode: 'PT',
-        endedOn: DateTime(2026, 10, 15),
-      );
+      final end = DateTime(2026, 10, 15);
 
-      expect(success, isFalse);
-      expect(repository.createCalls, 0);
-      expect(cubit.state.errorMessage, 'An end date requires a start date.');
+      final success = await cubit.submit(countryCode: 'PT', endedOn: end);
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOn, isNull);
+      expect(repository.receivedEndedOn, end);
 
       await cubit.close();
     });
@@ -304,6 +311,60 @@ void main() {
       );
 
       expect(await submission, isFalse);
+    });
+    test('creates a visit with month precision', () async {
+      final repository = FakeCountriesRepository();
+      final cubit = AddCountryVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: DateTime(2024, 6, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+      );
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOn, DateTime(2024, 6, 1));
+      expect(repository.receivedStartedOnPrecision, VisitDatePrecision.month);
+
+      await cubit.close();
+    });
+    test('creates a visit with year precision', () async {
+      final repository = FakeCountriesRepository();
+      final cubit = AddCountryVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.year,
+        endedOn: DateTime(2025, 1, 1),
+        endedOnPrecision: VisitDatePrecision.year,
+      );
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOnPrecision, VisitDatePrecision.year);
+      expect(repository.receivedEndedOnPrecision, VisitDatePrecision.year);
+
+      await cubit.close();
+    });
+    test('rejects precision without a date', () async {
+      final repository = FakeCountriesRepository();
+      final cubit = AddCountryVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        countryCode: 'PT',
+        startedOnPrecision: VisitDatePrecision.month,
+      );
+
+      expect(success, isFalse);
+      expect(repository.createCalls, 0);
+      expect(
+        cubit.state.errorMessage,
+        'A start date precision requires a start date.',
+      );
+
+      await cubit.close();
     });
   });
 }

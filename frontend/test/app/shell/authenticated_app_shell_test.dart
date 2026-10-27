@@ -15,6 +15,7 @@ import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/foundation.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   @override
@@ -28,6 +29,8 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError(
       'Country visit creation is not used by this test.',
@@ -37,8 +40,7 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     throw UnimplementedError(
       'Country visit updates are not used by this test.',

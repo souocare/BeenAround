@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/edit_city_visit_cubit.dart';
 import 'package:beenaround/features/explore/application/edit_city_visit_state.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
@@ -22,6 +23,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }
@@ -33,7 +36,7 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }) {
     updateCalls++;
     receivedVisitId = visitId;
-    receivedChanges = Map.of(changes);
+    receivedChanges = Map<String, dynamic>.of(changes);
 
     if (updateHandler != null) {
       return updateHandler!();
@@ -48,6 +51,9 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
         countryName: 'Portugal',
         startedOn: changes['started_on'] as DateTime?,
         endedOn: changes['ended_on'] as DateTime?,
+        startedOnPrecision:
+            changes['started_on_precision'] as VisitDatePrecision?,
+        endedOnPrecision: changes['ended_on_precision'] as VisitDatePrecision?,
         createdAt: DateTime(2026, 10, 20),
         updatedAt: DateTime(2026, 10, 24),
       ),
@@ -78,40 +84,86 @@ void main() {
       final start = DateTime(2026, 10, 10);
       final end = DateTime(2026, 10, 15);
 
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: start,
-        endedOn: end,
-      );
+      final changes = {
+        'started_on': start,
+        'started_on_precision': VisitDatePrecision.day,
+        'ended_on': end,
+        'ended_on_precision': VisitDatePrecision.day,
+      };
+
+      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
 
       expect(success, isTrue);
       expect(repository.updateCalls, 1);
       expect(repository.receivedVisitId, 'visit-1');
-
-      expect(repository.receivedChanges, {
-        'started_on': start,
-        'ended_on': end,
-      });
-
+      expect(repository.receivedChanges, changes);
       expect(repository.receivedChanges!.containsKey('city_id'), isFalse);
-
       expect(cubit.state.phase, EditCityVisitPhase.success);
 
       await cubit.close();
     });
 
-    test('allows clearing both dates', () async {
+    test('updates only the end date', () async {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: 'visit-1');
+      final end = DateTime(2026, 11, 1);
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'ended_on': end,
+          'ended_on_precision': VisitDatePrecision.month,
+        },
+      );
 
       expect(success, isTrue);
-
       expect(repository.receivedChanges, {
-        'started_on': null,
-        'ended_on': null,
+        'ended_on': end,
+        'ended_on_precision': VisitDatePrecision.month,
       });
+
+      expect(repository.receivedChanges!.containsKey('started_on'), isFalse);
+
+      await cubit.close();
+    });
+
+    test('supports year precision', () async {
+      final repository = FakeCityVisitsRepository();
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'started_on': DateTime(2024),
+          'started_on_precision': VisitDatePrecision.year,
+        },
+      );
+
+      expect(success, isTrue);
+      expect(
+        repository.receivedChanges!['started_on_precision'],
+        VisitDatePrecision.year,
+      );
+
+      await cubit.close();
+    });
+
+    test('allows clearing both dates and precisions', () async {
+      final repository = FakeCityVisitsRepository();
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      final changes = {
+        'started_on': null,
+        'started_on_precision': null,
+        'ended_on': null,
+        'ended_on_precision': null,
+      };
+
+      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
+
+      expect(success, isTrue);
+      expect(repository.receivedChanges, changes);
 
       await cubit.close();
     });
@@ -122,14 +174,13 @@ void main() {
 
       final start = DateTime(2025, 6, 12);
 
-      final success = await cubit.submit(visitId: 'visit-1', startedOn: start);
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {'started_on': start},
+      );
 
       expect(success, isTrue);
-
-      expect(repository.receivedChanges, {
-        'started_on': start,
-        'ended_on': null,
-      });
+      expect(repository.receivedChanges, {'started_on': start});
 
       await cubit.close();
     });
@@ -140,11 +191,13 @@ void main() {
 
       final end = DateTime(2025, 6, 15);
 
-      final success = await cubit.submit(visitId: 'visit-1', endedOn: end);
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {'ended_on': end},
+      );
 
       expect(success, isTrue);
-
-      expect(repository.receivedChanges, {'started_on': null, 'ended_on': end});
+      expect(repository.receivedChanges, {'ended_on': end});
 
       await cubit.close();
     });
@@ -153,7 +206,10 @@ void main() {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: '  ');
+      final success = await cubit.submit(
+        visitId: '  ',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      );
 
       expect(success, isFalse);
       expect(repository.updateCalls, 0);
@@ -163,39 +219,15 @@ void main() {
       await cubit.close();
     });
 
-    test('rejects end date before start date', () async {
+    test('rejects empty changes', () async {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: DateTime(2026, 10, 15),
-        endedOn: DateTime(2026, 10, 10),
-      );
+      final success = await cubit.submit(visitId: 'visit-1', changes: {});
 
       expect(success, isFalse);
       expect(repository.updateCalls, 0);
-
-      expect(
-        cubit.state.errorMessage,
-        'End date cannot be earlier than start date.',
-      );
-
-      await cubit.close();
-    });
-
-    test('accepts same calendar day with different times', () async {
-      final repository = FakeCityVisitsRepository();
-      final cubit = EditCityVisitCubit(repository: repository);
-
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: DateTime(2026, 10, 15, 23),
-        endedOn: DateTime(2026, 10, 15, 8),
-      );
-
-      expect(success, isTrue);
-      expect(repository.updateCalls, 1);
+      expect(cubit.state.errorMessage, 'No changes to save.');
 
       await cubit.close();
     });
@@ -208,8 +240,11 @@ void main() {
 
       final cubit = EditCityVisitCubit(repository: repository);
 
-      final first = cubit.submit(visitId: 'visit-1');
-      final second = await cubit.submit(visitId: 'visit-1');
+      final changes = {'started_on': DateTime(2026, 10, 10)};
+
+      final first = cubit.submit(visitId: 'visit-1', changes: changes);
+
+      final second = await cubit.submit(visitId: 'visit-1', changes: changes);
 
       expect(second, isFalse);
       expect(repository.updateCalls, 1);
@@ -222,7 +257,7 @@ void main() {
           cityName: 'Lisbon',
           countryCode: 'PT',
           countryName: 'Portugal',
-          startedOn: null,
+          startedOn: DateTime(2026, 10, 10),
           endedOn: null,
           createdAt: DateTime(2026, 10, 20),
           updatedAt: DateTime(2026, 10, 24),

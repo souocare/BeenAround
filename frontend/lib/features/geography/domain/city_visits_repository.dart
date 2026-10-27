@@ -1,4 +1,5 @@
 import 'city_visit.dart';
+import '../../../core/models/visit_date_precision.dart';
 
 class CityVisitChanges {
   const CityVisitChanges({this.cityId, this.startedOn, this.endedOn});
@@ -15,6 +16,8 @@ abstract interface class CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   });
 
   Future<CityVisit> updateCityVisit({

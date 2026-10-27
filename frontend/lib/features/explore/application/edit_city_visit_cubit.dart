@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -6,16 +5,14 @@ import '../../geography/domain/city_visits_repository.dart';
 import 'edit_city_visit_state.dart';
 
 class EditCityVisitCubit extends Cubit<EditCityVisitState> {
-  EditCityVisitCubit({required CityVisitsRepository repository})
-    : _repository = repository,
-      super(const EditCityVisitState());
+  EditCityVisitCubit({required this._repository})
+    : super(const EditCityVisitState());
 
   final CityVisitsRepository _repository;
 
   Future<bool> submit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) async {
     if (isClosed ||
         state.isSubmitting ||
@@ -30,32 +27,25 @@ class EditCityVisitCubit extends Cubit<EditCityVisitState> {
           errorMessage: 'Invalid visit.',
         ),
       );
-
       return false;
     }
 
-    if (startedOn != null && endedOn != null) {
-      final start = DateUtils.dateOnly(startedOn);
-      final end = DateUtils.dateOnly(endedOn);
-
-      if (end.isBefore(start)) {
-        emit(
-          const EditCityVisitState(
-            phase: EditCityVisitPhase.failure,
-            errorMessage: 'End date cannot be earlier than start date.',
-          ),
-        );
-
-        return false;
-      }
+    if (changes.isEmpty) {
+      emit(
+        const EditCityVisitState(
+          phase: EditCityVisitPhase.failure,
+          errorMessage: 'No changes to save.',
+        ),
+      );
+      return false;
     }
 
     emit(const EditCityVisitState(phase: EditCityVisitPhase.submitting));
 
     try {
       await _repository.updateCityVisit(
-        visitId: visitId,
-        changes: {'started_on': startedOn, 'ended_on': endedOn},
+        visitId: visitId.trim(),
+        changes: changes,
       );
 
       if (isClosed) return false;

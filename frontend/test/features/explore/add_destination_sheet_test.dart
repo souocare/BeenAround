@@ -13,6 +13,7 @@ import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/country_city_count.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
@@ -38,8 +39,7 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     throw UnimplementedError(
       'Country visit updates are not used by this test.',
@@ -58,6 +58,8 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     createCalls++;
     lastCreatedCountryCode = countryCode;
@@ -67,6 +69,8 @@ class FakeCountriesRepository implements CountriesRepository {
       countryCode: countryCode,
       startedOn: startedOn,
       endedOn: endedOn,
+      startedOnPrecision: startedOnPrecision,
+      endedOnPrecision: endedOnPrecision,
       createdAt: DateTime(2026, 10, 21),
       updatedAt: DateTime(2026, 10, 21),
     );
@@ -171,6 +175,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     createCalls++;
     lastCreatedCityId = cityId;
@@ -185,6 +191,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
       countryName: cityId == 2267057 ? 'Portugal' : 'Spain',
       startedOn: startedOn,
       endedOn: endedOn,
+      startedOnPrecision: startedOnPrecision,
+      endedOnPrecision: endedOnPrecision,
       createdAt: DateTime(2026, 10, 24),
       updatedAt: DateTime(2026, 10, 24),
     );
@@ -632,4 +640,175 @@ void main() {
       );
     },
   );
+  testWidgets('creates a country visit with month precision', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    // Open Add Destination.
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    // Select Portugal.
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    // Open start date picker.
+    await tester.tap(find.text('START DATE'));
+    await tester.pumpAndSettle();
+
+    // Choose month precision.
+    await tester.tap(find.text('Month and year'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select month and year'), findsOneWidget);
+
+    // Select 2024.
+    final yearDropdown = find.byType(DropdownButton<int>).first;
+
+    await tester.tap(yearDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('2024').last);
+    await tester.pumpAndSettle();
+
+    // Select June.
+    final monthDropdown = find.byType(DropdownButton<int>).last;
+
+    await tester.tap(monthDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('June 2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Save visit.
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(repository.createdVisits.single.startedOn, DateTime(2024, 6, 1));
+    expect(
+      repository.createdVisits.single.startedOnPrecision,
+      VisitDatePrecision.month,
+    );
+    expect(repository.createdVisits.single.endedOn, isNull);
+  });
+  testWidgets('creates a country visit with an end date only', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    // The end date must be available without a start date.
+    await tester.tap(find.text('END DATE'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Year only'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(YearPicker), findsOneWidget);
+
+    // Select the year 2024.
+    await tester.tap(find.text('2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+
+    final visit = repository.createdVisits.single;
+
+    expect(visit.startedOn, isNull);
+    expect(visit.startedOnPrecision, isNull);
+    expect(visit.endedOn, DateTime(2024, 1, 1));
+    expect(visit.endedOnPrecision, VisitDatePrecision.year);
+  });
+  testWidgets('creates a city visit with month precision', (tester) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    // Open Add Destination.
+    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.pumpAndSettle();
+
+    // Switch to City.
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    // Select Lisbon.
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    // Select a partial start date.
+    await tester.tap(find.text('START DATE'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Month and year'));
+    await tester.pumpAndSettle();
+
+    // Select 2024.
+    await tester.tap(find.byType(DropdownButton<int>).first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('2024').last);
+    await tester.pumpAndSettle();
+
+    // Select June.
+    await tester.tap(find.byType(DropdownButton<int>).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('June 2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Save the city visit.
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(cityVisitsRepository.createCalls, 1);
+    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+    final visit = cityVisitsRepository.createdVisits.single;
+
+    expect(visit.startedOn, DateTime(2024, 6, 1));
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+    expect(visit.endedOn, isNull);
+
+    // A city visit must not create a country visit.
+    expect(countriesRepository.createCalls, 0);
+  });
 }

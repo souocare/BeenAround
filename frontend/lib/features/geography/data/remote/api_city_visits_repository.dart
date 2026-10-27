@@ -4,6 +4,8 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_error_mapper.dart';
 import '../../domain/city_visit.dart';
 import '../../domain/city_visits_repository.dart';
+import '../../../../core/models/visit_date_precision.dart';
+import '../../../../core/models/visit_date_serializer.dart';
 
 class ApiCityVisitsRepository implements CityVisitsRepository {
   const ApiCityVisitsRepository({required this.apiClient});
@@ -45,14 +47,20 @@ class ApiCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(
         'city-visits',
         data: {
           'city_id': cityId,
-          'started_on': _formatDate(startedOn),
-          'ended_on': _formatDate(endedOn),
+          ...VisitDateSerializer.createFields(
+            startedOn: startedOn,
+            endedOn: endedOn,
+            startedOnPrecision: startedOnPrecision,
+            endedOnPrecision: endedOnPrecision,
+          ),
         },
       );
 
@@ -81,7 +89,13 @@ class ApiCityVisitsRepository implements CityVisitsRepository {
       );
     }
 
-    final allowedFields = {'city_id', 'started_on', 'ended_on'};
+    const allowedFields = {
+      'city_id',
+      'started_on',
+      'ended_on',
+      'started_on_precision',
+      'ended_on_precision',
+    };
 
     for (final key in changes.keys) {
       if (!allowedFields.contains(key)) {
@@ -96,19 +110,7 @@ class ApiCityVisitsRepository implements CityVisitsRepository {
     final payload = <String, dynamic>{};
 
     for (final entry in changes.entries) {
-      if (entry.key == 'started_on' || entry.key == 'ended_on') {
-        final value = entry.value;
-
-        if (value != null && value is! DateTime) {
-          throw ArgumentError.value(
-            value,
-            entry.key,
-            'Expected a DateTime or null.',
-          );
-        }
-
-        payload[entry.key] = _formatDate(value as DateTime?);
-      } else {
+      if (entry.key == 'city_id') {
         final value = entry.value;
 
         if (value is! int || value <= 0) {
@@ -120,6 +122,10 @@ class ApiCityVisitsRepository implements CityVisitsRepository {
         }
 
         payload[entry.key] = value;
+      } else {
+        payload.addAll(
+          VisitDateSerializer.updateFields({entry.key: entry.value}),
+        );
       }
     }
 
@@ -150,17 +156,5 @@ class ApiCityVisitsRepository implements CityVisitsRepository {
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }
-  }
-
-  String? _formatDate(DateTime? date) {
-    if (date == null) {
-      return null;
-    }
-
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '$year-$month-$day';
   }
 }

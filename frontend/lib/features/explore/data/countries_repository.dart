@@ -4,6 +4,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_error_mapper.dart';
 import '../domain/country.dart';
 import '../domain/country_visit.dart';
+import '../../../core/models/visit_date_precision.dart';
+import '../../../core/models/visit_date_serializer.dart';
 
 abstract interface class CountriesRepository {
   Future<List<Country>> getCountries();
@@ -14,11 +16,12 @@ abstract interface class CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   });
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   });
   Future<void> deleteCountryVisit({required String visitId});
 }
@@ -92,14 +95,20 @@ class ApiCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(
         'country-visits',
         data: {
           'country_code': countryCode.trim().toUpperCase(),
-          'started_on': _formatDate(startedOn),
-          'ended_on': _formatDate(endedOn),
+          ...VisitDateSerializer.createFields(
+            startedOn: startedOn,
+            endedOn: endedOn,
+            startedOnPrecision: startedOnPrecision,
+            endedOnPrecision: endedOnPrecision,
+          ),
         },
       );
 
@@ -115,29 +124,25 @@ class ApiCountriesRepository implements CountriesRepository {
     }
   }
 
-  String? _formatDate(DateTime? date) {
-    if (date == null) return null;
-
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '$year-$month-$day';
-  }
-
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) async {
+    if (changes.isEmpty) {
+      throw ArgumentError.value(
+        changes,
+        'changes',
+        'At least one field must be provided.',
+      );
+    }
+
+    final payload = VisitDateSerializer.updateFields(changes);
+
     try {
       final response = await apiClient.dio.patch<Map<String, dynamic>>(
         'country-visits/${Uri.encodeComponent(visitId)}',
-        data: {
-          'started_on': _formatDate(startedOn),
-          'ended_on': _formatDate(endedOn),
-        },
+        data: payload,
       );
 
       final data = response.data;

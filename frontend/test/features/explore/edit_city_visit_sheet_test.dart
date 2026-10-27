@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/edit_city_visit_cubit.dart';
 import 'package:beenaround/features/explore/domain/visited_city.dart';
 import 'package:beenaround/features/explore/presentation/widgets/edit_city_visit_sheet.dart';
@@ -24,6 +25,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }
@@ -53,7 +56,12 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }
 }
 
-CityVisit makeVisit({DateTime? startedOn, DateTime? endedOn}) {
+CityVisit makeVisit({
+  DateTime? startedOn,
+  DateTime? endedOn,
+  VisitDatePrecision? startedOnPrecision,
+  VisitDatePrecision? endedOnPrecision,
+}) {
   return CityVisit(
     id: 'visit-1',
     cityId: 2267057,
@@ -62,6 +70,8 @@ CityVisit makeVisit({DateTime? startedOn, DateTime? endedOn}) {
     countryName: 'Portugal',
     startedOn: startedOn,
     endedOn: endedOn,
+    startedOnPrecision: startedOnPrecision,
+    endedOnPrecision: endedOnPrecision,
     createdAt: DateTime(2026, 10, 20),
     updatedAt: DateTime(2026, 10, 24),
   );
@@ -142,9 +152,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
+
     expect(repository.receivedChanges, {
       'started_on': null,
-      'ended_on': DateTime(2026, 10, 15),
+      'started_on_precision': null,
     });
   });
 
@@ -171,9 +182,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    expect(repository.updateCalls, 1);
+
     expect(repository.receivedChanges, {
-      'started_on': DateTime(2026, 10, 10),
       'ended_on': null,
+      'ended_on_precision': null,
     });
   });
 
@@ -193,10 +206,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(repository.receivedChanges, {
-      'started_on': null,
-      'ended_on': DateTime(2025, 6, 15),
-    });
+    expect(repository.updateCalls, 0);
+    expect(repository.receivedChanges, isNull);
   });
 
   testWidgets('disables save while submitting', (tester) async {
@@ -205,7 +216,15 @@ void main() {
 
     repository.updateHandler = () => pending.future;
 
-    await pumpSheet(tester, repository: repository, visit: makeVisit());
+    await pumpSheet(
+      tester,
+      repository: repository,
+      visit: makeVisit(startedOn: DateTime(2026, 10, 10)),
+    );
+
+    await tester.tap(find.byKey(const Key('editCityVisitClearStartDate')));
+
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
 
@@ -223,5 +242,73 @@ void main() {
     pending.complete(makeVisit());
 
     await tester.pumpAndSettle();
+  });
+  testWidgets('displays month precision correctly', (tester) async {
+    final repository = FakeCityVisitsRepository();
+
+    await pumpSheet(
+      tester,
+      repository: repository,
+      visit: makeVisit(
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+      ),
+    );
+
+    expect(find.text('January 2024'), findsOneWidget);
+    expect(find.text('01/01/2024'), findsNothing);
+  });
+  testWidgets('displays year precision correctly', (tester) async {
+    final repository = FakeCityVisitsRepository();
+
+    await pumpSheet(
+      tester,
+      repository: repository,
+      visit: makeVisit(
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.year,
+      ),
+    );
+
+    expect(find.text('2024'), findsOneWidget);
+    expect(find.text('01/01/2024'), findsNothing);
+  });
+  testWidgets('clearing end date preserves existing start precision', (
+    tester,
+  ) async {
+    final repository = FakeCityVisitsRepository();
+
+    await pumpSheet(
+      tester,
+      repository: repository,
+      visit: makeVisit(
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOn: DateTime(2024, 2, 1),
+        endedOnPrecision: VisitDatePrecision.month,
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('editCityVisitClearEndDate')));
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.updateCalls, 1);
+
+    expect(repository.receivedChanges, {
+      'ended_on': null,
+      'ended_on_precision': null,
+    });
+
+    expect(repository.receivedChanges!.containsKey('started_on'), isFalse);
+
+    expect(
+      repository.receivedChanges!.containsKey('started_on_precision'),
+      isFalse,
+    );
   });
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:beenaround/core/config/server_config.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/core/network/api_client.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/geography/data/remote/api_city_visits_repository.dart';
@@ -47,6 +48,8 @@ Map<String, dynamic> visitResponse({
   String countryName = 'Portugal',
   String? startedOn = '2025-07-10',
   String? endedOn = '2025-07-15',
+  String? startedOnPrecision,
+  String? endedOnPrecision,
 }) {
   return {
     'id': id,
@@ -56,6 +59,8 @@ Map<String, dynamic> visitResponse({
     'country_name': countryName,
     'started_on': startedOn,
     'ended_on': endedOn,
+    'started_on_precision': startedOnPrecision,
+    'ended_on_precision': endedOnPrecision,
     'created_at': '2026-10-21T10:00:00',
     'updated_at': '2026-10-21T10:00:00',
   };
@@ -276,6 +281,68 @@ void main() {
         repository.createCityVisit(cityId: 2267057),
         throwsFormatException,
       );
+    });
+    test('creates a city visit with month precision', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'POST');
+        expect(options.uri.path, '/api/v1/city-visits');
+
+        expect(options.data, {
+          'city_id': 2267057,
+          'started_on': '2026-10-01',
+          'ended_on': null,
+          'started_on_precision': 'month',
+        });
+
+        return jsonResponse(
+          visitResponse(
+            startedOn: '2026-10-01',
+            endedOn: null,
+            startedOnPrecision: 'month',
+          ),
+          statusCode: 201,
+        );
+      });
+
+      final visit = await repository.createCityVisit(
+        cityId: 2267057,
+        startedOn: DateTime(2026, 10, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+      );
+
+      expect(visit.startedOn, DateTime(2026, 10, 1));
+      expect(visit.startedOnPrecision, VisitDatePrecision.month);
+      expect(visit.endedOn, isNull);
+    });
+    test('creates a city visit with year precision', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'POST');
+
+        expect(options.data, {
+          'city_id': 2267057,
+          'started_on': '2024-01-01',
+          'ended_on': null,
+          'started_on_precision': 'year',
+        });
+
+        return jsonResponse(
+          visitResponse(
+            startedOn: '2024-01-01',
+            endedOn: null,
+            startedOnPrecision: 'year',
+          ),
+          statusCode: 201,
+        );
+      });
+
+      final visit = await repository.createCityVisit(
+        cityId: 2267057,
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.year,
+      );
+
+      expect(visit.startedOn, DateTime(2024, 1, 1));
+      expect(visit.startedOnPrecision, VisitDatePrecision.year);
     });
   });
 

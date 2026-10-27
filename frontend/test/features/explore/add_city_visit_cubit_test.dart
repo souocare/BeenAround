@@ -5,6 +5,7 @@ import 'package:beenaround/features/explore/application/add_city_visit_cubit.dar
 import 'package:beenaround/features/explore/application/add_city_visit_state.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
@@ -13,6 +14,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   int? receivedCityId;
   DateTime? receivedStartedOn;
   DateTime? receivedEndedOn;
+  VisitDatePrecision? receivedStartedOnPrecision;
+  VisitDatePrecision? receivedEndedOnPrecision;
 
   Future<CityVisit> Function()? createHandler;
 
@@ -37,12 +40,16 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     createCalls++;
 
     receivedCityId = cityId;
     receivedStartedOn = startedOn;
     receivedEndedOn = endedOn;
+    receivedStartedOnPrecision = startedOnPrecision;
+    receivedEndedOnPrecision = endedOnPrecision;
 
     if (createHandler != null) {
       return createHandler!();
@@ -57,6 +64,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
         countryName: 'Portugal',
         startedOn: startedOn,
         endedOn: endedOn,
+        startedOnPrecision: startedOnPrecision,
+        endedOnPrecision: endedOnPrecision,
         createdAt: DateTime(2026, 10, 24),
         updatedAt: DateTime(2026, 10, 24),
       ),
@@ -143,19 +152,18 @@ void main() {
       await cubit.close();
     });
 
-    test('rejects an end date without a start date', () async {
+    test('allows an end date without a start date', () async {
       final repository = FakeCityVisitsRepository();
-
       final cubit = AddCityVisitCubit(repository: repository);
 
-      final success = await cubit.submit(
-        cityId: 2267057,
-        endedOn: DateTime(2026, 10, 15),
-      );
+      final end = DateTime(2026, 10, 15);
 
-      expect(success, isFalse);
-      expect(repository.createCalls, 0);
-      expect(cubit.state.errorMessage, 'An end date requires a start date.');
+      final success = await cubit.submit(cityId: 2267057, endedOn: end);
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOn, isNull);
+      expect(repository.receivedEndedOn, end);
 
       await cubit.close();
     });
@@ -303,6 +311,60 @@ void main() {
       );
 
       expect(await submission, isFalse);
+    });
+    test('creates a city visit with month precision', () async {
+      final repository = FakeCityVisitsRepository();
+      final cubit = AddCityVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2024, 6, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+      );
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOn, DateTime(2024, 6, 1));
+      expect(repository.receivedStartedOnPrecision, VisitDatePrecision.month);
+
+      await cubit.close();
+    });
+    test('creates a city visit with year precision', () async {
+      final repository = FakeCityVisitsRepository();
+      final cubit = AddCityVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2024, 1, 1),
+        startedOnPrecision: VisitDatePrecision.year,
+        endedOn: DateTime(2025, 1, 1),
+        endedOnPrecision: VisitDatePrecision.year,
+      );
+
+      expect(success, isTrue);
+      expect(repository.createCalls, 1);
+      expect(repository.receivedStartedOnPrecision, VisitDatePrecision.year);
+      expect(repository.receivedEndedOnPrecision, VisitDatePrecision.year);
+
+      await cubit.close();
+    });
+    test('rejects precision without a date', () async {
+      final repository = FakeCityVisitsRepository();
+      final cubit = AddCityVisitCubit(repository: repository);
+
+      final success = await cubit.submit(
+        cityId: 2267057,
+        endedOnPrecision: VisitDatePrecision.year,
+      );
+
+      expect(success, isFalse);
+      expect(repository.createCalls, 0);
+      expect(
+        cubit.state.errorMessage,
+        'An end date precision requires an end date.',
+      );
+
+      await cubit.close();
     });
   });
 }

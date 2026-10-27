@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:beenaround/core/config/server_config.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/core/network/api_client.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
@@ -266,6 +267,72 @@ void main() {
     expect(visit.startedOn, isNull);
     expect(visit.endedOn, isNull);
   });
+  test('creates a country visit with month precision', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'POST');
+      expect(options.uri.path, '/api/v1/country-visits');
+
+      expect(options.data, {
+        'country_code': 'PT',
+        'started_on': '2026-10-01',
+        'ended_on': null,
+        'started_on_precision': 'month',
+      });
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2026-10-01',
+        'started_on_precision': 'month',
+        'ended_on': null,
+        'ended_on_precision': null,
+        'created_at': '2026-10-21T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      }, statusCode: 201);
+    });
+
+    final visit = await repository.createCountryVisit(
+      countryCode: 'PT',
+      startedOn: DateTime(2026, 10, 1),
+      startedOnPrecision: VisitDatePrecision.month,
+    );
+
+    expect(visit.startedOn, DateTime(2026, 10, 1));
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+    expect(visit.endedOn, isNull);
+  });
+  test('creates a country visit with year precision', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'POST');
+
+      expect(options.data, {
+        'country_code': 'PT',
+        'started_on': '2024-01-01',
+        'ended_on': null,
+        'started_on_precision': 'year',
+      });
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2024-01-01',
+        'started_on_precision': 'year',
+        'ended_on': null,
+        'ended_on_precision': null,
+        'created_at': '2026-10-21T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      }, statusCode: 201);
+    });
+
+    final visit = await repository.createCountryVisit(
+      countryCode: 'PT',
+      startedOn: DateTime(2024, 1, 1),
+      startedOnPrecision: VisitDatePrecision.year,
+    );
+
+    expect(visit.startedOn, DateTime(2024, 1, 1));
+    expect(visit.startedOnPrecision, VisitDatePrecision.year);
+  });
   test('maps validation errors when creating a visit', () async {
     final dio = Dio()
       ..httpClientAdapter = FakeHttpAdapter((options) {
@@ -319,8 +386,10 @@ void main() {
 
     final visit = await repository.updateCountryVisit(
       visitId: 'visit-1',
-      startedOn: DateTime(2026, 10, 10),
-      endedOn: DateTime(2026, 10, 15),
+      changes: {
+        'started_on': DateTime(2026, 10, 10),
+        'ended_on': DateTime(2026, 10, 15),
+      },
     );
 
     expect(visit.id, 'visit-1');
@@ -346,7 +415,7 @@ void main() {
 
     final visit = await repository.updateCountryVisit(
       visitId: 'visit-1',
-      startedOn: DateTime(2026, 10, 10),
+      changes: {'started_on': DateTime(2026, 10, 10), 'ended_on': null},
     );
 
     expect(visit.startedOn, DateTime(2026, 10, 10));
@@ -368,7 +437,10 @@ void main() {
       });
     });
 
-    final visit = await repository.updateCountryVisit(visitId: 'visit-1');
+    final visit = await repository.updateCountryVisit(
+      visitId: 'visit-1',
+      changes: {'started_on': null, 'ended_on': null},
+    );
 
     expect(visit.startedOn, isNull);
     expect(visit.endedOn, isNull);
@@ -385,8 +457,10 @@ void main() {
     await expectLater(
       repository.updateCountryVisit(
         visitId: 'visit-1',
-        startedOn: DateTime(2026, 10, 15),
-        endedOn: DateTime(2026, 10, 10),
+        changes: {
+          'started_on': DateTime(2026, 10, 15),
+          'ended_on': DateTime(2026, 10, 10),
+        },
       ),
       throwsA(isA<ApiException>()),
     );
@@ -401,7 +475,10 @@ void main() {
     });
 
     await expectLater(
-      repository.updateCountryVisit(visitId: 'visit-1'),
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      ),
       throwsA(isA<ApiException>()),
     );
   });
@@ -419,7 +496,10 @@ void main() {
     });
 
     await expectLater(
-      repository.updateCountryVisit(visitId: 'visit-1'),
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      ),
       throwsA(isA<FormatException>()),
     );
   });
@@ -465,6 +545,66 @@ void main() {
           ApiErrorType.server,
         ),
       ),
+    );
+  });
+  test('updates only the provided start date', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      expect(options.data, {'started_on': '2026-10-10'});
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2026-10-10',
+        'ended_on': '2026-10-15',
+        'created_at': '2026-10-20T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      });
+    });
+
+    final visit = await repository.updateCountryVisit(
+      visitId: 'visit-1',
+      changes: {'started_on': DateTime(2026, 10, 10)},
+    );
+
+    expect(visit.startedOn, DateTime(2026, 10, 10));
+    expect(visit.endedOn, DateTime(2026, 10, 15));
+  });
+  test('updates only the start date precision', () async {
+    final repository = createRepository((options) {
+      expect(options.method, 'PATCH');
+
+      expect(options.data, {'started_on_precision': 'month'});
+
+      return jsonResponse({
+        'id': 'visit-1',
+        'country_code': 'PT',
+        'started_on': '2026-10-01',
+        'started_on_precision': 'month',
+        'ended_on': null,
+        'ended_on_precision': null,
+        'created_at': '2026-10-20T10:00:00',
+        'updated_at': '2026-10-21T10:00:00',
+      });
+    });
+
+    final visit = await repository.updateCountryVisit(
+      visitId: 'visit-1',
+      changes: {'started_on_precision': VisitDatePrecision.month},
+    );
+
+    expect(visit.startedOn, DateTime(2026, 10, 1));
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+  });
+  test('rejects an empty country visit update', () async {
+    final repository = createRepository((options) {
+      fail('No HTTP request should be sent for an empty update.');
+    });
+
+    await expectLater(
+      repository.updateCountryVisit(visitId: 'visit-1', changes: {}),
+      throwsA(isA<ArgumentError>()),
     );
   });
 }

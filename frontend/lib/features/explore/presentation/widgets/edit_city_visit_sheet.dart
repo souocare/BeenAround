@@ -5,7 +5,10 @@ import '../../application/edit_city_visit_cubit.dart';
 import '../../application/edit_city_visit_state.dart';
 import '../../domain/visited_city.dart';
 import '../../../geography/domain/city_visit.dart';
-import 'adaptive_visit_date_picker.dart';
+import '../../../../core/models/partial_visit_date.dart';
+import '../../../../core/models/visit_date_precision.dart';
+import '../../domain/country_visit_date_validator.dart';
+import 'partial_visit_date_picker.dart';
 
 class EditCityVisitSheet extends StatefulWidget {
   const EditCityVisitSheet({
@@ -24,6 +27,8 @@ class EditCityVisitSheet extends StatefulWidget {
 class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
   DateTime? _startedOn;
   DateTime? _endedOn;
+  VisitDatePrecision? _startedOnPrecision;
+  VisitDatePrecision? _endedOnPrecision;
 
   @override
   void initState() {
@@ -31,68 +36,129 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
 
     _startedOn = widget.visit.startedOn;
     _endedOn = widget.visit.endedOn;
+
+    _startedOnPrecision = widget.visit.startedOnPrecision;
+    _endedOnPrecision = widget.visit.endedOnPrecision;
   }
 
   Future<void> _pickStartDate() async {
-    final selected = await showAdaptiveVisitDatePicker(
+    final selected = await showPartialVisitDatePicker(
       context: context,
-      initialDate: _startedOn ?? _endedOn ?? DateTime.now(),
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2100),
+      initialValue: _startedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _startedOn!,
+              precision: _startedOnPrecision ?? VisitDatePrecision.day,
+            ),
     );
 
     if (!mounted || selected == null) return;
 
     setState(() {
-      _startedOn = selected;
-
-      if (_endedOn != null && _endedOn!.isBefore(selected)) {
-        _endedOn = null;
-      }
+      _startedOn = selected.date;
+      _startedOnPrecision = selected.precision;
     });
 
     context.read<EditCityVisitCubit>().clearError();
   }
 
   Future<void> _pickEndDate() async {
-    final selected = await showAdaptiveVisitDatePicker(
+    final selected = await showPartialVisitDatePicker(
       context: context,
-      initialDate: _endedOn ?? _startedOn ?? DateTime.now(),
-      firstDate: _startedOn ?? DateTime(1900),
-      lastDate: DateTime(2100),
+      initialValue: _endedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _endedOn!,
+              precision: _endedOnPrecision ?? VisitDatePrecision.day,
+            ),
     );
 
     if (!mounted || selected == null) return;
 
-    setState(() => _endedOn = selected);
+    setState(() {
+      _endedOn = selected.date;
+      _endedOnPrecision = selected.precision;
+    });
 
     context.read<EditCityVisitCubit>().clearError();
   }
 
   void _clearStartDate() {
-    setState(() => _startedOn = null);
+    setState(() {
+      _startedOn = null;
+      _startedOnPrecision = null;
+    });
+
     context.read<EditCityVisitCubit>().clearError();
   }
 
   void _clearEndDate() {
-    setState(() => _endedOn = null);
+    setState(() {
+      _endedOn = null;
+      _endedOnPrecision = null;
+    });
+
     context.read<EditCityVisitCubit>().clearError();
   }
 
-  String _formatDate(DateTime? date) {
+  String _formatDate(DateTime? date, VisitDatePrecision? precision) {
     if (date == null) return 'Not set';
 
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
+    switch (precision ?? VisitDatePrecision.day) {
+      case VisitDatePrecision.day:
+        final day = date.day.toString().padLeft(2, '0');
+        final month = date.month.toString().padLeft(2, '0');
+        return '$day/$month/${date.year}';
 
-    return '$day/$month/${date.year}';
+      case VisitDatePrecision.month:
+        return MaterialLocalizations.of(context).formatMonthYear(date);
+
+      case VisitDatePrecision.year:
+        return '${date.year}';
+    }
   }
 
   Future<void> _saveChanges() async {
-    final success = await context.read<EditCityVisitCubit>().submit(
-      visitId: widget.visit.id,
+    final dateError = CountryVisitDateValidator.validate(
       startedOn: _startedOn,
       endedOn: _endedOn,
+      startedOnPrecision: _startedOnPrecision,
+      endedOnPrecision: _endedOnPrecision,
+    );
+
+    if (dateError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(dateError)));
+      return;
+    }
+
+    final changes = <String, dynamic>{};
+
+    if (_startedOn != widget.visit.startedOn ||
+        _startedOnPrecision != widget.visit.startedOnPrecision) {
+      changes['started_on'] = _startedOn;
+      changes['started_on_precision'] = _startedOn == null
+          ? null
+          : _startedOnPrecision ?? VisitDatePrecision.day;
+    }
+
+    if (_endedOn != widget.visit.endedOn ||
+        _endedOnPrecision != widget.visit.endedOnPrecision) {
+      changes['ended_on'] = _endedOn;
+      changes['ended_on_precision'] = _endedOn == null
+          ? null
+          : _endedOnPrecision ?? VisitDatePrecision.day;
+    }
+
+    if (changes.isEmpty) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+
+    final success = await context.read<EditCityVisitCubit>().submit(
+      visitId: widget.visit.id,
+      changes: changes,
     );
 
     if (!mounted || !success) return;
@@ -228,7 +294,12 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                     horizontal: 12,
                                   ),
                                   title: const Text('Start date'),
-                                  subtitle: Text(_formatDate(_startedOn)),
+                                  subtitle: Text(
+                                    _formatDate(
+                                      _startedOn,
+                                      _startedOnPrecision,
+                                    ),
+                                  ),
                                   onTap: state.isSubmitting
                                       ? null
                                       : _pickStartDate,
@@ -261,7 +332,9 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                     horizontal: 12,
                                   ),
                                   title: const Text('End date'),
-                                  subtitle: Text(_formatDate(_endedOn)),
+                                  subtitle: Text(
+                                    _formatDate(_endedOn, _endedOnPrecision),
+                                  ),
                                   onTap: state.isSubmitting
                                       ? null
                                       : _pickEndDate,

@@ -7,6 +7,7 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int deleteCalls = 0;
@@ -25,6 +26,8 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }
@@ -32,8 +35,7 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     throw UnimplementedError();
   }

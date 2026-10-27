@@ -1,3 +1,4 @@
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -15,6 +16,8 @@ class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     if (state.isSubmitting || state.phase == AddCountryVisitPhase.success) {
       return false;
@@ -36,6 +39,8 @@ class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
     final dateError = CountryVisitDateValidator.validate(
       startedOn: startedOn,
       endedOn: endedOn,
+      startedOnPrecision: startedOnPrecision,
+      endedOnPrecision: endedOnPrecision,
     );
 
     if (dateError != null) {
@@ -56,6 +61,8 @@ class AddCountryVisitCubit extends Cubit<AddCountryVisitState> {
         countryCode: normalizedCode,
         startedOn: startedOn,
         endedOn: endedOn,
+        startedOnPrecision: startedOnPrecision,
+        endedOnPrecision: endedOnPrecision,
       );
 
       if (isClosed) return false;

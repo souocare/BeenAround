@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:beenaround/features/explore/application/explore_cubit.dart';
-import 'package:beenaround/features/explore/application/visited_cities_cubit.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
@@ -12,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/explore/presentation/pages/city_details_page.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeExploreRepository implements CountriesRepository {
   FakeExploreRepository({this.countries = const [], this.visits = const []});
@@ -39,6 +39,8 @@ class FakeExploreRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError(
       'Country visit creation is not used by this test.',
@@ -51,8 +53,7 @@ class FakeExploreRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     throw UnimplementedError(
       'Country visit updates are not used by this test.',
@@ -87,6 +88,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }

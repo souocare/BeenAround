@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:beenaround/core/network/api_exception.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/delete_city_visit_cubit.dart';
 import 'package:beenaround/features/explore/application/delete_city_visit_state.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
@@ -21,6 +21,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }

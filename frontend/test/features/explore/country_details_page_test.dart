@@ -15,6 +15,7 @@ import 'package:beenaround/features/geography/domain/city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_search_result.dart';
 import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/country_city_count.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -30,6 +31,7 @@ class FakeCountriesRepository implements CountriesRepository {
   String? receivedVisitId;
   DateTime? receivedStartedOn;
   DateTime? receivedEndedOn;
+  Map<String, dynamic>? receivedChanges;
 
   int deleteCalls = 0;
   String? receivedDeletedVisitId;
@@ -48,14 +50,14 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) async {
     updateCalls++;
 
     receivedVisitId = visitId;
-    receivedStartedOn = startedOn;
-    receivedEndedOn = endedOn;
+    receivedChanges = Map<String, dynamic>.of(changes);
+    receivedStartedOn = changes['started_on'] as DateTime?;
+    receivedEndedOn = changes['ended_on'] as DateTime?;
 
     if (updateHandler != null) {
       return updateHandler!();
@@ -72,8 +74,18 @@ class FakeCountriesRepository implements CountriesRepository {
     final updated = CountryVisit(
       id: previous.id,
       countryCode: previous.countryCode,
-      startedOn: startedOn,
-      endedOn: endedOn,
+      startedOn: changes.containsKey('started_on')
+          ? receivedStartedOn
+          : previous.startedOn,
+      endedOn: changes.containsKey('ended_on')
+          ? receivedEndedOn
+          : previous.endedOn,
+      startedOnPrecision: changes.containsKey('started_on_precision')
+          ? changes['started_on_precision'] as VisitDatePrecision?
+          : previous.startedOnPrecision,
+      endedOnPrecision: changes.containsKey('ended_on_precision')
+          ? changes['ended_on_precision'] as VisitDatePrecision?
+          : previous.endedOnPrecision,
       createdAt: previous.createdAt,
       updatedAt: DateTime(2026, 10, 22),
     );
@@ -91,6 +103,8 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) async {
     createCalls++;
     receivedCreatedCountryCode = countryCode;
@@ -100,6 +114,8 @@ class FakeCountriesRepository implements CountriesRepository {
       countryCode: countryCode,
       startedOn: startedOn,
       endedOn: endedOn,
+      startedOnPrecision: startedOnPrecision,
+      endedOnPrecision: endedOnPrecision,
       createdAt: DateTime(2026, 10, 22),
       updatedAt: DateTime(2026, 10, 22),
     );
@@ -132,6 +148,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError('City visit creation is not used by these tests.');
   }
@@ -440,8 +458,11 @@ void main() {
     await tester.tap(find.byKey(const Key('editVisitStartDate')));
     await tester.pumpAndSettle();
 
-    // O calendário abre em outubro de 2026.
-    // Selecionamos o dia 12.
+    // Select exact date precision.
+    await tester.tap(find.text('Exact date'));
+    await tester.pumpAndSettle();
+
+    // Select October 12, 2026.
     await tester.tap(find.text('12').last);
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
@@ -452,8 +473,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
-    expect(repository.receivedStartedOn, DateTime(2026, 10, 12));
-    expect(repository.receivedEndedOn, DateTime(2026, 10, 15));
+    expect(repository.receivedChanges, {
+      'started_on': DateTime(2026, 10, 12),
+      'started_on_precision': VisitDatePrecision.day,
+    });
 
     expect(find.text('12–15 Oct 2026'), findsOneWidget);
   });
@@ -490,6 +513,17 @@ void main() {
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
+    // Change the start date to trigger a PATCH request.
+    await tester.tap(find.byKey(const Key('editVisitStartDate')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Exact date'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('12').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('editVisitSaveButton')));
     await tester.pumpAndSettle();
 
@@ -502,7 +536,7 @@ void main() {
     expect(editSheet, findsOneWidget);
 
     expect(
-      find.descendant(of: editSheet, matching: find.text('10/10/2026')),
+      find.descendant(of: editSheet, matching: find.text('12/10/2026')),
       findsOneWidget,
     );
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/application/edit_country_visit_cubit.dart';
 import 'package:beenaround/features/explore/application/edit_country_visit_state.dart';
@@ -12,8 +13,7 @@ class FakeCountriesRepository implements CountriesRepository {
   int updateCalls = 0;
 
   String? receivedVisitId;
-  DateTime? receivedStartedOn;
-  DateTime? receivedEndedOn;
+  Map<String, dynamic>? receivedChanges;
 
   Future<CountryVisit> Function()? updateHandler;
 
@@ -28,30 +28,25 @@ class FakeCountriesRepository implements CountriesRepository {
     required String countryCode,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
-    throw UnimplementedError(
-      'Country visit creation is not used by this test.',
-    );
+    throw UnimplementedError();
   }
 
   @override
   Future<void> deleteCountryVisit({required String visitId}) {
-    throw UnimplementedError(
-      'Country visit deletion is not used by this test.',
-    );
+    throw UnimplementedError();
   }
 
   @override
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) {
     updateCalls++;
-
     receivedVisitId = visitId;
-    receivedStartedOn = startedOn;
-    receivedEndedOn = endedOn;
+    receivedChanges = Map<String, dynamic>.of(changes);
 
     if (updateHandler != null) {
       return updateHandler!();
@@ -61,8 +56,11 @@ class FakeCountriesRepository implements CountriesRepository {
       CountryVisit(
         id: visitId,
         countryCode: 'PT',
-        startedOn: startedOn,
-        endedOn: endedOn,
+        startedOn: changes['started_on'] as DateTime?,
+        endedOn: changes['ended_on'] as DateTime?,
+        startedOnPrecision:
+            changes['started_on_precision'] as VisitDatePrecision?,
+        endedOnPrecision: changes['ended_on_precision'] as VisitDatePrecision?,
         createdAt: DateTime(2026, 10, 20),
         updatedAt: DateTime(2026, 10, 21),
       ),
@@ -85,66 +83,128 @@ void main() {
 
     test('updates a visit with exact dates', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
       final start = DateTime(2026, 10, 10);
       final end = DateTime(2026, 10, 15);
 
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: start,
-        endedOn: end,
-      );
+      final changes = {
+        'started_on': start,
+        'started_on_precision': VisitDatePrecision.day,
+        'ended_on': end,
+        'ended_on_precision': VisitDatePrecision.day,
+      };
+
+      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
 
       expect(success, isTrue);
       expect(repository.updateCalls, 1);
       expect(repository.receivedVisitId, 'visit-1');
-      expect(repository.receivedStartedOn, start);
-      expect(repository.receivedEndedOn, end);
+      expect(repository.receivedChanges, changes);
       expect(cubit.state.phase, EditCountryVisitPhase.success);
 
       await cubit.close();
     });
 
-    test('allows clearing both dates', () async {
+    test('updates only the end date without changing the start', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: 'visit-1');
+      final end = DateTime(2026, 11, 1);
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'ended_on': end,
+          'ended_on_precision': VisitDatePrecision.month,
+        },
+      );
 
       expect(success, isTrue);
-      expect(repository.updateCalls, 1);
-      expect(repository.receivedStartedOn, isNull);
-      expect(repository.receivedEndedOn, isNull);
-      expect(cubit.state.phase, EditCountryVisitPhase.success);
+      expect(repository.receivedChanges, {
+        'ended_on': end,
+        'ended_on_precision': VisitDatePrecision.month,
+      });
+      expect(repository.receivedChanges!.containsKey('started_on'), isFalse);
+      expect(
+        repository.receivedChanges!.containsKey('started_on_precision'),
+        isFalse,
+      );
 
       await cubit.close();
     });
 
-    test('allows start date without end date', () async {
+    test('supports year precision', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final start = DateTime(2025, 5, 12);
-
-      final success = await cubit.submit(visitId: 'visit-1', startedOn: start);
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'started_on': DateTime(2024),
+          'started_on_precision': VisitDatePrecision.year,
+        },
+      );
 
       expect(success, isTrue);
-      expect(repository.receivedStartedOn, start);
-      expect(repository.receivedEndedOn, isNull);
+      expect(
+        repository.receivedChanges!['started_on_precision'],
+        VisitDatePrecision.year,
+      );
+
+      await cubit.close();
+    });
+
+    test('allows clearing both dates and precisions', () async {
+      final repository = FakeCountriesRepository();
+      final cubit = EditCountryVisitCubit(repository: repository);
+
+      final changes = {
+        'started_on': null,
+        'started_on_precision': null,
+        'ended_on': null,
+        'ended_on_precision': null,
+      };
+
+      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
+
+      expect(success, isTrue);
+      expect(repository.receivedChanges, changes);
+
+      await cubit.close();
+    });
+
+    test('allows an end date without a start date', () async {
+      final repository = FakeCountriesRepository();
+      final cubit = EditCountryVisitCubit(repository: repository);
+
+      final end = DateTime(2025, 6, 15);
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'ended_on': end,
+          'ended_on_precision': VisitDatePrecision.day,
+        },
+      );
+
+      expect(success, isTrue);
+      expect(repository.receivedChanges, {
+        'ended_on': end,
+        'ended_on_precision': VisitDatePrecision.day,
+      });
 
       await cubit.close();
     });
 
     test('rejects missing visit ID', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: '  ');
+      final success = await cubit.submit(
+        visitId: '  ',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      );
 
       expect(success, isFalse);
       expect(repository.updateCalls, 0);
@@ -154,57 +214,16 @@ void main() {
       await cubit.close();
     });
 
-    test('rejects end date without start date', () async {
+    test('rejects empty changes', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        endedOn: DateTime(2026, 10, 15),
-      );
+      final success = await cubit.submit(visitId: 'visit-1', changes: {});
 
       expect(success, isFalse);
       expect(repository.updateCalls, 0);
-      expect(cubit.state.errorMessage, 'An end date requires a start date.');
-
-      await cubit.close();
-    });
-
-    test('rejects end date earlier than start date', () async {
-      final repository = FakeCountriesRepository();
-
-      final cubit = EditCountryVisitCubit(repository: repository);
-
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: DateTime(2026, 10, 15),
-        endedOn: DateTime(2026, 10, 10),
-      );
-
-      expect(success, isFalse);
-      expect(repository.updateCalls, 0);
-      expect(
-        cubit.state.errorMessage,
-        'End date cannot be earlier than start date.',
-      );
-
-      await cubit.close();
-    });
-
-    test('ignores time of day when validating dates', () async {
-      final repository = FakeCountriesRepository();
-
-      final cubit = EditCountryVisitCubit(repository: repository);
-
-      final success = await cubit.submit(
-        visitId: 'visit-1',
-        startedOn: DateTime(2026, 10, 15, 23),
-        endedOn: DateTime(2026, 10, 15, 8),
-      );
-
-      expect(success, isTrue);
-      expect(repository.updateCalls, 1);
+      expect(cubit.state.phase, EditCountryVisitPhase.failure);
+      expect(cubit.state.errorMessage, 'No changes to save.');
 
       await cubit.close();
     });
@@ -217,8 +236,11 @@ void main() {
 
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final first = cubit.submit(visitId: 'visit-1');
-      final second = await cubit.submit(visitId: 'visit-1');
+      final changes = {'started_on': DateTime(2026, 10, 10)};
+
+      final first = cubit.submit(visitId: 'visit-1', changes: changes);
+
+      final second = await cubit.submit(visitId: 'visit-1', changes: changes);
 
       expect(second, isFalse);
       expect(repository.updateCalls, 1);
@@ -228,7 +250,7 @@ void main() {
         CountryVisit(
           id: 'visit-1',
           countryCode: 'PT',
-          startedOn: null,
+          startedOn: DateTime(2026, 10, 10),
           endedOn: null,
           createdAt: DateTime(2026, 10, 20),
           updatedAt: DateTime(2026, 10, 21),
@@ -243,11 +265,13 @@ void main() {
 
     test('does not submit again after success', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      expect(await cubit.submit(visitId: 'visit-1'), isTrue);
-      expect(await cubit.submit(visitId: 'visit-1'), isFalse);
+      final changes = {'started_on': DateTime(2026, 10, 10)};
+
+      expect(await cubit.submit(visitId: 'visit-1', changes: changes), isTrue);
+
+      expect(await cubit.submit(visitId: 'visit-1', changes: changes), isFalse);
 
       expect(repository.updateCalls, 1);
 
@@ -266,7 +290,10 @@ void main() {
 
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: 'visit-1');
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      );
 
       expect(success, isFalse);
       expect(cubit.state.phase, EditCountryVisitPhase.failure);
@@ -284,7 +311,10 @@ void main() {
 
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(visitId: 'visit-1');
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      );
 
       expect(success, isFalse);
       expect(cubit.state.phase, EditCountryVisitPhase.failure);
@@ -305,17 +335,18 @@ void main() {
 
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      expect(await cubit.submit(visitId: 'visit-1'), isFalse);
-      expect(cubit.state.phase, EditCountryVisitPhase.failure);
+      final changes = {'started_on': DateTime(2026, 10, 10)};
+
+      expect(await cubit.submit(visitId: 'visit-1', changes: changes), isFalse);
 
       repository.updateHandler = null;
-
       cubit.clearError();
 
       expect(cubit.state.phase, EditCountryVisitPhase.idle);
       expect(cubit.state.errorMessage, isNull);
 
-      expect(await cubit.submit(visitId: 'visit-1'), isTrue);
+      expect(await cubit.submit(visitId: 'visit-1', changes: changes), isTrue);
+
       expect(repository.updateCalls, 2);
 
       await cubit.close();
@@ -329,7 +360,10 @@ void main() {
 
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final submission = cubit.submit(visitId: 'visit-1');
+      final submission = cubit.submit(
+        visitId: 'visit-1',
+        changes: {'started_on': DateTime(2026, 10, 10)},
+      );
 
       await cubit.close();
 
@@ -337,7 +371,7 @@ void main() {
         CountryVisit(
           id: 'visit-1',
           countryCode: 'PT',
-          startedOn: null,
+          startedOn: DateTime(2026, 10, 10),
           endedOn: null,
           createdAt: DateTime(2026, 10, 20),
           updatedAt: DateTime(2026, 10, 21),

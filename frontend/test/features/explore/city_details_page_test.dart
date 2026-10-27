@@ -1,3 +1,4 @@
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/visited_cities_cubit.dart';
 import 'package:beenaround/features/explore/domain/visited_city.dart';
 import 'package:beenaround/features/explore/presentation/pages/city_details_page.dart';
@@ -29,6 +30,8 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required int cityId,
     DateTime? startedOn,
     DateTime? endedOn,
+    VisitDatePrecision? startedOnPrecision,
+    VisitDatePrecision? endedOnPrecision,
   }) {
     throw UnimplementedError();
   }
@@ -67,8 +70,18 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
       cityName: previous.cityName,
       countryCode: previous.countryCode,
       countryName: previous.countryName,
-      startedOn: changes['started_on'] as DateTime?,
-      endedOn: changes['ended_on'] as DateTime?,
+      startedOn: changes.containsKey('started_on')
+          ? changes['started_on'] as DateTime?
+          : previous.startedOn,
+      endedOn: changes.containsKey('ended_on')
+          ? changes['ended_on'] as DateTime?
+          : previous.endedOn,
+      startedOnPrecision: changes.containsKey('started_on_precision')
+          ? changes['started_on_precision'] as VisitDatePrecision?
+          : previous.startedOnPrecision,
+      endedOnPrecision: changes.containsKey('ended_on_precision')
+          ? changes['ended_on_precision'] as VisitDatePrecision?
+          : previous.endedOnPrecision,
       createdAt: previous.createdAt,
       updatedAt: DateTime(2026, 10, 24),
     );
@@ -352,8 +365,8 @@ void main() {
     expect(repository.receivedVisitId, 'visit-1');
 
     expect(repository.receivedChanges, {
-      'started_on': DateTime(2026, 10, 10),
       'ended_on': null,
+      'ended_on_precision': null,
     });
 
     expect(repository.loadCalls, 2);

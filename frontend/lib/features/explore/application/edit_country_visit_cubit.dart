@@ -2,22 +2,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../data/countries_repository.dart';
-import '../domain/country_visit_date_validator.dart';
 import 'edit_country_visit_state.dart';
 
 class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
-  EditCountryVisitCubit({required CountriesRepository repository})
-    : _repository = repository,
-      super(const EditCountryVisitState());
+  EditCountryVisitCubit({required this._repository})
+    : super(const EditCountryVisitState());
 
   final CountriesRepository _repository;
 
   Future<bool> submit({
     required String visitId,
-    DateTime? startedOn,
-    DateTime? endedOn,
+    required Map<String, dynamic> changes,
   }) async {
-    if (state.isSubmitting || state.phase == EditCountryVisitPhase.success) {
+    if (isClosed ||
+        state.isSubmitting ||
+        state.phase == EditCountryVisitPhase.success) {
       return false;
     }
 
@@ -28,23 +27,16 @@ class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
           errorMessage: 'Invalid visit.',
         ),
       );
-
       return false;
     }
 
-    final dateError = CountryVisitDateValidator.validate(
-      startedOn: startedOn,
-      endedOn: endedOn,
-    );
-
-    if (dateError != null) {
+    if (changes.isEmpty) {
       emit(
-        EditCountryVisitState(
+        const EditCountryVisitState(
           phase: EditCountryVisitPhase.failure,
-          errorMessage: dateError,
+          errorMessage: 'No changes to save.',
         ),
       );
-
       return false;
     }
 
@@ -52,9 +44,8 @@ class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
 
     try {
       await _repository.updateCountryVisit(
-        visitId: visitId,
-        startedOn: startedOn,
-        endedOn: endedOn,
+        visitId: visitId.trim(),
+        changes: changes,
       );
 
       if (isClosed) return false;
@@ -88,7 +79,7 @@ class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
   }
 
   void clearError() {
-    if (state.phase != EditCountryVisitPhase.failure) return;
+    if (isClosed || state.phase != EditCountryVisitPhase.failure) return;
 
     emit(const EditCountryVisitState());
   }
