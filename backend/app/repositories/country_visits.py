@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.country_visit import CountryVisit
+from app.domain.visit_dates import DatePrecision
 
 
 class CountryVisitRepository:
@@ -36,6 +37,8 @@ class CountryVisitRepository:
         country_code: str,
         started_on: date | None,
         ended_on: date | None,
+        started_on_precision: DatePrecision | None,
+        ended_on_precision: DatePrecision | None,
     ) -> CountryVisit:
         """Persist a new country visit."""
 
@@ -43,7 +46,9 @@ class CountryVisitRepository:
             user_id=user_id,
             country_code=country_code,
             started_on=started_on,
+            started_on_precision=started_on_precision,
             ended_on=ended_on,
+            ended_on_precision=ended_on_precision,
         )
 
         self._session.add(visit)
@@ -74,12 +79,16 @@ class CountryVisitRepository:
         country_code: str,
         started_on: date | None,
         ended_on: date | None,
+        started_on_precision: DatePrecision | None,
+        ended_on_precision: DatePrecision | None,
     ) -> CountryVisit:
         """Persist validated changes to an existing country visit."""
 
         visit.country_code = country_code
         visit.started_on = started_on
+        visit.started_on_precision = started_on_precision
         visit.ended_on = ended_on
+        visit.ended_on_precision = ended_on_precision
 
         self._session.commit()
         self._session.refresh(visit)

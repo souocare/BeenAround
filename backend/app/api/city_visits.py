@@ -5,6 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import CurrentApiUser, DatabaseSession
+from app.domain.visit_dates import (
+    DatePrecision,
+    resolve_partial_visit_update,
+)
 from app.models.city import City
 from app.models.city_visit import CityVisit
 from app.models.country import Country
@@ -15,7 +19,6 @@ from app.schemas.city_visits import (
     CityVisitResponse,
     CityVisitUpdate,
 )
-from app.domain.visit_dates import validate_visit_dates
 
 
 router = APIRouter(
@@ -40,7 +43,9 @@ def serialize_visit(
         country_code=country_code,
         country_name=country_name,
         started_on=visit.started_on,
+        started_on_precision=visit.started_on_precision,
         ended_on=visit.ended_on,
+        ended_on_precision=visit.ended_on_precision,
         created_at=visit.created_at,
         updated_at=visit.updated_at,
     )
@@ -51,6 +56,8 @@ def serialize_visit_with_city(
     city: City,
     country: Country,
 ) -> CityVisitResponse:
+    """Build a city visit response using its catalog records."""
+
     return serialize_visit(
         visit,
         city_name=city.name,
@@ -115,7 +122,9 @@ def create_city_visit(
         user_id=user.id,
         city_id=city.id,
         started_on=payload.started_on,
+        started_on_precision=payload.started_on_precision,
         ended_on=payload.ended_on,
+        ended_on_precision=payload.ended_on_precision,
     )
 
     return serialize_visit_with_city(visit, city, country)
@@ -149,11 +158,28 @@ def update_city_visit(
     changes = payload.model_dump(exclude_unset=True)
 
     city_id = changes.get("city_id", visit.city_id)
-    started_on = changes.get("started_on", visit.started_on)
-    ended_on = changes.get("ended_on", visit.ended_on)
 
     try:
-        validate_visit_dates(started_on, ended_on)
+        (
+            started_on,
+            started_on_precision,
+            ended_on,
+            ended_on_precision,
+        ) = resolve_partial_visit_update(
+            current_started_on=visit.started_on,
+            current_started_on_precision=(
+                DatePrecision(visit.started_on_precision)
+                if visit.started_on_precision is not None
+                else None
+            ),
+            current_ended_on=visit.ended_on,
+            current_ended_on_precision=(
+                DatePrecision(visit.ended_on_precision)
+                if visit.ended_on_precision is not None
+                else None
+            ),
+            changes=changes,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -174,7 +200,9 @@ def update_city_visit(
         visit=visit,
         city_id=city.id,
         started_on=started_on,
+        started_on_precision=started_on_precision,
         ended_on=ended_on,
+        ended_on_precision=ended_on_precision,
     )
 
     return serialize_visit_with_city(updated, city, country)
@@ -189,7 +217,7 @@ def delete_city_visit(
     user: CurrentApiUser,
     session: DatabaseSession,
 ) -> None:
-    """Delete a city visit owned by the authenticated user."""
+    """Delete a visit owned by the authenticated user."""
 
     repository = CityVisitRepository(session)
 

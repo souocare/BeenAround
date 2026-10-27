@@ -56,7 +56,9 @@ def test_country_visit_can_be_persisted(database_engine) -> None:
             user_id=user.id,
             country_code="PT",
             started_on=date(2026, 9, 1),
+            started_on_precision="day",
             ended_on=date(2026, 9, 7),
+            ended_on_precision="day",
         )
 
         session.add(visit)
@@ -89,13 +91,17 @@ def test_multiple_visits_to_same_country_are_allowed(database_engine) -> None:
                     user_id=user.id,
                     country_code="PT",
                     started_on=date(2022, 8, 10),
+                    started_on_precision="day",
                     ended_on=date(2022, 8, 20),
+                    ended_on_precision="day",
                 ),
                 CountryVisit(
                     user_id=user.id,
                     country_code="PT",
                     started_on=date(2024, 6, 1),
+                    started_on_precision="day",
                     ended_on=date(2024, 6, 7),
+                    ended_on_precision="day",
                 ),
                 CountryVisit(
                     user_id=user.id,
@@ -138,6 +144,8 @@ def test_visit_without_dates_is_allowed(database_engine) -> None:
         assert visit is not None
         assert visit.started_on is None
         assert visit.ended_on is None
+        assert visit.started_on_precision is None
+        assert visit.ended_on_precision is None
 
 
 def test_visit_with_only_start_date_is_allowed(database_engine) -> None:
@@ -153,6 +161,7 @@ def test_visit_with_only_start_date_is_allowed(database_engine) -> None:
                 user_id=user.id,
                 country_code="PT",
                 started_on=date(2026, 10, 1),
+                started_on_precision="day",
             )
         )
 
@@ -183,7 +192,9 @@ def test_invalid_visit_dates_are_rejected(
                 user_id=user.id,
                 country_code="PT",
                 started_on=started_on,
+                started_on_precision="day" if started_on is not None else None,
                 ended_on=ended_on,
+                ended_on_precision="day" if ended_on is not None else None,
             )
         )
 

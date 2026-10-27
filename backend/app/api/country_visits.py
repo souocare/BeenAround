@@ -3,9 +3,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import ValidationError
 
 from app.api.dependencies import CurrentApiUser, DatabaseSession
+from app.domain.visit_dates import (
+    DatePrecision,
+    resolve_partial_visit_update,
+)
 from app.repositories.countries import CountryRepository
 from app.repositories.country_visits import CountryVisitRepository
 from app.schemas.country_visits import (
@@ -13,7 +16,6 @@ from app.schemas.country_visits import (
     CountryVisitListResponse,
     CountryVisitResponse,
     CountryVisitUpdate,
-    validate_visit_dates,
 )
 
 
@@ -71,7 +73,9 @@ def create_country_visit(
         user_id=user.id,
         country_code=country.code,
         started_on=payload.started_on,
+        started_on_precision=payload.started_on_precision,
         ended_on=payload.ended_on,
+        ended_on_precision=payload.ended_on_precision,
     )
 
     return CountryVisitResponse.model_validate(visit)
@@ -109,19 +113,27 @@ def update_country_visit(
         visit.country_code,
     )
 
-    started_on = changes.get(
-        "started_on",
-        visit.started_on,
-    )
-
-    ended_on = changes.get(
-        "ended_on",
-        visit.ended_on,
-    )
-
-    # Validate the complete resulting date range.
     try:
-        validate_visit_dates(started_on, ended_on)
+        (
+            started_on,
+            started_on_precision,
+            ended_on,
+            ended_on_precision,
+        ) = resolve_partial_visit_update(
+            current_started_on=visit.started_on,
+            current_started_on_precision=(
+                DatePrecision(visit.started_on_precision)
+                if visit.started_on_precision is not None
+                else None
+            ),
+            current_ended_on=visit.ended_on,
+            current_ended_on_precision=(
+                DatePrecision(visit.ended_on_precision)
+                if visit.ended_on_precision is not None
+                else None
+            ),
+            changes=changes,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -144,7 +156,9 @@ def update_country_visit(
         visit=visit,
         country_code=country_code,
         started_on=started_on,
+        started_on_precision=started_on_precision,
         ended_on=ended_on,
+        ended_on_precision=ended_on_precision,
     )
 
     return CountryVisitResponse.model_validate(updated_visit)
@@ -159,7 +173,7 @@ def delete_country_visit(
     user: CurrentApiUser,
     session: DatabaseSession,
 ) -> None:
-    """Delete a country visit owned by the authenticated user."""
+    """Delete a visit owned by the authenticated user."""
 
     repository = CountryVisitRepository(session)
 

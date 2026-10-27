@@ -18,7 +18,6 @@ from app.models.city_visit import CityVisit
 from app.models.country import Country
 from app.models.user import User
 
-
 TEST_PASSWORD = "correct-password-123"
 LISBON_ID = 2267057
 MADRID_ID = 3117735
@@ -40,13 +39,13 @@ def visits_client(tmp_path: Path) -> Generator[TestClient, None, None]:
                     code="PT",
                     name="Portugal",
                     alpha3_code="PRT",
-                    continent="Europe",
+                    continent="EU",
                 ),
                 Country(
                     code="ES",
                     name="Spain",
                     alpha3_code="ESP",
-                    continent="Europe",
+                    continent="EU",
                 ),
             ]
         )
@@ -83,6 +82,7 @@ def visits_client(tmp_path: Path) -> Generator[TestClient, None, None]:
             display_name="Gonçalo",
             password_hash=hash_password(TEST_PASSWORD),
         )
+
         second_user = User(
             username="anotheruser",
             email="another@example.com",
@@ -99,13 +99,17 @@ def visits_client(tmp_path: Path) -> Generator[TestClient, None, None]:
                     user_id=first_user.id,
                     city_id=LISBON_ID,
                     started_on=date(2025, 7, 10),
+                    started_on_precision="day",
                     ended_on=date(2025, 7, 15),
+                    ended_on_precision="day",
                 ),
                 CityVisit(
                     user_id=first_user.id,
                     city_id=LISBON_ID,
                     started_on=date(2026, 2, 1),
+                    started_on_precision="day",
                     ended_on=date(2026, 2, 5),
+                    ended_on_precision="day",
                 ),
                 CityVisit(
                     user_id=first_user.id,
@@ -115,7 +119,9 @@ def visits_client(tmp_path: Path) -> Generator[TestClient, None, None]:
                     user_id=second_user.id,
                     city_id=MADRID_ID,
                     started_on=date(2024, 8, 1),
+                    started_on_precision="day",
                     ended_on=date(2024, 8, 10),
+                    ended_on_precision="day",
                 ),
             ]
         )
@@ -264,6 +270,8 @@ def test_listing_includes_city_and_country_details(
         "ended_on",
         "created_at",
         "updated_at",
+        "started_on_precision",
+        "ended_on_precision",
     }
 
 
@@ -727,3 +735,257 @@ def test_patch_invalid_bearer_does_not_fallback_to_cookie(
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("precision", "input_date", "expected_date"),
+    [
+        ("day", "2026-09-28", "2026-09-28"),
+        ("month", "2026-09-28", "2026-09-01"),
+        ("year", "2026-09-28", "2026-01-01"),
+    ],
+)
+def test_create_city_visit_with_partial_start_date(
+    visits_client: TestClient,
+    precision: str,
+    input_date: str,
+    expected_date: str,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        BASE_URL,
+        json={
+            "city_id": LISBON_ID,
+            "started_on": input_date,
+            "started_on_precision": precision,
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201
+
+    body = response.json()
+
+    assert body["started_on"] == expected_date
+    assert body["started_on_precision"] == precision
+    assert body["ended_on"] is None
+    assert body["ended_on_precision"] is None
+
+    listing = visits_client.get(BASE_URL)
+
+    assert listing.status_code == 200
+
+    saved = next(item for item in listing.json()["items"] if item["id"] == body["id"])
+
+    assert saved["started_on"] == expected_date
+    assert saved["started_on_precision"] == precision
+
+
+@pytest.mark.parametrize(
+    ("precision", "expected_date"),
+    [
+        ("month", "2026-09-01"),
+        ("year", "2026-01-01"),
+    ],
+)
+def test_update_city_visit_precision_only(
+    visits_client: TestClient,
+    precision: str,
+    expected_date: str,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit(
+        visits_client,
+        started_on="2026-09-28",
+    )
+
+    response = visits_client.patch(
+        f"{BASE_URL}/{visit_id}",
+        json={"started_on_precision": precision},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["started_on"] == expected_date
+    assert response.json()["started_on_precision"] == precision
+
+
+def test_update_city_visit_date_without_precision_defaults_to_day(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        BASE_URL,
+        json={
+            "city_id": LISBON_ID,
+            "started_on": "2026-09-28",
+            "started_on_precision": "month",
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201
+
+    visit_id = response.json()["id"]
+
+    response = visits_client.patch(
+        f"{BASE_URL}/{visit_id}",
+        json={"started_on": "2026-10-15"},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["started_on"] == "2026-10-15"
+    assert response.json()["started_on_precision"] == "day"
+
+
+def test_update_city_visit_clears_date_and_precision(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit(
+        visits_client,
+        started_on="2026-09-28",
+    )
+
+    response = visits_client.patch(
+        f"{BASE_URL}/{visit_id}",
+        json={"started_on": None},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["started_on"] is None
+    assert response.json()["started_on_precision"] is None
+
+
+def test_update_city_visit_rejects_precision_increase_without_date(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        BASE_URL,
+        json={
+            "city_id": LISBON_ID,
+            "started_on": "2026-09-28",
+            "started_on_precision": "year",
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201
+
+    visit_id = response.json()["id"]
+
+    response = visits_client.patch(
+        f"{BASE_URL}/{visit_id}",
+        json={"started_on_precision": "month"},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "city_id": LISBON_ID,
+            "started_on_precision": "month",
+        },
+        {
+            "city_id": LISBON_ID,
+            "started_on": "2026-09-28",
+            "started_on_precision": "invalid",
+        },
+        {
+            "city_id": LISBON_ID,
+            "started_on": "2026-09-28",
+            "started_on_precision": None,
+        },
+    ],
+)
+def test_create_city_visit_rejects_invalid_precision(
+    visits_client: TestClient,
+    payload: dict,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        BASE_URL,
+        json=payload,
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("started_on", "started_precision", "ended_on", "ended_precision", "expected_end"),
+    [
+        ("2026-09-28", "day", "2026-10-15", "month", "2026-10-01"),
+        ("2026-01-01", "year", "2026-12-15", "year", "2026-01-01"),
+        ("2026-09-28", "day", "2026-09-15", "month", "2026-09-01"),
+    ],
+)
+def test_create_city_visit_with_partial_end_date(
+    visits_client: TestClient,
+    started_on: str,
+    started_precision: str,
+    ended_on: str,
+    ended_precision: str,
+    expected_end: str,
+) -> None:
+    login_web(visits_client)
+
+    response = visits_client.post(
+        BASE_URL,
+        json={
+            "city_id": LISBON_ID,
+            "started_on": started_on,
+            "started_on_precision": started_precision,
+            "ended_on": ended_on,
+            "ended_on_precision": ended_precision,
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201
+
+    body = response.json()
+    assert body["ended_on"] == expected_end
+    assert body["ended_on_precision"] == ended_precision
+
+
+def test_city_visit_patch_precision_persists(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    visit_id = create_visit(
+        visits_client,
+        started_on="2026-09-28",
+    )
+
+    response = visits_client.patch(
+        f"{BASE_URL}/{visit_id}",
+        json={"started_on_precision": "month"},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+
+    listing = visits_client.get(BASE_URL)
+    assert listing.status_code == 200
+
+    saved = next(
+        item for item in listing.json()["items"] if item["id"] == visit_id
+    )
+
+    assert saved["started_on"] == "2026-09-01"
+    assert saved["started_on_precision"] == "month"

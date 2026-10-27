@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.city import City
 from app.models.city_visit import CityVisit
 from app.models.country import Country
+from app.domain.visit_dates import DatePrecision
 
 
 type CityVisitRow = tuple[CityVisit, str, str, str]
@@ -73,7 +74,9 @@ class CityVisitRepository:
         user_id: UUID,
         city_id: int,
         started_on: date | None,
+        started_on_precision: DatePrecision | None,
         ended_on: date | None,
+        ended_on_precision: DatePrecision | None,
     ) -> CityVisit:
         """Persist a new city visit."""
 
@@ -81,7 +84,9 @@ class CityVisitRepository:
             user_id=user_id,
             city_id=city_id,
             started_on=started_on,
+            started_on_precision=started_on_precision,
             ended_on=ended_on,
+            ended_on_precision=ended_on_precision,
         )
 
         self._session.add(visit)
@@ -96,13 +101,17 @@ class CityVisitRepository:
         visit: CityVisit,
         city_id: int,
         started_on: date | None,
+        started_on_precision: DatePrecision | None,
         ended_on: date | None,
+        ended_on_precision: DatePrecision | None,
     ) -> CityVisit:
         """Persist validated changes to an existing visit."""
 
         visit.city_id = city_id
         visit.started_on = started_on
+        visit.started_on_precision = started_on_precision
         visit.ended_on = ended_on
+        visit.ended_on_precision = ended_on_precision
 
         self._session.commit()
         self._session.refresh(visit)
