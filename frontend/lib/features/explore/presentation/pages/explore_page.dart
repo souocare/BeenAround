@@ -38,8 +38,80 @@ class ExplorePage extends StatelessWidget {
   }
 }
 
-class _ExploreView extends StatelessWidget {
+class _ExploreView extends StatefulWidget {
   const _ExploreView();
+
+  @override
+  State<_ExploreView> createState() => _ExploreViewState();
+}
+
+class _ExploreViewState extends State<_ExploreView> {
+  final ScrollController _scrollController = ScrollController();
+
+  bool _showFloatingAddButton = false;
+  double? _headerButtonExitOffset;
+
+  static const double _mobileBreakpoint = 800;
+
+  final GlobalKey _headerAddButtonKey = GlobalKey();
+
+  void _updateFloatingAddButton() {
+    if (!_scrollController.hasClients) return;
+
+    final buttonContext = _headerAddButtonKey.currentContext;
+    if (buttonContext == null) return;
+
+    final buttonRenderObject = buttonContext.findRenderObject();
+
+    if (buttonRenderObject is! RenderBox || !buttonRenderObject.attached) {
+      return;
+    }
+
+    final scrollOffset = _scrollController.offset;
+
+    // Calcular a posição do botão dentro do conteúdo,
+    // independentemente do deslocamento atual.
+    final buttonBottomInContent =
+        buttonRenderObject.localToGlobal(Offset.zero).dy +
+        buttonRenderObject.size.height +
+        scrollOffset;
+
+    _headerButtonExitOffset ??= buttonBottomInContent;
+
+    final shouldShow = scrollOffset >= _headerButtonExitOffset! - 12;
+
+    if (shouldShow != _showFloatingAddButton && mounted) {
+      setState(() {
+        _showFloatingAddButton = shouldShow;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateFloatingAddButton);
+  }
+
+  Future<void> _addDestination() async {
+    final exploreCubit = context.read<ExploreCubit>();
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+
+    final created = await showAddDestination(context);
+
+    if (!created || !mounted) return;
+
+    await Future.wait([
+      if (!exploreCubit.isClosed) exploreCubit.refresh(),
+      if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
+    ]);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,33 +138,83 @@ class _ExploreView extends StatelessWidget {
             onRetry: context.read<ExploreCubit>().load,
           );
         }
+        final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+        final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
-        return RefreshIndicator(
-          onRefresh: () async {
-            final exploreCubit = context.read<ExploreCubit>();
-            final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+        final floatingButtonBottom = isIOS ? 60.0 : 20.0;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _updateFloatingAddButton();
+          }
+        });
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: () async {
+                final exploreCubit = context.read<ExploreCubit>();
+                final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
 
-            await Future.wait([
-              exploreCubit.refresh(),
-              visitedCitiesCubit.load(),
-            ]);
-          },
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                sliver: SliverToBoxAdapter(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 960),
-                      child: _ExploreContent(state: state),
+                await Future.wait([
+                  exploreCubit.refresh(),
+                  visitedCitiesCubit.load(),
+                ]);
+              },
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                    sliver: SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 960),
+                          child: _ExploreContent(
+                            state: state,
+                            onAddDestination: _addDestination,
+                            addButtonKey: _headerAddButtonKey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (isMobile)
+              Positioned(
+                right: 20,
+                bottom: floatingButtonBottom,
+                child: AnimatedScale(
+                  scale: _showFloatingAddButton ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _showFloatingAddButton ? 1 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: IgnorePointer(
+                      ignoring: !_showFloatingAddButton,
+                      child: FloatingActionButton(
+                        key: const Key('exploreFloatingAddButton'),
+                        tooltip: 'Add Destination',
+                        heroTag: 'exploreFloatingAddButton',
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        onPressed: _addDestination,
+                        child: const Icon(Icons.add_rounded, size: 28),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         );
       },
     );
@@ -100,9 +222,15 @@ class _ExploreView extends StatelessWidget {
 }
 
 class _ExploreContent extends StatefulWidget {
-  const _ExploreContent({required this.state});
+  const _ExploreContent({
+    required this.state,
+    required this.onAddDestination,
+    required this.addButtonKey,
+  });
 
   final ExploreState state;
+  final Future<void> Function() onAddDestination;
+  final GlobalKey addButtonKey;
 
   @override
   State<_ExploreContent> createState() => _ExploreContentState();
@@ -160,6 +288,7 @@ class _ExploreContentState extends State<_ExploreContent> {
             ),
             const SizedBox(width: 16),
             IconButton.filled(
+              key: widget.addButtonKey,
               tooltip: 'Add Destination',
               style: IconButton.styleFrom(
                 minimumSize: const Size(48, 48),
@@ -167,19 +296,7 @@ class _ExploreContentState extends State<_ExploreContent> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: () async {
-                final exploreCubit = context.read<ExploreCubit>();
-                final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
-
-                final created = await showAddDestination(context);
-
-                if (!created) return;
-
-                await Future.wait([
-                  if (!exploreCubit.isClosed) exploreCubit.refresh(),
-                  if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
-                ]);
-              },
+              onPressed: widget.onAddDestination,
               icon: const Icon(Icons.add, size: 26),
             ),
           ],

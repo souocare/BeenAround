@@ -161,8 +161,9 @@ void main() {
     WidgetTester tester,
     ExploreCubit cubit, {
     FakeCityVisitsRepository? cityRepository,
+    Size screenSize = const Size(1200, 900),
   }) async {
-    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.physicalSize = screenSize;
     tester.view.devicePixelRatio = 1;
 
     addTearDown(() {
@@ -800,5 +801,95 @@ void main() {
     // A visita ao país permanece inalterada.
     expect(countryRepository.visits, hasLength(1));
     expect(countryRepository.visits.single.id, 'country-1');
+  });
+  testWidgets('shows floating add button after scrolling past the header', (
+    tester,
+  ) async {
+    final repository = FakeExploreRepository(
+      countries: [
+        portugal,
+        spain,
+        for (var i = 0; i < 30; i++)
+          Country(
+            code: 'T$i',
+            name: 'Test Country $i',
+            alpha3Code: 'TST',
+            continent: 'Europe',
+          ),
+      ],
+      visits: [
+        for (var i = 0; i < 20; i++) visit('visit-pt-$i', 'PT'),
+        for (var i = 0; i < 20; i++) visit('visit-es-$i', 'ES'),
+      ],
+    );
+
+    final cubit = ExploreCubit(repository: repository);
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, screenSize: const Size(390, 500));
+
+    final floatingButton = find.byKey(const Key('exploreFloatingAddButton'));
+
+    expect(floatingButton, findsOneWidget);
+
+    FloatingActionButton button = tester.widget(floatingButton);
+
+    expect(button.onPressed, isNotNull);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -450));
+
+    await tester.pumpAndSettle();
+
+    button = tester.widget(floatingButton);
+
+    expect(button.onPressed, isNotNull);
+
+    final animatedOpacity = tester.widget<AnimatedOpacity>(
+      find
+          .ancestor(of: floatingButton, matching: find.byType(AnimatedOpacity))
+          .first,
+    );
+
+    expect(animatedOpacity.opacity, 1);
+  });
+  testWidgets('hides floating add button when returning to the top', (
+    tester,
+  ) async {
+    final repository = FakeExploreRepository(
+      countries: [portugal, spain],
+      visits: [
+        for (var i = 0; i < 20; i++) visit('visit-pt-$i', 'PT'),
+        for (var i = 0; i < 20; i++) visit('visit-es-$i', 'ES'),
+      ],
+    );
+
+    final cubit = ExploreCubit(repository: repository);
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, screenSize: const Size(390, 844));
+
+    final floatingButton = find.byKey(const Key('exploreFloatingAddButton'));
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -450));
+
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 1000));
+
+    await tester.pumpAndSettle();
+
+    final animatedOpacity = tester.widget<AnimatedOpacity>(
+      find
+          .ancestor(of: floatingButton, matching: find.byType(AnimatedOpacity))
+          .first,
+    );
+
+    expect(animatedOpacity.opacity, 0);
   });
 }
