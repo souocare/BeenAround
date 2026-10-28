@@ -48,8 +48,8 @@ class CountryVisitCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     country_code: str
-    started_on: date | None = None
-    ended_on: date | None = None
+    started_on: date
+    ended_on: date
     started_on_precision: DatePrecision | None = None
     ended_on_precision: DatePrecision | None = None
 

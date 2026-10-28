@@ -81,11 +81,11 @@ def validate_partial_visit_dates(
         ended_on_precision,
     )
 
-    if normalized_end is None:
-        return normalized_start, None
-
     if normalized_start is None:
-        raise ValueError("End date requires a start date.")
+        raise ValueError("Start date is required.")
+
+    if normalized_end is None:
+        raise ValueError("End date is required.")
 
     assert started_on_precision is not None
     assert ended_on_precision is not None

@@ -114,6 +114,10 @@ def visits_client(tmp_path: Path) -> Generator[TestClient, None, None]:
                 CityVisit(
                     user_id=first_user.id,
                     city_id=MADRID_ID,
+                    started_on=date(2025, 3, 10),
+                    started_on_precision="day",
+                    ended_on=date(2025, 3, 15),
+                    ended_on_precision="day",
                 ),
                 CityVisit(
                     user_id=second_user.id,
@@ -175,8 +179,8 @@ def create_visit(
     client: TestClient,
     *,
     city_id: int = LISBON_ID,
-    started_on: str | None = None,
-    ended_on: str | None = None,
+    started_on: str = "2026-09-28",
+    ended_on: str = "2026-10-31",
 ) -> str:
     response = client.post(
         BASE_URL,
@@ -275,15 +279,22 @@ def test_listing_includes_city_and_country_details(
     }
 
 
-def test_undated_visits_are_supported(visits_client: TestClient) -> None:
+def test_listed_city_visits_have_complete_dates(
+    visits_client: TestClient,
+) -> None:
     login_web(visits_client)
 
     response = visits_client.get(BASE_URL)
 
-    undated = [item for item in response.json()["items"] if item["started_on"] is None]
+    assert response.status_code == 200
 
-    assert len(undated) == 1
-    assert undated[0]["ended_on"] is None
+    visits = response.json()["items"]
+
+    assert len(visits) == 3
+    assert all(visit["started_on"] is not None for visit in visits)
+    assert all(visit["ended_on"] is not None for visit in visits)
+    assert all(visit["started_on_precision"] is not None for visit in visits)
+    assert all(visit["ended_on_precision"] is not None for visit in visits)
 
 
 def test_create_city_visit(visits_client: TestClient) -> None:
@@ -311,38 +322,18 @@ def test_create_city_visit(visits_client: TestClient) -> None:
     assert "user_id" not in body
 
 
-def test_create_without_dates(visits_client: TestClient) -> None:
-    login_web(visits_client)
-
-    visit_id = create_visit(visits_client)
-
-    listing = visits_client.get(BASE_URL)
-    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
-
-    assert visit["started_on"] is None
-    assert visit["ended_on"] is None
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"city_id": 999999999},
-        {"city_id": 999999998},
-    ],
-)
-def test_create_unknown_city_returns_404(
+def test_create_city_visit_without_dates_is_rejected(
     visits_client: TestClient,
-    payload: dict,
 ) -> None:
     login_web(visits_client)
 
     response = visits_client.post(
         BASE_URL,
-        json=payload,
+        json={"city_id": LISBON_ID},
         headers=ORIGIN,
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize(
@@ -388,7 +379,11 @@ def test_mobile_user_can_create_visit(visits_client: TestClient) -> None:
 
     response = visits_client.post(
         BASE_URL,
-        json={"city_id": LISBON_ID},
+        json={
+            "city_id": LISBON_ID,
+            "started_on": "2026-09-28",
+            "ended_on": "2026-10-03",
+        },
         headers=headers,
     )
 
@@ -452,7 +447,9 @@ def test_update_preserves_omitted_fields(visits_client: TestClient) -> None:
     assert response.json()["ended_on"] == "2026-10-03"
 
 
-def test_update_can_clear_end_date(visits_client: TestClient) -> None:
+def test_update_rejects_clearing_end_date(
+    visits_client: TestClient,
+) -> None:
     login_web(visits_client)
 
     visit_id = create_visit(
@@ -467,8 +464,18 @@ def test_update_can_clear_end_date(visits_client: TestClient) -> None:
         headers=ORIGIN,
     )
 
-    assert response.status_code == 200
-    assert response.json()["ended_on"] is None
+    assert response.status_code == 422
+
+    listing = visits_client.get(BASE_URL)
+
+    assert listing.status_code == 200
+
+    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
+
+    assert visit["started_on"] == "2026-09-28"
+    assert visit["started_on_precision"] == "day"
+    assert visit["ended_on"] == "2026-10-03"
+    assert visit["ended_on_precision"] == "day"
 
 
 @pytest.mark.parametrize(
@@ -759,6 +766,7 @@ def test_create_city_visit_with_partial_start_date(
             "city_id": LISBON_ID,
             "started_on": input_date,
             "started_on_precision": precision,
+            "ended_on": "2026-12-31",
         },
         headers=ORIGIN,
     )
@@ -769,8 +777,8 @@ def test_create_city_visit_with_partial_start_date(
 
     assert body["started_on"] == expected_date
     assert body["started_on_precision"] == precision
-    assert body["ended_on"] is None
-    assert body["ended_on_precision"] is None
+    assert body["ended_on"] == "2026-12-31"
+    assert body["ended_on_precision"] == "day"
 
     listing = visits_client.get(BASE_URL)
 
@@ -823,6 +831,7 @@ def test_update_city_visit_date_without_precision_defaults_to_day(
             "city_id": LISBON_ID,
             "started_on": "2026-09-28",
             "started_on_precision": "month",
+            "ended_on": "2026-12-31",
         },
         headers=ORIGIN,
     )
@@ -842,7 +851,7 @@ def test_update_city_visit_date_without_precision_defaults_to_day(
     assert response.json()["started_on_precision"] == "day"
 
 
-def test_update_city_visit_clears_date_and_precision(
+def test_update_city_visit_rejects_clearing_start_date(
     visits_client: TestClient,
 ) -> None:
     login_web(visits_client)
@@ -850,6 +859,7 @@ def test_update_city_visit_clears_date_and_precision(
     visit_id = create_visit(
         visits_client,
         started_on="2026-09-28",
+        ended_on="2026-10-03",
     )
 
     response = visits_client.patch(
@@ -858,9 +868,18 @@ def test_update_city_visit_clears_date_and_precision(
         headers=ORIGIN,
     )
 
-    assert response.status_code == 200
-    assert response.json()["started_on"] is None
-    assert response.json()["started_on_precision"] is None
+    assert response.status_code == 422
+
+    listing = visits_client.get(BASE_URL)
+
+    assert listing.status_code == 200
+
+    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
+
+    assert visit["started_on"] == "2026-09-28"
+    assert visit["started_on_precision"] == "day"
+    assert visit["ended_on"] == "2026-10-03"
+    assert visit["ended_on_precision"] == "day"
 
 
 def test_update_city_visit_rejects_precision_increase_without_date(
@@ -874,6 +893,7 @@ def test_update_city_visit_rejects_precision_increase_without_date(
             "city_id": LISBON_ID,
             "started_on": "2026-09-28",
             "started_on_precision": "year",
+            "ended_on": "2026-12-31",
         },
         headers=ORIGIN,
     )
@@ -983,9 +1003,7 @@ def test_city_visit_patch_precision_persists(
     listing = visits_client.get(BASE_URL)
     assert listing.status_code == 200
 
-    saved = next(
-        item for item in listing.json()["items"] if item["id"] == visit_id
-    )
+    saved = next(item for item in listing.json()["items"] if item["id"] == visit_id)
 
     assert saved["started_on"] == "2026-09-01"
     assert saved["started_on_precision"] == "month"

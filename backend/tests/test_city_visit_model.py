@@ -67,6 +67,25 @@ def seed_city(session: Session) -> None:
     session.commit()
 
 
+def make_city_visit(
+    user_id,
+    *,
+    city_id: int = CITY_ID,
+    started_on: date = date(2026, 9, 28),
+    ended_on: date = date(2026, 10, 3),
+) -> CityVisit:
+    """Create a city visit with a complete date range."""
+
+    return CityVisit(
+        user_id=user_id,
+        city_id=city_id,
+        started_on=started_on,
+        started_on_precision="day",
+        ended_on=ended_on,
+        ended_on_precision="day",
+    )
+
+
 def test_city_visit_can_be_persisted(database_engine) -> None:
     with Session(database_engine) as session:
         seed_city(session)
@@ -110,25 +129,20 @@ def test_multiple_visits_to_same_city_are_allowed(database_engine) -> None:
 
         session.add_all(
             [
-                CityVisit(
-                    user_id=user.id,
-                    city_id=CITY_ID,
+                make_city_visit(
+                    user.id,
                     started_on=date(2022, 8, 10),
-                    started_on_precision="day",
                     ended_on=date(2022, 8, 20),
-                    ended_on_precision="day",
                 ),
-                CityVisit(
-                    user_id=user.id,
-                    city_id=CITY_ID,
+                make_city_visit(
+                    user.id,
                     started_on=date(2024, 6, 1),
-                    started_on_precision="day",
                     ended_on=date(2024, 6, 7),
-                    ended_on_precision="day",
                 ),
-                CityVisit(
-                    user_id=user.id,
-                    city_id=CITY_ID,
+                make_city_visit(
+                    user.id,
+                    started_on=date(2026, 9, 28),
+                    ended_on=date(2026, 10, 3),
                 ),
             ]
         )
@@ -145,7 +159,23 @@ def test_multiple_visits_to_same_city_are_allowed(database_engine) -> None:
         assert len(visits) == 3
 
 
-def test_visit_without_dates_is_allowed(database_engine) -> None:
+@pytest.mark.parametrize(
+    ("started_on", "started_on_precision", "ended_on", "ended_on_precision"),
+    [
+        (None, None, None, None),
+        (date(2026, 10, 1), "day", None, None),
+        (None, None, date(2026, 10, 3), "day"),
+        (date(2026, 10, 1), None, date(2026, 10, 3), "day"),
+        (date(2026, 10, 1), "day", date(2026, 10, 3), None),
+    ],
+)
+def test_city_visit_requires_complete_dates(
+    database_engine,
+    started_on,
+    started_on_precision,
+    ended_on,
+    ended_on_precision,
+) -> None:
     with Session(database_engine) as session:
         seed_city(session)
 
@@ -157,38 +187,17 @@ def test_visit_without_dates_is_allowed(database_engine) -> None:
             CityVisit(
                 user_id=user.id,
                 city_id=CITY_ID,
+                started_on=started_on,
+                started_on_precision=started_on_precision,
+                ended_on=ended_on,
+                ended_on_precision=ended_on_precision,
             )
         )
 
-        session.commit()
+        with pytest.raises(IntegrityError):
+            session.flush()
 
-        visit = session.scalar(select(CityVisit))
-
-        assert visit is not None
-        assert visit.started_on is None
-        assert visit.ended_on is None
-        assert visit.started_on_precision is None
-        assert visit.ended_on_precision is None
-
-
-def test_visit_with_only_start_date_is_allowed(database_engine) -> None:
-    with Session(database_engine) as session:
-        seed_city(session)
-
-        user = make_user("goncalo")
-        session.add(user)
-        session.flush()
-
-        session.add(
-            CityVisit(
-                user_id=user.id,
-                city_id=CITY_ID,
-                started_on=date(2026, 10, 1),
-                started_on_precision="day",
-            )
-        )
-
-        session.commit()
+        session.rollback()
 
 
 @pytest.mark.parametrize(
@@ -234,8 +243,8 @@ def test_visit_requires_existing_city(database_engine) -> None:
         session.flush()
 
         session.add(
-            CityVisit(
-                user_id=user.id,
+            make_city_visit(
+                user.id,
                 city_id=999999999,
             )
         )
@@ -250,12 +259,7 @@ def test_visit_requires_existing_user(database_engine) -> None:
     with Session(database_engine) as session:
         seed_city(session)
 
-        session.add(
-            CityVisit(
-                user_id=uuid4(),
-                city_id=CITY_ID,
-            )
-        )
+        session.add(make_city_visit(uuid4()))
 
         with pytest.raises(IntegrityError):
             session.commit()
@@ -275,14 +279,8 @@ def test_different_users_can_visit_same_city(database_engine) -> None:
 
         session.add_all(
             [
-                CityVisit(
-                    user_id=user_a.id,
-                    city_id=CITY_ID,
-                ),
-                CityVisit(
-                    user_id=user_b.id,
-                    city_id=CITY_ID,
-                ),
+                make_city_visit(user_a.id),
+                make_city_visit(user_b.id),
             ]
         )
 
@@ -314,10 +312,7 @@ def test_deleting_user_deletes_city_visits(database_engine) -> None:
         session.add(user)
         session.flush()
 
-        visit = CityVisit(
-            user_id=user.id,
-            city_id=CITY_ID,
-        )
+        visit = make_city_visit(user.id)
 
         session.add(visit)
         session.commit()
@@ -339,12 +334,7 @@ def test_city_with_visits_cannot_be_deleted(database_engine) -> None:
         session.add(user)
         session.flush()
 
-        session.add(
-            CityVisit(
-                user_id=user.id,
-                city_id=CITY_ID,
-            )
-        )
+        session.add(make_city_visit(user.id))
 
         session.commit()
 

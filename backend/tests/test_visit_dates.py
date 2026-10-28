@@ -111,12 +111,6 @@ def test_partial_date_bounds(value, precision, expected):
             date(2024, 8, 1),
             DatePrecision.MONTH,
         ),
-        (
-            None,
-            None,
-            None,
-            None,
-        ),
     ],
 )
 def test_validate_partial_visit_dates_accepts_possible_ranges(
@@ -193,16 +187,16 @@ def test_partial_update_preserves_omitted_dates():
     result = resolve_partial_visit_update(
         current_started_on=date(2024, 8, 1),
         current_started_on_precision=DatePrecision.MONTH,
-        current_ended_on=None,
-        current_ended_on_precision=None,
+        current_ended_on=date(2024, 8, 31),
+        current_ended_on_precision=DatePrecision.DAY,
         changes={},
     )
 
     assert result == (
         date(2024, 8, 1),
         DatePrecision.MONTH,
-        None,
-        None,
+        date(2024, 8, 31),
+        DatePrecision.DAY,
     )
 
 
@@ -210,8 +204,8 @@ def test_partial_update_new_date_defaults_to_day():
     result = resolve_partial_visit_update(
         current_started_on=date(2024, 8, 1),
         current_started_on_precision=DatePrecision.MONTH,
-        current_ended_on=None,
-        current_ended_on_precision=None,
+        current_ended_on=date(2024, 9, 30),
+        current_ended_on_precision=DatePrecision.DAY,
         changes={
             "started_on": date(2024, 9, 15),
         },
@@ -220,17 +214,17 @@ def test_partial_update_new_date_defaults_to_day():
     assert result == (
         date(2024, 9, 15),
         DatePrecision.DAY,
-        None,
-        None,
+        date(2024, 9, 30),
+        DatePrecision.DAY,
     )
 
 
 def test_partial_update_normalizes_explicit_precision():
     result = resolve_partial_visit_update(
-        current_started_on=None,
-        current_started_on_precision=None,
-        current_ended_on=None,
-        current_ended_on_precision=None,
+        current_started_on=date(2024, 8, 10),
+        current_started_on_precision=DatePrecision.DAY,
+        current_ended_on=date(2024, 8, 31),
+        current_ended_on_precision=DatePrecision.DAY,
         changes={
             "started_on": date(2024, 8, 15),
             "started_on_precision": DatePrecision.MONTH,
@@ -240,27 +234,8 @@ def test_partial_update_normalizes_explicit_precision():
     assert result == (
         date(2024, 8, 1),
         DatePrecision.MONTH,
-        None,
-        None,
-    )
-
-
-def test_partial_update_clearing_date_clears_precision():
-    result = resolve_partial_visit_update(
-        current_started_on=date(2024, 8, 15),
-        current_started_on_precision=DatePrecision.DAY,
-        current_ended_on=None,
-        current_ended_on_precision=None,
-        changes={
-            "started_on": None,
-        },
-    )
-
-    assert result == (
-        None,
-        None,
-        None,
-        None,
+        date(2024, 8, 31),
+        DatePrecision.DAY,
     )
 
 
@@ -294,8 +269,8 @@ def test_partial_update_allows_reducing_precision(
         if current_precision == DatePrecision.DAY
         else date(2024, 8, 1),
         current_started_on_precision=current_precision,
-        current_ended_on=None,
-        current_ended_on_precision=None,
+        current_ended_on=date(2024, 12, 31),
+        current_ended_on_precision=DatePrecision.DAY,
         changes={
             "started_on_precision": new_precision,
         },
@@ -377,7 +352,7 @@ def test_partial_update_rejects_invalid_final_range():
 def test_partial_update_rejects_end_without_start():
     with pytest.raises(
         ValueError,
-        match="End date requires a start date",
+        match="Start date is required",
     ):
         resolve_partial_visit_update(
             current_started_on=date(2024, 8, 15),
@@ -387,4 +362,40 @@ def test_partial_update_rejects_end_without_start():
             changes={
                 "started_on": None,
             },
+        )
+
+
+@pytest.mark.parametrize(
+    ("started_on", "started_precision", "ended_on", "ended_precision", "message"),
+    [
+        (None, None, None, None, "Start date is required."),
+        (
+            None,
+            None,
+            date(2024, 8, 15),
+            DatePrecision.DAY,
+            "Start date is required.",
+        ),
+        (
+            date(2024, 8, 15),
+            DatePrecision.DAY,
+            None,
+            None,
+            "End date is required.",
+        ),
+    ],
+)
+def test_validate_partial_visit_dates_requires_complete_range(
+    started_on,
+    started_precision,
+    ended_on,
+    ended_precision,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        validate_partial_visit_dates(
+            started_on,
+            started_precision,
+            ended_on,
+            ended_precision,
         )

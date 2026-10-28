@@ -52,22 +52,22 @@ class CountryVisit(TimestampMixin, Base):
         nullable=False,
     )
 
-    started_on: Mapped[date | None] = mapped_column(
+    started_on: Mapped[date] = mapped_column(
         Date,
-        nullable=True,
+        nullable=False,
     )
 
-    ended_on: Mapped[date | None] = mapped_column(
+    ended_on: Mapped[date] = mapped_column(
         Date,
-        nullable=True,
+        nullable=False,
     )
 
-    started_on_precision: Mapped[str | None] = mapped_column(
+    started_on_precision: Mapped[str] = mapped_column(
         String(5),
-        nullable=True,
+        nullable=False,
     )
 
-    ended_on_precision: Mapped[str | None] = mapped_column(
+    ended_on_precision: Mapped[str] = mapped_column(
         String(5),
-        nullable=True,
+        nullable=False,
     )

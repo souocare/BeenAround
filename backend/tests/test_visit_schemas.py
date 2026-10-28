@@ -17,13 +17,19 @@ from app.schemas.country_visits import CountryVisitCreate, CountryVisitUpdate
         (CityVisitCreate, {"city_id": 1}),
     ],
 )
-def test_create_without_dates(schema, identifier):
-    payload = schema.model_validate(identifier)
-
-    assert payload.started_on is None
-    assert payload.started_on_precision is None
-    assert payload.ended_on is None
-    assert payload.ended_on_precision is None
+@pytest.mark.parametrize(
+    "dates",
+    [
+        {},
+        {"started_on": "2024-08-15"},
+        {"ended_on": "2024-08-20"},
+        {"started_on": None, "ended_on": "2024-08-20"},
+        {"started_on": "2024-08-15", "ended_on": None},
+    ],
+)
+def test_create_requires_both_dates(schema, identifier, dates):
+    with pytest.raises(ValidationError):
+        schema.model_validate({**identifier, **dates})
 
 
 @pytest.mark.parametrize(
@@ -186,3 +192,14 @@ def test_update_rejects_invalid_precision(schema):
                 "started_on_precision": "week",
             }
         )
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [CountryVisitCreate, CityVisitCreate],
+)
+def test_create_schema_requires_date_fields(schema):
+    json_schema = schema.model_json_schema()
+
+    assert "started_on" in json_schema["required"]
+    assert "ended_on" in json_schema["required"]

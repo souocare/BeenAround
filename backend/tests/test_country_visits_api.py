@@ -84,6 +84,10 @@ def visits_client(
                 CountryVisit(
                     user_id=first_user.id,
                     country_code="ES",
+                    started_on=date(2025, 3, 10),
+                    started_on_precision="day",
+                    ended_on=date(2025, 3, 15),
+                    ended_on_precision="day",
                 ),
                 CountryVisit(
                     user_id=second_user.id,
@@ -159,8 +163,8 @@ def create_visit_for_test(
     client: TestClient,
     *,
     country_code: str = "PT",
-    started_on: str | None = None,
-    ended_on: str | None = None,
+    started_on: str = "2026-09-28",
+    ended_on: str = "2026-10-31",
 ) -> str:
     payload = {
         "country_code": country_code,
@@ -255,7 +259,7 @@ def test_multiple_visits_to_same_country_are_preserved(
     }
 
 
-def test_visits_without_dates_are_supported(
+def test_listed_country_visits_have_complete_dates(
     visits_client: TestClient,
 ) -> None:
     login_web(visits_client)
@@ -264,10 +268,13 @@ def test_visits_without_dates_are_supported(
 
     assert response.status_code == 200
 
-    undated_visits = [visit for visit in response.json()["items"] if visit["started_on"] is None]
+    visits = response.json()["items"]
 
-    assert len(undated_visits) == 1
-    assert undated_visits[0]["ended_on"] is None
+    assert len(visits) == 3
+    assert all(visit["started_on"] is not None for visit in visits)
+    assert all(visit["ended_on"] is not None for visit in visits)
+    assert all(visit["started_on_precision"] is not None for visit in visits)
+    assert all(visit["ended_on_precision"] is not None for visit in visits)
 
 
 def test_invalid_bearer_does_not_fallback_to_cookie(
@@ -341,7 +348,11 @@ def test_create_country_visit_normalizes_country_code(
 
     response = visits_client.post(
         "/api/v1/country-visits",
-        json={"country_code": " pt "},
+        json={
+            "country_code": " pt ",
+            "started_on": "2026-09-28",
+            "ended_on": "2026-10-03",
+        },
         headers={"Origin": "http://testserver"},
     )
 
@@ -349,7 +360,7 @@ def test_create_country_visit_normalizes_country_code(
     assert response.json()["country_code"] == "PT"
 
 
-def test_create_country_visit_without_dates(
+def test_create_country_visit_without_dates_is_rejected(
     visits_client: TestClient,
 ) -> None:
     login_web(visits_client)
@@ -360,9 +371,7 @@ def test_create_country_visit_without_dates(
         headers={"Origin": "http://testserver"},
     )
 
-    assert response.status_code == 201
-    assert response.json()["started_on"] is None
-    assert response.json()["ended_on"] is None
+    assert response.status_code == 422
 
 
 def test_create_country_visit_rejects_unknown_country(
@@ -372,7 +381,11 @@ def test_create_country_visit_rejects_unknown_country(
 
     response = visits_client.post(
         "/api/v1/country-visits",
-        json={"country_code": "ZZ"},
+        json={
+            "country_code": "ZZ",
+            "started_on": "2026-09-28",
+            "ended_on": "2026-10-03",
+        },
         headers={"Origin": "http://testserver"},
     )
 
@@ -449,7 +462,11 @@ def test_mobile_user_can_create_country_visit(
 
     response = visits_client.post(
         "/api/v1/country-visits",
-        json={"country_code": "PT"},
+        json={
+            "country_code": "PT",
+            "started_on": "2026-09-28",
+            "ended_on": "2026-10-03",
+        },
         headers=headers,
     )
 
@@ -524,7 +541,7 @@ def test_update_preserves_omitted_fields(
     assert body["ended_on"] == "2026-10-03"
 
 
-def test_update_can_clear_end_date(
+def test_update_rejects_clearing_end_date(
     visits_client: TestClient,
 ) -> None:
     login_web(visits_client)
@@ -541,9 +558,13 @@ def test_update_can_clear_end_date(
         headers={"Origin": "http://testserver"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["started_on"] == "2026-09-28"
-    assert response.json()["ended_on"] is None
+    assert response.status_code == 422
+
+    listing = visits_client.get("/api/v1/country-visits")
+    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
+
+    assert visit["started_on"] == "2026-09-28"
+    assert visit["ended_on"] == "2026-10-03"
 
 
 def test_update_rejects_invalid_final_date_range(
@@ -908,6 +929,7 @@ def test_create_country_visit_with_partial_start_date(
             "country_code": "PT",
             "started_on": input_date,
             "started_on_precision": precision,
+            "ended_on": "2026-12-31",
         },
         headers={"Origin": "http://testserver"},
     )
@@ -918,8 +940,8 @@ def test_create_country_visit_with_partial_start_date(
 
     assert body["started_on"] == expected_date
     assert body["started_on_precision"] == precision
-    assert body["ended_on"] is None
-    assert body["ended_on_precision"] is None
+    assert body["ended_on"] == "2026-12-31"
+    assert body["ended_on_precision"] == "day"
 
     listing = visits_client.get("/api/v1/country-visits")
 
@@ -972,6 +994,7 @@ def test_update_country_visit_date_without_precision_defaults_to_day(
             "country_code": "PT",
             "started_on": "2026-09-28",
             "started_on_precision": "month",
+            "ended_on": "2026-12-31",
         },
         headers={"Origin": "http://testserver"},
     )
@@ -991,7 +1014,7 @@ def test_update_country_visit_date_without_precision_defaults_to_day(
     assert response.json()["started_on_precision"] == "day"
 
 
-def test_update_country_visit_clears_date_and_precision(
+def test_update_country_visit_rejects_clearing_start_date(
     visits_client: TestClient,
 ) -> None:
     login_web(visits_client)
@@ -999,6 +1022,7 @@ def test_update_country_visit_clears_date_and_precision(
     visit_id = create_visit_for_test(
         visits_client,
         started_on="2026-09-28",
+        ended_on="2026-10-03",
     )
 
     response = visits_client.patch(
@@ -1007,9 +1031,18 @@ def test_update_country_visit_clears_date_and_precision(
         headers={"Origin": "http://testserver"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["started_on"] is None
-    assert response.json()["started_on_precision"] is None
+    assert response.status_code == 422
+
+    listing = visits_client.get("/api/v1/country-visits")
+
+    assert listing.status_code == 200
+
+    visit = next(item for item in listing.json()["items"] if item["id"] == visit_id)
+
+    assert visit["started_on"] == "2026-09-28"
+    assert visit["started_on_precision"] == "day"
+    assert visit["ended_on"] == "2026-10-03"
+    assert visit["ended_on_precision"] == "day"
 
 
 def test_update_country_visit_rejects_precision_increase_without_date(
@@ -1023,6 +1056,7 @@ def test_update_country_visit_rejects_precision_increase_without_date(
             "country_code": "PT",
             "started_on": "2026-09-28",
             "started_on_precision": "year",
+            "ended_on": "2026-12-31",
         },
         headers={"Origin": "http://testserver"},
     )
@@ -1072,6 +1106,7 @@ def test_create_country_visit_rejects_invalid_precision(
     )
 
     assert response.status_code == 422
+
 
 @pytest.mark.parametrize(
     ("started_on", "started_precision", "ended_on", "ended_precision", "expected_end"),
@@ -1131,9 +1166,7 @@ def test_country_visit_patch_precision_persists(
     listing = visits_client.get("/api/v1/country-visits")
     assert listing.status_code == 200
 
-    saved = next(
-        item for item in listing.json()["items"] if item["id"] == visit_id
-    )
+    saved = next(item for item in listing.json()["items"] if item["id"] == visit_id)
 
     assert saved["started_on"] == "2026-09-01"
     assert saved["started_on_precision"] == "month"

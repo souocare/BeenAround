@@ -1,6 +1,6 @@
 from datetime import date
 from pathlib import Path
-
+from uuid import uuid4
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +42,25 @@ def seed_country(session: Session) -> None:
         )
     )
     session.commit()
+
+
+def make_country_visit(
+    user_id,
+    *,
+    country_code: str = "PT",
+    started_on: date = date(2026, 9, 28),
+    ended_on: date = date(2026, 10, 3),
+) -> CountryVisit:
+    """Create a country visit with a complete date range."""
+
+    return CountryVisit(
+        user_id=user_id,
+        country_code=country_code,
+        started_on=started_on,
+        started_on_precision="day",
+        ended_on=ended_on,
+        ended_on_precision="day",
+    )
 
 
 def test_country_visit_can_be_persisted(database_engine) -> None:
@@ -87,25 +106,20 @@ def test_multiple_visits_to_same_country_are_allowed(database_engine) -> None:
 
         session.add_all(
             [
-                CountryVisit(
-                    user_id=user.id,
-                    country_code="PT",
+                make_country_visit(
+                    user.id,
                     started_on=date(2022, 8, 10),
-                    started_on_precision="day",
                     ended_on=date(2022, 8, 20),
-                    ended_on_precision="day",
                 ),
-                CountryVisit(
-                    user_id=user.id,
-                    country_code="PT",
+                make_country_visit(
+                    user.id,
                     started_on=date(2024, 6, 1),
-                    started_on_precision="day",
                     ended_on=date(2024, 6, 7),
-                    ended_on_precision="day",
                 ),
-                CountryVisit(
-                    user_id=user.id,
-                    country_code="PT",
+                make_country_visit(
+                    user.id,
+                    started_on=date(2026, 9, 28),
+                    ended_on=date(2026, 10, 3),
                 ),
             ]
         )
@@ -122,7 +136,23 @@ def test_multiple_visits_to_same_country_are_allowed(database_engine) -> None:
         assert len(visits) == 3
 
 
-def test_visit_without_dates_is_allowed(database_engine) -> None:
+@pytest.mark.parametrize(
+    ("started_on", "started_on_precision", "ended_on", "ended_on_precision"),
+    [
+        (None, None, None, None),
+        (date(2026, 10, 1), "day", None, None),
+        (None, None, date(2026, 10, 3), "day"),
+        (date(2026, 10, 1), None, date(2026, 10, 3), "day"),
+        (date(2026, 10, 1), "day", date(2026, 10, 3), None),
+    ],
+)
+def test_country_visit_requires_complete_dates(
+    database_engine,
+    started_on,
+    started_on_precision,
+    ended_on,
+    ended_on_precision,
+) -> None:
     with Session(database_engine) as session:
         seed_country(session)
 
@@ -134,38 +164,17 @@ def test_visit_without_dates_is_allowed(database_engine) -> None:
             CountryVisit(
                 user_id=user.id,
                 country_code="PT",
+                started_on=started_on,
+                started_on_precision=started_on_precision,
+                ended_on=ended_on,
+                ended_on_precision=ended_on_precision,
             )
         )
 
-        session.commit()
+        with pytest.raises(IntegrityError):
+            session.flush()
 
-        visit = session.scalar(select(CountryVisit))
-
-        assert visit is not None
-        assert visit.started_on is None
-        assert visit.ended_on is None
-        assert visit.started_on_precision is None
-        assert visit.ended_on_precision is None
-
-
-def test_visit_with_only_start_date_is_allowed(database_engine) -> None:
-    with Session(database_engine) as session:
-        seed_country(session)
-
-        user = make_user("goncalo")
-        session.add(user)
-        session.flush()
-
-        session.add(
-            CountryVisit(
-                user_id=user.id,
-                country_code="PT",
-                started_on=date(2026, 10, 1),
-                started_on_precision="day",
-            )
-        )
-
-        session.commit()
+        session.rollback()
 
 
 @pytest.mark.parametrize(
@@ -211,8 +220,8 @@ def test_visit_requires_existing_country(database_engine) -> None:
         session.flush()
 
         session.add(
-            CountryVisit(
-                user_id=user.id,
+            make_country_visit(
+                user.id,
                 country_code="XX",
             )
         )
@@ -229,12 +238,7 @@ def test_visit_requires_existing_user(database_engine) -> None:
     with Session(database_engine) as session:
         seed_country(session)
 
-        session.add(
-            CountryVisit(
-                user_id=uuid4(),
-                country_code="PT",
-            )
-        )
+        session.add(make_country_visit(uuid4()))
 
         with pytest.raises(IntegrityError):
             session.commit()
@@ -254,14 +258,8 @@ def test_different_users_can_visit_same_country(database_engine) -> None:
 
         session.add_all(
             [
-                CountryVisit(
-                    user_id=user_a.id,
-                    country_code="PT",
-                ),
-                CountryVisit(
-                    user_id=user_b.id,
-                    country_code="PT",
-                ),
+                make_country_visit(user_a.id),
+                make_country_visit(user_b.id),
             ]
         )
 
@@ -286,10 +284,7 @@ def test_deleting_user_deletes_country_visits(database_engine) -> None:
         session.add(user)
         session.flush()
 
-        visit = CountryVisit(
-            user_id=user.id,
-            country_code="PT",
-        )
+        visit = make_country_visit(user.id)
 
         session.add(visit)
         session.commit()

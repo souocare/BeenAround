@@ -311,7 +311,7 @@ def test_visit_precision_migration_creates_expected_constraints(
         ("2024-08-15", None, None, None, False),
         (None, "day", None, None, False),
         (None, None, "2024-08-15", "day", False),
-        (None, None, None, None, True),
+        (None, None, None, None, False),
     ],
 )
 def test_visit_precision_constraints_enforce_valid_ranges(
