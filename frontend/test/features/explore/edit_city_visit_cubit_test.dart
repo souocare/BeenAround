@@ -21,10 +21,10 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   @override
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) {
     throw UnimplementedError();
   }
@@ -149,26 +149,29 @@ void main() {
       await cubit.close();
     });
 
-    test('allows clearing both dates and precisions', () async {
+    test('rejects clearing visit dates', () async {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 
-      final changes = {
-        'started_on': null,
-        'started_on_precision': null,
-        'ended_on': null,
-        'ended_on_precision': null,
-      };
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'started_on': null,
+          'started_on_precision': null,
+          'ended_on': null,
+          'ended_on_precision': null,
+        },
+      );
 
-      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
-
-      expect(success, isTrue);
-      expect(repository.receivedChanges, changes);
+      expect(success, isFalse);
+      expect(repository.updateCalls, 0);
+      expect(cubit.state.phase, EditCityVisitPhase.failure);
+      expect(cubit.state.errorMessage, 'Visit dates cannot be cleared.');
 
       await cubit.close();
     });
 
-    test('allows start date only', () async {
+    test('updates only the start date', () async {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 
@@ -185,7 +188,7 @@ void main() {
       await cubit.close();
     });
 
-    test('allows end date only', () async {
+    test('updates only the end date', () async {
       final repository = FakeCityVisitsRepository();
       final cubit = EditCityVisitCubit(repository: repository);
 

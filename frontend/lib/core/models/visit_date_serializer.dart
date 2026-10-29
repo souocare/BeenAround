@@ -14,25 +14,17 @@ class VisitDateSerializer {
   }
 
   static Map<String, dynamic> createFields({
-    required DateTime? startedOn,
-    required DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) {
-    final fields = <String, dynamic>{
+    return {
       'started_on': formatDate(startedOn),
+      'started_on_precision': startedOnPrecision.toJson(),
       'ended_on': formatDate(endedOn),
+      'ended_on_precision': endedOnPrecision.toJson(),
     };
-
-    if (startedOnPrecision != null) {
-      fields['started_on_precision'] = startedOnPrecision.toJson();
-    }
-
-    if (endedOnPrecision != null) {
-      fields['ended_on_precision'] = endedOnPrecision.toJson();
-    }
-
-    return fields;
   }
 
   static Map<String, dynamic> updateFields(Map<String, dynamic> changes) {
@@ -45,27 +37,27 @@ class VisitDateSerializer {
       if (dateFields.contains(entry.key)) {
         final value = entry.value;
 
-        if (value != null && value is! DateTime) {
+        if (value is! DateTime) {
           throw ArgumentError.value(
             value,
             entry.key,
-            'Expected a DateTime or null.',
+            'Expected a non-null DateTime.',
           );
         }
 
-        result[entry.key] = formatDate(value as DateTime?);
+        result[entry.key] = formatDate(value);
       } else if (precisionFields.contains(entry.key)) {
         final value = entry.value;
 
-        if (value != null && value is! VisitDatePrecision) {
+        if (value is! VisitDatePrecision) {
           throw ArgumentError.value(
             value,
             entry.key,
-            'Expected a VisitDatePrecision or null.',
+            'Expected a non-null VisitDatePrecision.',
           );
         }
 
-        result[entry.key] = (value as VisitDatePrecision?)?.toJson();
+        result[entry.key] = value.toJson();
       } else {
         throw ArgumentError.value(
           entry.key,

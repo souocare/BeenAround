@@ -161,7 +161,7 @@ void main() {
     expect(find.text('01/01/2024'), findsNothing);
   });
 
-  testWidgets('clears only the start date', (tester) async {
+  testWidgets('does not expose date clearing actions', (tester) async {
     final repository = FakeCountriesRepository();
 
     await pumpSheet(
@@ -169,84 +169,20 @@ void main() {
       repository: repository,
       visit: makeVisit(
         startedOn: DateTime(2024, 1, 1),
-        startedOnPrecision: VisitDatePrecision.month,
         endedOn: DateTime(2024, 3, 1),
+        startedOnPrecision: VisitDatePrecision.month,
         endedOnPrecision: VisitDatePrecision.month,
       ),
     );
 
-    await tester.tap(find.byKey(const Key('editVisitClearStartDate')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editVisitClearStartDate')), findsNothing);
 
-    expect(find.text('March 2024'), findsOneWidget);
-    expect(find.text('January 2024'), findsNothing);
+    expect(find.byKey(const Key('editVisitClearEndDate')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('editVisitSaveButton')));
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 1);
-    expect(repository.receivedChanges, {
-      'started_on': null,
-      'started_on_precision': null,
-    });
-  });
-
-  testWidgets('clears only the end date', (tester) async {
-    final repository = FakeCountriesRepository();
-
-    await pumpSheet(
-      tester,
-      repository: repository,
-      visit: makeVisit(
-        startedOn: DateTime(2024, 1, 1),
-        startedOnPrecision: VisitDatePrecision.month,
-        endedOn: DateTime(2024, 3, 1),
-        endedOnPrecision: VisitDatePrecision.month,
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('editVisitClearEndDate')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editVisitClearDates')), findsNothing);
 
     expect(find.text('January 2024'), findsOneWidget);
-    expect(find.text('March 2024'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('editVisitSaveButton')));
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 1);
-    expect(repository.receivedChanges, {
-      'ended_on': null,
-      'ended_on_precision': null,
-    });
-  });
-
-  testWidgets('clears both dates', (tester) async {
-    final repository = FakeCountriesRepository();
-
-    await pumpSheet(
-      tester,
-      repository: repository,
-      visit: makeVisit(
-        startedOn: DateTime(2024, 1, 1),
-        startedOnPrecision: VisitDatePrecision.year,
-        endedOn: DateTime(2025, 1, 1),
-        endedOnPrecision: VisitDatePrecision.year,
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('editVisitClearDates')));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('editVisitSaveButton')));
-    await tester.pumpAndSettle();
-
-    expect(repository.receivedChanges, {
-      'started_on': null,
-      'started_on_precision': null,
-      'ended_on': null,
-      'ended_on_precision': null,
-    });
+    expect(find.text('March 2024'), findsOneWidget);
   });
 
   testWidgets('does not submit unchanged visits', (tester) async {
@@ -255,11 +191,13 @@ void main() {
     await pumpSheet(
       tester,
       repository: repository,
-      visit: makeVisit(endedOn: DateTime(2025, 6, 15)),
+      visit: makeVisit(
+        startedOn: DateTime(2025, 6, 10),
+        endedOn: DateTime(2025, 6, 15),
+        startedOnPrecision: VisitDatePrecision.day,
+        endedOnPrecision: VisitDatePrecision.day,
+      ),
     );
-
-    expect(find.text('Not set'), findsOneWidget);
-    expect(find.text('15/06/2025'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('editVisitSaveButton')));
     await tester.pumpAndSettle();
@@ -277,25 +215,85 @@ void main() {
     await pumpSheet(
       tester,
       repository: repository,
-      visit: makeVisit(startedOn: DateTime(2026, 10, 10)),
+      visit: makeVisit(
+        startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2024, 3, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
+      ),
     );
 
-    await tester.tap(find.byKey(const Key('editVisitClearStartDate')));
+    // Open the start date picker.
+    await tester.tap(find.byKey(const Key('editVisitStartDate')));
     await tester.pumpAndSettle();
 
+    expect(find.text('How precise is your date?'), findsOneWidget);
+
+    // Keep month precision.
+    await tester.tap(find.text('Month and year'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select month and year'), findsOneWidget);
+
+    // Change January to February.
+    final monthDropdown = find.byType(DropdownButton<int>).last;
+
+    await tester.tap(monthDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('February 2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Verify the date changed without modifying the end date.
+    expect(find.text('February 2024'), findsOneWidget);
+    expect(find.text('March 2024'), findsOneWidget);
+
+    // Submit the update.
     await tester.tap(find.byKey(const Key('editVisitSaveButton')));
     await tester.pump();
 
+    expect(repository.updateCalls, 1);
+
+    // Only the start date should be included in PATCH.
+    expect(repository.receivedChanges, {
+      'started_on': DateTime(2024, 2, 1),
+      'started_on_precision': VisitDatePrecision.month,
+    });
+
     expect(find.text('Saving...'), findsOneWidget);
 
+    // Save must be disabled while submitting.
     final saveButton = tester.widget<FilledButton>(
       find.byKey(const Key('editVisitSaveButton')),
     );
 
     expect(saveButton.onPressed, isNull);
-    expect(repository.updateCalls, 1);
 
-    pending.complete(makeVisit());
+    // Date editing must also be disabled.
+    final startDateTile = tester.widget<ListTile>(
+      find.byKey(const Key('editVisitStartDate')),
+    );
+
+    final endDateTile = tester.widget<ListTile>(
+      find.byKey(const Key('editVisitEndDate')),
+    );
+
+    expect(startDateTile.onTap, isNull);
+    expect(endDateTile.onTap, isNull);
+
+    // Finish the pending request.
+    pending.complete(
+      makeVisit(
+        startedOn: DateTime(2024, 2, 1),
+        endedOn: DateTime(2024, 3, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
+      ),
+    );
+
     await tester.pumpAndSettle();
   });
 }

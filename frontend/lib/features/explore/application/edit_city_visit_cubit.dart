@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/domain/visit_date_changes_validator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -37,6 +38,19 @@ class EditCityVisitCubit extends Cubit<EditCityVisitState> {
           errorMessage: 'No changes to save.',
         ),
       );
+      return false;
+    }
+
+    final dateError = VisitDateChangesValidator.validate(changes);
+
+    if (dateError != null) {
+      emit(
+        EditCityVisitState(
+          phase: EditCityVisitPhase.failure,
+          errorMessage: dateError,
+        ),
+      );
+
       return false;
     }
 

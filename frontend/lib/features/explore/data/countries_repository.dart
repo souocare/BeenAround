@@ -14,10 +14,10 @@ abstract interface class CountriesRepository {
 
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   });
   Future<CountryVisit> updateCountryVisit({
     required String visitId,
@@ -93,10 +93,10 @@ class ApiCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) async {
     try {
       final response = await apiClient.dio.post<Map<String, dynamic>>(

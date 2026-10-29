@@ -14,10 +14,10 @@ abstract interface class CityVisitsRepository {
 
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   });
 
   Future<CityVisit> updateCityVisit({

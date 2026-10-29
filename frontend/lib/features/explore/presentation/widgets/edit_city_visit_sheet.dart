@@ -83,24 +83,6 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
     context.read<EditCityVisitCubit>().clearError();
   }
 
-  void _clearStartDate() {
-    setState(() {
-      _startedOn = null;
-      _startedOnPrecision = null;
-    });
-
-    context.read<EditCityVisitCubit>().clearError();
-  }
-
-  void _clearEndDate() {
-    setState(() {
-      _endedOn = null;
-      _endedOnPrecision = null;
-    });
-
-    context.read<EditCityVisitCubit>().clearError();
-  }
-
   String _formatDate(DateTime? date, VisitDatePrecision? precision) {
     if (date == null) return 'Not set';
 
@@ -135,22 +117,30 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
 
     final changes = <String, dynamic>{};
 
-    if (_startedOn != widget.visit.startedOn ||
-        _startedOnPrecision != widget.visit.startedOnPrecision) {
-      changes['started_on'] = _startedOn;
-      changes['started_on_precision'] = _startedOn == null
-          ? null
-          : _startedOnPrecision ?? VisitDatePrecision.day;
+    final startedOn = _startedOn!;
+    final endedOn = _endedOn!;
+
+    final startedOnPrecision = _startedOnPrecision ?? VisitDatePrecision.day;
+
+    final endedOnPrecision = _endedOnPrecision ?? VisitDatePrecision.day;
+
+    final originalStartedOnPrecision =
+        widget.visit.startedOnPrecision ?? VisitDatePrecision.day;
+
+    final originalEndedOnPrecision =
+        widget.visit.endedOnPrecision ?? VisitDatePrecision.day;
+
+    if (startedOn != widget.visit.startedOn ||
+        startedOnPrecision != originalStartedOnPrecision) {
+      changes['started_on'] = startedOn;
+      changes['started_on_precision'] = startedOnPrecision;
     }
 
-    if (_endedOn != widget.visit.endedOn ||
-        _endedOnPrecision != widget.visit.endedOnPrecision) {
-      changes['ended_on'] = _endedOn;
-      changes['ended_on_precision'] = _endedOn == null
-          ? null
-          : _endedOnPrecision ?? VisitDatePrecision.day;
+    if (endedOn != widget.visit.endedOn ||
+        endedOnPrecision != originalEndedOnPrecision) {
+      changes['ended_on'] = endedOn;
+      changes['ended_on_precision'] = endedOnPrecision;
     }
-
     if (changes.isEmpty) {
       Navigator.of(context).pop(false);
       return;
@@ -272,7 +262,7 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                 const SizedBox(height: 10),
 
                 Text(
-                  'Dates are optional. You can clear each date independently.',
+                  'Start and end dates are required. Tap a date to change it.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -304,17 +294,6 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                       ? null
                                       : _pickStartDate,
                                 ),
-
-                                if (_startedOn != null)
-                                  TextButton(
-                                    key: const Key(
-                                      'editCityVisitClearStartDate',
-                                    ),
-                                    onPressed: state.isSubmitting
-                                        ? null
-                                        : _clearStartDate,
-                                    child: const Text('Clear'),
-                                  ),
                               ],
                             ),
                           ),
@@ -339,15 +318,6 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                       ? null
                                       : _pickEndDate,
                                 ),
-
-                                if (_endedOn != null)
-                                  TextButton(
-                                    key: const Key('editCityVisitClearEndDate'),
-                                    onPressed: state.isSubmitting
-                                        ? null
-                                        : _clearEndDate,
-                                    child: const Text('Clear'),
-                                  ),
                               ],
                             ),
                           ),

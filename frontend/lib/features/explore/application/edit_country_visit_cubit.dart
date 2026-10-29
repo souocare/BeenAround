@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_exception.dart';
 import '../data/countries_repository.dart';
 import 'edit_country_visit_state.dart';
+import '../domain/visit_date_changes_validator.dart';
 
 class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
   EditCountryVisitCubit({required this._repository})
@@ -37,6 +38,19 @@ class EditCountryVisitCubit extends Cubit<EditCountryVisitState> {
           errorMessage: 'No changes to save.',
         ),
       );
+      return false;
+    }
+
+    final dateError = VisitDateChangesValidator.validate(changes);
+
+    if (dateError != null) {
+      emit(
+        EditCountryVisitState(
+          phase: EditCountryVisitPhase.failure,
+          errorMessage: dateError,
+        ),
+      );
+
       return false;
     }
 

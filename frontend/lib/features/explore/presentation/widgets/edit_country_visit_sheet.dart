@@ -83,35 +83,6 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
     context.read<EditCountryVisitCubit>().clearError();
   }
 
-  void _clearStartDate() {
-    setState(() {
-      _startedOn = null;
-      _startedOnPrecision = null;
-    });
-
-    context.read<EditCountryVisitCubit>().clearError();
-  }
-
-  void _clearEndDate() {
-    setState(() {
-      _endedOn = null;
-      _endedOnPrecision = null;
-    });
-
-    context.read<EditCountryVisitCubit>().clearError();
-  }
-
-  void _clearDates() {
-    setState(() {
-      _startedOn = null;
-      _endedOn = null;
-      _startedOnPrecision = null;
-      _endedOnPrecision = null;
-    });
-
-    context.read<EditCountryVisitCubit>().clearError();
-  }
-
   String _formatDate(DateTime? date, VisitDatePrecision? precision) {
     if (date == null) return 'Not set';
 
@@ -146,20 +117,29 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
 
     final changes = <String, dynamic>{};
 
-    if (_startedOn != widget.visit.startedOn ||
-        _startedOnPrecision != widget.visit.startedOnPrecision) {
-      changes['started_on'] = _startedOn;
-      changes['started_on_precision'] = _startedOn == null
-          ? null
-          : _startedOnPrecision ?? VisitDatePrecision.day;
+    final startedOn = _startedOn!;
+    final endedOn = _endedOn!;
+
+    final startedOnPrecision = _startedOnPrecision ?? VisitDatePrecision.day;
+
+    final endedOnPrecision = _endedOnPrecision ?? VisitDatePrecision.day;
+
+    final originalStartedOnPrecision =
+        widget.visit.startedOnPrecision ?? VisitDatePrecision.day;
+
+    final originalEndedOnPrecision =
+        widget.visit.endedOnPrecision ?? VisitDatePrecision.day;
+
+    if (startedOn != widget.visit.startedOn ||
+        startedOnPrecision != originalStartedOnPrecision) {
+      changes['started_on'] = startedOn;
+      changes['started_on_precision'] = startedOnPrecision;
     }
 
-    if (_endedOn != widget.visit.endedOn ||
-        _endedOnPrecision != widget.visit.endedOnPrecision) {
-      changes['ended_on'] = _endedOn;
-      changes['ended_on_precision'] = _endedOn == null
-          ? null
-          : _endedOnPrecision ?? VisitDatePrecision.day;
+    if (endedOn != widget.visit.endedOn ||
+        endedOnPrecision != originalEndedOnPrecision) {
+      changes['ended_on'] = endedOn;
+      changes['ended_on_precision'] = endedOnPrecision;
     }
 
     if (changes.isEmpty) {
@@ -283,7 +263,7 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
                 const SizedBox(height: 10),
 
                 Text(
-                  'Dates are optional. You can remove them at any time.',
+                  'Start and end dates are required. Tap a date to change it.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -316,17 +296,6 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
                                       ? null
                                       : _pickStartDate,
                                 ),
-                                if (_startedOn != null)
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      key: const Key('editVisitClearStartDate'),
-                                      onPressed: state.isSubmitting
-                                          ? null
-                                          : _clearStartDate,
-                                      child: const Text('Clear'),
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
@@ -352,17 +321,6 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
                                       ? null
                                       : _pickEndDate,
                                 ),
-                                if (_endedOn != null)
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      key: const Key('editVisitClearEndDate'),
-                                      onPressed: state.isSubmitting
-                                          ? null
-                                          : _clearEndDate,
-                                      child: const Text('Clear'),
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
@@ -371,20 +329,6 @@ class _EditCountryVisitSheetState extends State<EditCountryVisitSheet> {
                     );
                   },
                 ),
-
-                if (_startedOn != null || _endedOn != null)
-                  BlocBuilder<EditCountryVisitCubit, EditCountryVisitState>(
-                    builder: (context, state) {
-                      return Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          key: const Key('editVisitClearDates'),
-                          onPressed: state.isSubmitting ? null : _clearDates,
-                          child: const Text('Clear dates'),
-                        ),
-                      );
-                    },
-                  ),
               ],
             ),
           ),

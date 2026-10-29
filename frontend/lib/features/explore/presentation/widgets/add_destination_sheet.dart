@@ -36,6 +36,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   DateTime? _countryEndedOn;
   VisitDatePrecision? _countryStartedOnPrecision;
   VisitDatePrecision? _countryEndedOnPrecision;
+  bool _showDateErrors = false;
 
   DateTime? _cityStartedOn;
   DateTime? _cityEndedOn;
@@ -48,6 +49,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   DateTime? get _startedOn => _isCountry ? _countryStartedOn : _cityStartedOn;
 
   DateTime? get _endedOn => _isCountry ? _countryEndedOn : _cityEndedOn;
+
+  bool get _startDateMissing => _showDateErrors && _startedOn == null;
+
+  bool get _endDateMissing => _showDateErrors && _endedOn == null;
 
   VisitDatePrecision? get _startedOnPrecision =>
       _isCountry ? _countryStartedOnPrecision : _cityStartedOnPrecision;
@@ -67,6 +72,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickStartDate() async {
+    if (_isAnySubmissionInProgress) return;
     final selected = await showPartialVisitDatePicker(
       context: context,
       initialValue: _startedOn == null
@@ -77,7 +83,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             ),
     );
 
-    if (!mounted || selected == null) return;
+    if (!mounted || selected == null || _isAnySubmissionInProgress) return;
 
     setState(() {
       if (_isCountry) {
@@ -93,6 +99,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickEndDate() async {
+    if (_isAnySubmissionInProgress) return;
     final selected = await showPartialVisitDatePicker(
       context: context,
       initialValue: _endedOn == null
@@ -103,7 +110,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             ),
     );
 
-    if (!mounted || selected == null) return;
+    if (!mounted || selected == null || _isAnySubmissionInProgress) return;
 
     setState(() {
       if (_isCountry) {
@@ -144,6 +151,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _saveVisit() async {
+    setState(() {
+      _showDateErrors = true;
+    });
+
     if (_selectedDestinationType == 0) {
       final country = _selectedCountry;
 
@@ -190,6 +201,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       _selectingCountry = false;
       _selectingCity = false;
       _searchQuery = '';
+      _showDateErrors = false;
     });
 
     _clearActiveError();
@@ -346,19 +358,22 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Dates are optional. You can add them later.',
+          'Start and end dates are required. Choose an exact date, month, or year.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: colors.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 16),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _VisitDateCard(
                 label: 'START DATE',
                 value: _formatDate(_startedOn, _startedOnPrecision),
-                onTap: _pickStartDate,
+                onTap: _isAnySubmissionInProgress ? null : _pickStartDate,
+                required: true,
+                hasError: _startDateMissing,
               ),
             ),
             const SizedBox(width: 12),
@@ -366,35 +381,14 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
               child: _VisitDateCard(
                 label: 'END DATE',
                 value: _formatDate(_endedOn, _endedOnPrecision),
-                onTap: _pickEndDate,
+                onTap: _isAnySubmissionInProgress ? null : _pickEndDate,
+                required: true,
+                hasError: _endDateMissing,
               ),
             ),
           ],
         ),
-        if (_startedOn != null || _endedOn != null)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  if (_isCountry) {
-                    _countryStartedOn = null;
-                    _countryEndedOn = null;
-                    _countryStartedOnPrecision = null;
-                    _countryEndedOnPrecision = null;
-                  } else {
-                    _cityStartedOn = null;
-                    _cityEndedOn = null;
-                    _cityStartedOnPrecision = null;
-                    _cityEndedOnPrecision = null;
-                  }
-                });
 
-                _clearActiveError();
-              },
-              child: const Text('Clear dates'),
-            ),
-          ),
         const SizedBox(height: 24),
         const _ComingLaterCard(
           title: 'Associated Trip',
@@ -679,67 +673,118 @@ class _VisitDateCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.required = false,
+    this.hasError = false,
   });
 
   final String label;
   final String value;
   final VoidCallback? onTap;
 
+  final bool required;
+  final bool hasError;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 82),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.4),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 82),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasError
+                      ? colors.error
+                      : colors.outlineVariant.withValues(alpha: 0.4),
+                  width: hasError ? 1.5 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        letterSpacing: 0.8,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                label,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: hasError
+                                      ? colors.error
+                                      : colors.onSurfaceVariant,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                            if (required) ...[
+                              const SizedBox(width: 3),
+                              Text(
+                                '*',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colors.error,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 15,
+                        color: hasError
+                            ? colors.error
+                            : colors.onSurfaceVariant,
+                      ),
+                    ],
                   ),
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 15,
-                    color: colors.onSurfaceVariant,
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    value == 'Not set' ? 'Select date' : value,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: hasError
+                          ? colors.error
+                          : onTap == null
+                          ? colors.onSurfaceVariant
+                          : colors.onSurface,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: onTap == null
-                      ? colors.onSurfaceVariant
-                      : colors.onSurface,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
+
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              'Required',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.error,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

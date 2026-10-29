@@ -188,7 +188,9 @@ void main() {
         expect(payload, {
           'country_code': 'PT',
           'started_on': '2026-10-10',
+          'started_on_precision': 'day',
           'ended_on': '2026-10-15',
+          'ended_on_precision': 'day',
         });
 
         expect(payload.containsKey('user_id'), isFalse);
@@ -227,46 +229,7 @@ void main() {
     expect(visit.startedOn, DateTime(2026, 10, 10));
     expect(visit.endedOn, DateTime(2026, 10, 15));
   });
-  test('creates a country visit without dates', () async {
-    final dio = Dio()
-      ..httpClientAdapter = FakeHttpAdapter((options) {
-        expect(options.method, 'POST');
 
-        expect(options.data, {
-          'country_code': 'ES',
-          'started_on': null,
-          'ended_on': null,
-        });
-
-        return ResponseBody.fromString(
-          jsonEncode({
-            'id': 'visit-2',
-            'country_code': 'ES',
-            'started_on': null,
-            'ended_on': null,
-            'created_at': '2026-10-21T06:00:00',
-            'updated_at': '2026-10-21T06:00:00',
-          }),
-          201,
-          headers: {
-            Headers.contentTypeHeader: ['application/json'],
-          },
-        );
-      });
-
-    final repository = ApiCountriesRepository(
-      apiClient: ApiClient(
-        serverConfig: ServerConfig.parse('https://travel.example.com')!,
-        dio: dio,
-      ),
-    );
-
-    final visit = await repository.createCountryVisit(countryCode: 'es');
-
-    expect(visit.countryCode, 'ES');
-    expect(visit.startedOn, isNull);
-    expect(visit.endedOn, isNull);
-  });
   test('creates a country visit with month precision', () async {
     final repository = createRepository((options) {
       expect(options.method, 'POST');
@@ -275,8 +238,9 @@ void main() {
       expect(options.data, {
         'country_code': 'PT',
         'started_on': '2026-10-01',
-        'ended_on': null,
         'started_on_precision': 'month',
+        'ended_on': '2026-12-01',
+        'ended_on_precision': 'month',
       });
 
       return jsonResponse({
@@ -294,7 +258,9 @@ void main() {
     final visit = await repository.createCountryVisit(
       countryCode: 'PT',
       startedOn: DateTime(2026, 10, 1),
+      endedOn: DateTime(2026, 12, 1),
       startedOnPrecision: VisitDatePrecision.month,
+      endedOnPrecision: VisitDatePrecision.month,
     );
 
     expect(visit.startedOn, DateTime(2026, 10, 1));
@@ -308,8 +274,9 @@ void main() {
       expect(options.data, {
         'country_code': 'PT',
         'started_on': '2024-01-01',
-        'ended_on': null,
         'started_on_precision': 'year',
+        'ended_on': '2025-01-01',
+        'ended_on_precision': 'year',
       });
 
       return jsonResponse({
@@ -327,7 +294,9 @@ void main() {
     final visit = await repository.createCountryVisit(
       countryCode: 'PT',
       startedOn: DateTime(2024, 1, 1),
+      endedOn: DateTime(2025, 1, 1),
       startedOnPrecision: VisitDatePrecision.year,
+      endedOnPrecision: VisitDatePrecision.year,
     );
 
     expect(visit.startedOn, DateTime(2024, 1, 1));
@@ -397,53 +366,39 @@ void main() {
     expect(visit.startedOn, DateTime(2026, 10, 10));
     expect(visit.endedOn, DateTime(2026, 10, 15));
   });
-  test('clears the end date when updating a visit', () async {
-    final repository = createRepository((options) {
-      expect(options.method, 'PATCH');
+  test('rejects clearing visit dates without an HTTP request', () async {
+    var requestCount = 0;
 
-      expect(options.data, {'started_on': '2026-10-10', 'ended_on': null});
-
-      return jsonResponse({
-        'id': 'visit-1',
-        'country_code': 'PT',
-        'started_on': '2026-10-10',
-        'ended_on': null,
-        'created_at': '2026-10-20T10:00:00',
-        'updated_at': '2026-10-21T10:00:00',
-      });
+    final repository = createRepository((_) {
+      requestCount++;
+      fail('No HTTP request should be sent.');
     });
 
-    final visit = await repository.updateCountryVisit(
-      visitId: 'visit-1',
-      changes: {'started_on': DateTime(2026, 10, 10), 'ended_on': null},
+    await expectLater(
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        changes: {'ended_on': null},
+      ),
+      throwsArgumentError,
     );
 
-    expect(visit.startedOn, DateTime(2026, 10, 10));
-    expect(visit.endedOn, isNull);
-  });
-  test('clears both dates when updating a visit', () async {
-    final repository = createRepository((options) {
-      expect(options.method, 'PATCH');
-
-      expect(options.data, {'started_on': null, 'ended_on': null});
-
-      return jsonResponse({
-        'id': 'visit-1',
-        'country_code': 'PT',
-        'started_on': null,
-        'ended_on': null,
-        'created_at': '2026-10-20T10:00:00',
-        'updated_at': '2026-10-21T10:00:00',
-      });
-    });
-
-    final visit = await repository.updateCountryVisit(
-      visitId: 'visit-1',
-      changes: {'started_on': null, 'ended_on': null},
+    await expectLater(
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        changes: {'started_on': null, 'ended_on': null},
+      ),
+      throwsArgumentError,
     );
 
-    expect(visit.startedOn, isNull);
-    expect(visit.endedOn, isNull);
+    await expectLater(
+      repository.updateCountryVisit(
+        visitId: 'visit-1',
+        changes: {'started_on_precision': null},
+      ),
+      throwsArgumentError,
+    );
+
+    expect(requestCount, 0);
   });
   test('maps validation errors when updating a visit', () async {
     final repository = createRepository((options) {
@@ -582,8 +537,8 @@ void main() {
         'country_code': 'PT',
         'started_on': '2026-10-01',
         'started_on_precision': 'month',
-        'ended_on': null,
-        'ended_on_precision': null,
+        'ended_on': '2026-10-15',
+        'ended_on_precision': 'day',
         'created_at': '2026-10-20T10:00:00',
         'updated_at': '2026-10-21T10:00:00',
       });

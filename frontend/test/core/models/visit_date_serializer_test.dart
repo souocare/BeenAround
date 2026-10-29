@@ -31,35 +31,17 @@ void main() {
   });
 
   group('VisitDateSerializer.createFields', () {
-    test('serializes a visit without dates', () {
-      final fields = VisitDateSerializer.createFields(
-        startedOn: null,
-        endedOn: null,
-      );
-
-      expect(fields, {'started_on': null, 'ended_on': null});
-    });
-
-    test('serializes exact dates without explicit precision', () {
+    test('serializes exact dates with day precision by default', () {
       final fields = VisitDateSerializer.createFields(
         startedOn: DateTime(2024, 6, 15),
         endedOn: DateTime(2024, 6, 20),
       );
 
-      expect(fields, {'started_on': '2024-06-15', 'ended_on': '2024-06-20'});
-    });
-
-    test('serializes month precision', () {
-      final fields = VisitDateSerializer.createFields(
-        startedOn: DateTime(2024, 6, 1),
-        endedOn: null,
-        startedOnPrecision: VisitDatePrecision.month,
-      );
-
       expect(fields, {
-        'started_on': '2024-06-01',
-        'ended_on': null,
-        'started_on_precision': 'month',
+        'started_on': '2024-06-15',
+        'started_on_precision': 'day',
+        'ended_on': '2024-06-20',
+        'ended_on_precision': 'day',
       });
     });
 
@@ -76,20 +58,6 @@ void main() {
         'ended_on': '2025-01-01',
         'started_on_precision': 'year',
         'ended_on_precision': 'year',
-      });
-    });
-
-    test('serializes independent end-only visits', () {
-      final fields = VisitDateSerializer.createFields(
-        startedOn: null,
-        endedOn: DateTime(2024, 6, 1),
-        endedOnPrecision: VisitDatePrecision.month,
-      );
-
-      expect(fields, {
-        'started_on': null,
-        'ended_on': '2024-06-01',
-        'ended_on_precision': 'month',
       });
     });
 
@@ -147,16 +115,18 @@ void main() {
       expect(fields, {'started_on_precision': 'year'});
     });
 
-    test('preserves explicit null when clearing a date', () {
-      final fields = VisitDateSerializer.updateFields({
-        'started_on': null,
-        'started_on_precision': null,
-      });
+    test('rejects null when clearing a date', () {
+      expect(
+        () => VisitDateSerializer.updateFields({'started_on': null}),
+        throwsArgumentError,
+      );
+    });
 
-      expect(fields, {'started_on': null, 'started_on_precision': null});
-
-      expect(fields.containsKey('ended_on'), isFalse);
-      expect(fields.containsKey('ended_on_precision'), isFalse);
+    test('rejects null when clearing a precision', () {
+      expect(
+        () => VisitDateSerializer.updateFields({'ended_on_precision': null}),
+        throwsArgumentError,
+      );
     });
 
     test('preserves independent end-only updates', () {
@@ -190,6 +160,34 @@ void main() {
             VisitDateSerializer.updateFields({'started_on_precision': 'month'}),
         throwsArgumentError,
       );
+    });
+    test('serializes exact dates with day precision by default', () {
+      final fields = VisitDateSerializer.createFields(
+        startedOn: DateTime(2024, 6, 15),
+        endedOn: DateTime(2024, 6, 20),
+      );
+
+      expect(fields, {
+        'started_on': '2024-06-15',
+        'started_on_precision': 'day',
+        'ended_on': '2024-06-20',
+        'ended_on_precision': 'day',
+      });
+    });
+    test('serializes complete visits with month precision', () {
+      final fields = VisitDateSerializer.createFields(
+        startedOn: DateTime(2024, 6, 1),
+        endedOn: DateTime(2024, 8, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
+      );
+
+      expect(fields, {
+        'started_on': '2024-06-01',
+        'started_on_precision': 'month',
+        'ended_on': '2024-08-01',
+        'ended_on_precision': 'month',
+      });
     });
   });
 }

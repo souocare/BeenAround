@@ -101,10 +101,10 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) async {
     createCalls++;
     receivedCreatedCountryCode = countryCode;
@@ -385,7 +385,7 @@ void main() {
       findsOneWidget,
     );
   });
-  testWidgets('clears visit dates and refreshes country details', (
+  testWidgets('updates visit end date and refreshes country details', (
     tester,
   ) async {
     final repository = FakeCountriesRepository(
@@ -407,27 +407,39 @@ void main() {
     );
 
     await openPortugalDetails(tester);
-
     await openVisitActions(tester);
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('editVisitClearDates')));
+    await tester.tap(find.byKey(const Key('editVisitEndDate')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not set'), findsNWidgets(2));
+    await tester.tap(find.text('Exact date'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('20').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editVisitSaveButton')));
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
     expect(repository.receivedVisitId, 'visit-1');
-    expect(repository.receivedStartedOn, isNull);
-    expect(repository.receivedEndedOn, isNull);
+
+    expect(repository.receivedChanges, {
+      'ended_on': DateTime(2026, 10, 20),
+      'ended_on_precision': VisitDatePrecision.day,
+    });
+
+    final updated = repository.visits.single;
+
+    expect(updated.startedOn, DateTime(2026, 10, 10));
+    expect(updated.endedOn, DateTime(2026, 10, 20));
 
     expect(find.text('Edit Visit'), findsNothing);
-    expect(find.text('Dates not specified'), findsOneWidget);
+    expect(find.text('10–20 Oct 2026'), findsOneWidget);
   });
   testWidgets('updates visit start date', (tester) async {
     final repository = FakeCountriesRepository(
@@ -743,6 +755,24 @@ void main() {
     // The country is already selected.
     expect(find.text('Select a country'), findsNothing);
 
+    await tester.tap(find.text('START DATE'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Year only'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('END DATE'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Year only'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('2025').last);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Save Visit'));
     await tester.pumpAndSettle();
 
@@ -753,6 +783,15 @@ void main() {
     // The modal closes and Country Details reflects the new visit.
     expect(find.text('Add Destination'), findsNothing);
     expect(find.text('Visit 2'), findsOneWidget);
+
+    final created = repository.visits.singleWhere(
+      (visit) => visit.id == 'created-1',
+    );
+
+    expect(created.startedOn, DateTime(2024, 1, 1));
+    expect(created.endedOn, DateTime(2025, 1, 1));
+    expect(created.startedOnPrecision, VisitDatePrecision.year);
+    expect(created.endedOnPrecision, VisitDatePrecision.year);
   });
   testWidgets('switches between country detail tabs', (tester) async {
     await pumpExplore(

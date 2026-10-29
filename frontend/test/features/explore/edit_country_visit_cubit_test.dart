@@ -26,10 +26,10 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) {
     throw UnimplementedError();
   }
@@ -155,26 +155,29 @@ void main() {
       await cubit.close();
     });
 
-    test('allows clearing both dates and precisions', () async {
+    test('rejects clearing visit dates', () async {
       final repository = FakeCountriesRepository();
       final cubit = EditCountryVisitCubit(repository: repository);
 
-      final changes = {
-        'started_on': null,
-        'started_on_precision': null,
-        'ended_on': null,
-        'ended_on_precision': null,
-      };
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'started_on': null,
+          'started_on_precision': null,
+          'ended_on': null,
+          'ended_on_precision': null,
+        },
+      );
 
-      final success = await cubit.submit(visitId: 'visit-1', changes: changes);
-
-      expect(success, isTrue);
-      expect(repository.receivedChanges, changes);
+      expect(success, isFalse);
+      expect(repository.updateCalls, 0);
+      expect(cubit.state.phase, EditCountryVisitPhase.failure);
+      expect(cubit.state.errorMessage, 'Visit dates cannot be cleared.');
 
       await cubit.close();
     });
 
-    test('allows an end date without a start date', () async {
+    test('updates only the end date', () async {
       final repository = FakeCountriesRepository();
       final cubit = EditCountryVisitCubit(repository: repository);
 

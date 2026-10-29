@@ -46,10 +46,10 @@ class FakeCountriesRepository implements CountriesRepository {
   @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) {
     createCalls++;
 
@@ -88,19 +88,15 @@ void main() {
       await cubit.close();
     });
 
-    test('creates a visit without dates', () async {
+    test('rejects a visit without dates', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(countryCode: ' pt ');
+      final success = await cubit.submit(countryCode: 'PT');
 
-      expect(success, isTrue);
-      expect(repository.createCalls, 1);
-      expect(repository.receivedCountryCode, 'PT');
-      expect(repository.receivedStartedOn, isNull);
-      expect(repository.receivedEndedOn, isNull);
-      expect(cubit.state.phase, AddCountryVisitPhase.success);
+      expect(success, isFalse);
+      expect(repository.createCalls, 0);
+      expect(cubit.state.errorMessage, 'Start and end dates are required.');
 
       await cubit.close();
     });
@@ -126,9 +122,8 @@ void main() {
       await cubit.close();
     });
 
-    test('allows start date without end date', () async {
+    test('rejects a missing end date', () async {
       final repository = FakeCountriesRepository();
-
       final cubit = AddCountryVisitCubit(repository: repository);
 
       final success = await cubit.submit(
@@ -136,8 +131,9 @@ void main() {
         startedOn: DateTime(2020, 5, 12),
       );
 
-      expect(success, isTrue);
-      expect(repository.createCalls, 1);
+      expect(success, isFalse);
+      expect(repository.createCalls, 0);
+      expect(cubit.state.errorMessage, 'Start and end dates are required.');
 
       await cubit.close();
     });
@@ -156,18 +152,18 @@ void main() {
       await cubit.close();
     });
 
-    test('allows an end date without a start date', () async {
+    test('rejects a missing start date', () async {
       final repository = FakeCountriesRepository();
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final end = DateTime(2026, 10, 15);
+      final success = await cubit.submit(
+        countryCode: 'PT',
+        endedOn: DateTime(2026, 10, 15),
+      );
 
-      final success = await cubit.submit(countryCode: 'PT', endedOn: end);
-
-      expect(success, isTrue);
-      expect(repository.createCalls, 1);
-      expect(repository.receivedStartedOn, isNull);
-      expect(repository.receivedEndedOn, end);
+      expect(success, isFalse);
+      expect(repository.createCalls, 0);
+      expect(cubit.state.errorMessage, 'Start and end dates are required.');
 
       await cubit.close();
     });
@@ -212,15 +208,26 @@ void main() {
 
     test('prevents duplicate submissions', () async {
       final repository = FakeCountriesRepository();
-
       final pending = Completer<CountryVisit>();
 
       repository.createHandler = () => pending.future;
 
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final first = cubit.submit(countryCode: 'PT');
-      final second = await cubit.submit(countryCode: 'PT');
+      final start = DateTime(2026, 10, 10);
+      final end = DateTime(2026, 10, 15);
+
+      final first = cubit.submit(
+        countryCode: 'PT',
+        startedOn: start,
+        endedOn: end,
+      );
+
+      final second = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: start,
+        endedOn: end,
+      );
 
       expect(second, isFalse);
       expect(repository.createCalls, 1);
@@ -229,8 +236,10 @@ void main() {
         CountryVisit(
           id: 'visit-1',
           countryCode: 'PT',
-          startedOn: null,
-          endedOn: null,
+          startedOn: start,
+          endedOn: end,
+          startedOnPrecision: VisitDatePrecision.day,
+          endedOnPrecision: VisitDatePrecision.day,
           createdAt: DateTime(2026, 10, 21),
           updatedAt: DateTime(2026, 10, 21),
         ),
@@ -254,7 +263,11 @@ void main() {
 
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final success = await cubit.submit(countryCode: 'PT');
+      final success = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: DateTime(2026, 10, 10),
+        endedOn: DateTime(2026, 10, 15),
+      );
 
       expect(success, isFalse);
       expect(cubit.state.phase, AddCountryVisitPhase.failure);
@@ -272,7 +285,17 @@ void main() {
 
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      expect(await cubit.submit(countryCode: 'PT'), isFalse);
+      final start = DateTime(2026, 10, 10);
+      final end = DateTime(2026, 10, 15);
+
+      final first = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: start,
+        endedOn: end,
+      );
+
+      expect(first, isFalse);
+      expect(repository.createCalls, 1);
 
       repository.createHandler = null;
 
@@ -280,7 +303,13 @@ void main() {
 
       expect(cubit.state.phase, AddCountryVisitPhase.idle);
 
-      expect(await cubit.submit(countryCode: 'PT'), isTrue);
+      final second = await cubit.submit(
+        countryCode: 'PT',
+        startedOn: start,
+        endedOn: end,
+      );
+
+      expect(second, isTrue);
       expect(repository.createCalls, 2);
 
       await cubit.close();
@@ -288,14 +317,20 @@ void main() {
 
     test('ignores responses after close', () async {
       final repository = FakeCountriesRepository();
-
       final pending = Completer<CountryVisit>();
 
       repository.createHandler = () => pending.future;
 
       final cubit = AddCountryVisitCubit(repository: repository);
 
-      final submission = cubit.submit(countryCode: 'PT');
+      final start = DateTime(2026, 10, 10);
+      final end = DateTime(2026, 10, 15);
+
+      final submission = cubit.submit(
+        countryCode: 'PT',
+        startedOn: start,
+        endedOn: end,
+      );
 
       await cubit.close();
 
@@ -303,8 +338,10 @@ void main() {
         CountryVisit(
           id: 'visit-1',
           countryCode: 'PT',
-          startedOn: null,
-          endedOn: null,
+          startedOn: start,
+          endedOn: end,
+          startedOnPrecision: VisitDatePrecision.day,
+          endedOnPrecision: VisitDatePrecision.day,
           createdAt: DateTime(2026, 10, 21),
           updatedAt: DateTime(2026, 10, 21),
         ),
@@ -319,13 +356,17 @@ void main() {
       final success = await cubit.submit(
         countryCode: 'PT',
         startedOn: DateTime(2024, 6, 1),
+        endedOn: DateTime(2024, 8, 1),
         startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
       );
 
       expect(success, isTrue);
       expect(repository.createCalls, 1);
       expect(repository.receivedStartedOn, DateTime(2024, 6, 1));
+      expect(repository.receivedEndedOn, DateTime(2024, 8, 1));
       expect(repository.receivedStartedOnPrecision, VisitDatePrecision.month);
+      expect(repository.receivedEndedOnPrecision, VisitDatePrecision.month);
 
       await cubit.close();
     });

@@ -46,10 +46,10 @@ Map<String, dynamic> visitResponse({
   String cityName = 'Lisbon',
   String countryCode = 'PT',
   String countryName = 'Portugal',
-  String? startedOn = '2025-07-10',
-  String? endedOn = '2025-07-15',
-  String? startedOnPrecision,
-  String? endedOnPrecision,
+  String startedOn = '2025-07-10',
+  String endedOn = '2025-07-15',
+  String startedOnPrecision = 'day',
+  String endedOnPrecision = 'day',
 }) {
   return {
     'id': id,
@@ -193,7 +193,9 @@ void main() {
         expect(options.data, {
           'city_id': 2267057,
           'started_on': '2026-10-10',
+          'started_on_precision': 'day',
           'ended_on': '2026-10-15',
+          'ended_on_precision': 'day',
         });
 
         expect((options.data as Map).containsKey('user_id'), isFalse);
@@ -216,35 +218,17 @@ void main() {
       expect(visit.endedOn, DateTime(2026, 10, 15));
     });
 
-    test('creates a visit without dates', () async {
-      final repository = createRepository((options) {
-        expect(options.method, 'POST');
-
-        expect(options.data, {
-          'city_id': 2267057,
-          'started_on': null,
-          'ended_on': null,
-        });
-
-        return jsonResponse(
-          visitResponse(startedOn: null, endedOn: null),
-          statusCode: 201,
-        );
-      });
-
-      final visit = await repository.createCityVisit(cityId: 2267057);
-
-      expect(visit.startedOn, isNull);
-      expect(visit.endedOn, isNull);
-    });
-
     test('maps invalid city IDs returned by the API', () async {
       final repository = createRepository(
         (_) => jsonResponse({'detail': 'City not found.'}, statusCode: 404),
       );
 
       await expectLater(
-        repository.createCityVisit(cityId: 999999999),
+        repository.createCityVisit(
+          cityId: 999999999,
+          startedOn: DateTime(2026, 10, 10),
+          endedOn: DateTime(2026, 10, 15),
+        ),
         throwsA(isA<ApiException>()),
       );
     });
@@ -278,7 +262,11 @@ void main() {
       );
 
       await expectLater(
-        repository.createCityVisit(cityId: 2267057),
+        repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2026, 10, 10),
+          endedOn: DateTime(2026, 10, 15),
+        ),
         throwsFormatException,
       );
     });
@@ -290,15 +278,17 @@ void main() {
         expect(options.data, {
           'city_id': 2267057,
           'started_on': '2026-10-01',
-          'ended_on': null,
           'started_on_precision': 'month',
+          'ended_on': '2026-12-01',
+          'ended_on_precision': 'month',
         });
 
         return jsonResponse(
           visitResponse(
             startedOn: '2026-10-01',
-            endedOn: null,
+            endedOn: '2026-12-01',
             startedOnPrecision: 'month',
+            endedOnPrecision: 'month',
           ),
           statusCode: 201,
         );
@@ -307,12 +297,15 @@ void main() {
       final visit = await repository.createCityVisit(
         cityId: 2267057,
         startedOn: DateTime(2026, 10, 1),
+        endedOn: DateTime(2026, 12, 1),
         startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
       );
 
       expect(visit.startedOn, DateTime(2026, 10, 1));
       expect(visit.startedOnPrecision, VisitDatePrecision.month);
-      expect(visit.endedOn, isNull);
+      expect(visit.endedOn, DateTime(2026, 12, 1));
+      expect(visit.endedOnPrecision, VisitDatePrecision.month);
     });
     test('creates a city visit with year precision', () async {
       final repository = createRepository((options) {
@@ -321,15 +314,17 @@ void main() {
         expect(options.data, {
           'city_id': 2267057,
           'started_on': '2024-01-01',
-          'ended_on': null,
           'started_on_precision': 'year',
+          'ended_on': '2025-01-01',
+          'ended_on_precision': 'year',
         });
 
         return jsonResponse(
           visitResponse(
             startedOn: '2024-01-01',
-            endedOn: null,
+            endedOn: '2025-01-01',
             startedOnPrecision: 'year',
+            endedOnPrecision: 'year',
           ),
           statusCode: 201,
         );
@@ -338,7 +333,9 @@ void main() {
       final visit = await repository.createCityVisit(
         cityId: 2267057,
         startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2025, 1, 1),
         startedOnPrecision: VisitDatePrecision.year,
+        endedOnPrecision: VisitDatePrecision.year,
       );
 
       expect(visit.startedOn, DateTime(2024, 1, 1));
@@ -393,36 +390,39 @@ void main() {
       expect(visit.endedOn, DateTime(2025, 7, 15));
     });
 
-    test('clears the end date explicitly', () async {
-      final repository = createRepository((options) {
-        expect(options.data, {'ended_on': null});
+    test('rejects clearing visit dates without an HTTP request', () async {
+      var requestCount = 0;
 
-        return jsonResponse(visitResponse(endedOn: null));
+      final repository = createRepository((_) {
+        requestCount++;
+        fail('No HTTP request should be sent.');
       });
 
-      final visit = await repository.updateCityVisit(
-        visitId: visitId,
-        changes: {'ended_on': null},
+      await expectLater(
+        repository.updateCityVisit(
+          visitId: visitId,
+          changes: {'ended_on': null},
+        ),
+        throwsArgumentError,
       );
 
-      expect(visit.endedOn, isNull);
-      expect(visit.startedOn, DateTime(2025, 7, 10));
-    });
-
-    test('clears both dates explicitly', () async {
-      final repository = createRepository((options) {
-        expect(options.data, {'started_on': null, 'ended_on': null});
-
-        return jsonResponse(visitResponse(startedOn: null, endedOn: null));
-      });
-
-      final visit = await repository.updateCityVisit(
-        visitId: visitId,
-        changes: {'started_on': null, 'ended_on': null},
+      await expectLater(
+        repository.updateCityVisit(
+          visitId: visitId,
+          changes: {'started_on': null, 'ended_on': null},
+        ),
+        throwsArgumentError,
       );
 
-      expect(visit.startedOn, isNull);
-      expect(visit.endedOn, isNull);
+      await expectLater(
+        repository.updateCityVisit(
+          visitId: visitId,
+          changes: {'ended_on_precision': null},
+        ),
+        throwsArgumentError,
+      );
+
+      expect(requestCount, 0);
     });
 
     test('rejects empty changes before sending a request', () async {

@@ -1,24 +1,38 @@
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/explore_cubit.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/explore/presentation/pages/explore_page.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/features/geography/domain/city.dart';
 import 'package:beenaround/features/geography/domain/city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
-import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/country_city_count.dart';
-import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// -----------------------------------------------------------------------------
+// Finders
+// -----------------------------------------------------------------------------
+
+Finder get addDestinationButton => find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == 'Add Destination',
+);
+
+// -----------------------------------------------------------------------------
+// Fake repositories
+// -----------------------------------------------------------------------------
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
   String? lastCreatedCountryCode;
+
   final List<CountryVisit> createdVisits = [];
+
   @override
   Future<List<Country>> getCountries() async => const [
     Country(
@@ -37,29 +51,12 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 
   @override
-  Future<CountryVisit> updateCountryVisit({
-    required String visitId,
-    required Map<String, dynamic> changes,
-  }) {
-    throw UnimplementedError(
-      'Country visit updates are not used by this test.',
-    );
-  }
-
-  @override
-  Future<void> deleteCountryVisit({required String visitId}) {
-    throw UnimplementedError(
-      'Country visit deletion is not used by this test.',
-    );
-  }
-
-  @override
   Future<CountryVisit> createCountryVisit({
     required String countryCode,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) async {
     createCalls++;
     lastCreatedCountryCode = countryCode;
@@ -78,6 +75,23 @@ class FakeCountriesRepository implements CountriesRepository {
     createdVisits.add(visit);
 
     return visit;
+  }
+
+  @override
+  Future<CountryVisit> updateCountryVisit({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) {
+    throw UnimplementedError(
+      'Country visit updates are not used by this test.',
+    );
+  }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) {
+    throw UnimplementedError(
+      'Country visit deletion is not used by this test.',
+    );
   }
 }
 
@@ -173,10 +187,10 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   @override
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) async {
     createCalls++;
     lastCreatedCityId = cityId;
@@ -214,6 +228,82 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   Future<void> deleteCityVisit({required String visitId}) {
     throw UnimplementedError();
   }
+}
+
+// -----------------------------------------------------------------------------
+// Test helpers
+// -----------------------------------------------------------------------------
+
+Future<void> selectVisitMonth(
+  WidgetTester tester, {
+  required String field,
+  required int year,
+  required int month,
+}) async {
+  await tester.ensureVisible(find.text(field));
+  await tester.tap(find.text(field));
+  await tester.pumpAndSettle();
+
+  // Select month precision.
+  await tester.tap(find.text('Month and year'));
+  await tester.pumpAndSettle();
+
+  expect(find.text('Select month and year'), findsOneWidget);
+
+  // Select year.
+  final yearDropdown = find.byType(DropdownButton<int>).first;
+
+  final currentYear = tester.widget<DropdownButton<int>>(yearDropdown).value;
+
+  if (currentYear != year) {
+    await tester.tap(yearDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('$year').last);
+    await tester.pumpAndSettle();
+  }
+
+  // Select month.
+  final monthDropdown = find.byType(DropdownButton<int>).last;
+
+  final currentMonth = tester.widget<DropdownButton<int>>(monthDropdown).value;
+
+  if (currentMonth != month) {
+    final monthLabel = MaterialLocalizations.of(
+      tester.element(monthDropdown),
+    ).formatMonthYear(DateTime(year, month));
+
+    await tester.tap(monthDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(monthLabel).last);
+    await tester.pumpAndSettle();
+  }
+
+  // Confirm selection.
+  await tester.tap(find.text('Done'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectVisitYear(
+  WidgetTester tester, {
+  required String field,
+  required int year,
+}) async {
+  await tester.ensureVisible(find.text(field));
+  await tester.tap(find.text(field));
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('Year only'));
+  await tester.pumpAndSettle();
+
+  expect(find.byType(YearPicker), findsOneWidget);
+
+  final yearFinder = find.text('$year').last;
+
+  await tester.ensureVisible(yearFinder);
+  await tester.tap(yearFinder);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -258,10 +348,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // ---------------------------------------------------------------------------
+  // Opening and navigation
+  // ---------------------------------------------------------------------------
+
   testWidgets('opens Add Destination from Explore', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Add Destination'), findsOneWidget);
@@ -277,7 +371,7 @@ void main() {
   testWidgets('searches countries and selects a destination', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Select a country'));
@@ -287,6 +381,7 @@ void main() {
       find.byKey(const Key('destinationCountrySearch')),
       'port',
     );
+
     await tester.pumpAndSettle();
 
     expect(find.text('Portugal'), findsOneWidget);
@@ -302,7 +397,7 @@ void main() {
   testWidgets('closes modal using the close button', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Close'));
@@ -314,7 +409,7 @@ void main() {
   testWidgets('uses a dialog on desktop', (tester) async {
     await pumpExplore(tester, width: 1200);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     expect(find.byType(Dialog), findsOneWidget);
@@ -326,7 +421,7 @@ void main() {
   ) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     final button = tester.widget<FilledButton>(
@@ -338,12 +433,54 @@ void main() {
 
     expect(button.onPressed, isNull);
   });
+
+  // ---------------------------------------------------------------------------
+  // Country visit creation
+  // ---------------------------------------------------------------------------
+
   testWidgets('creates a country visit and closes the modal', (tester) async {
     final repository = FakeCountriesRepository();
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    // Both dates are required.
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(repository.lastCreatedCountryCode, 'PT');
+
+    final visit = repository.createdVisits.single;
+
+    expect(visit.startedOn, DateTime(2024, 6, 1));
+    expect(visit.endedOn, DateTime(2024, 8, 1));
+
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(visit.endedOnPrecision, VisitDatePrecision.month);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
+
+  testWidgets('rejects creating a country visit without dates', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Select a country'));
@@ -355,11 +492,113 @@ void main() {
     await tester.tap(find.text('Save Visit'));
     await tester.pumpAndSettle();
 
-    expect(repository.createCalls, 1);
-    expect(repository.lastCreatedCountryCode, 'PT');
+    expect(repository.createCalls, 0);
+    expect(repository.createdVisits, isEmpty);
 
-    expect(find.text('Add Destination'), findsNothing);
+    expect(find.text('Start and end dates are required.'), findsOneWidget);
+
+    expect(find.text('Add Destination'), findsOneWidget);
   });
+
+  testWidgets('creates a country visit with month precision', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 9);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+
+    final visit = repository.createdVisits.single;
+
+    expect(visit.startedOn, DateTime(2024, 6, 1));
+    expect(visit.endedOn, DateTime(2024, 9, 1));
+
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(visit.endedOnPrecision, VisitDatePrecision.month);
+  });
+
+  testWidgets('rejects a country visit with only an end date', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    // An end date can be selected independently while editing the form,
+    // but the visit cannot be saved until both dates are provided.
+    await selectVisitYear(tester, field: 'END DATE', year: 2024);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 0);
+    expect(repository.createdVisits, isEmpty);
+
+    expect(find.text('Start and end dates are required.'), findsOneWidget);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+  });
+
+  testWidgets('creates a country visit with mixed precisions', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await selectVisitYear(tester, field: 'START DATE', year: 2024);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+
+    final visit = repository.createdVisits.single;
+
+    expect(visit.startedOn, DateTime(2024, 1, 1));
+    expect(visit.endedOn, DateTime(2024, 8, 1));
+
+    expect(visit.startedOnPrecision, VisitDatePrecision.year);
+
+    expect(visit.endedOnPrecision, VisitDatePrecision.month);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Repository scope
+  // ---------------------------------------------------------------------------
+
   testWidgets(
     'country picker works when ExploreCubit is scoped below MaterialApp',
     (tester) async {
@@ -370,7 +609,6 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final repository = FakeCountriesRepository();
-
       final cubit = ExploreCubit(repository: repository);
 
       addTearDown(cubit.close);
@@ -398,7 +636,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Add Destination'));
+      await tester.tap(addDestinationButton);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Select a country'));
@@ -414,10 +652,15 @@ void main() {
       expect(find.text('Save Visit'), findsOneWidget);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // City navigation and search
+  // ---------------------------------------------------------------------------
+
   testWidgets('switches from Country to City', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('City'));
@@ -426,12 +669,13 @@ void main() {
     expect(find.text('Select a city'), findsOneWidget);
     expect(find.text('Select a country'), findsNothing);
   });
+
   testWidgets('searches and selects a city', (tester) async {
     final cityRepository = FakeCityRepository();
 
     await pumpExplore(tester, cityRepository: cityRepository);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('City'));
@@ -458,6 +702,11 @@ void main() {
     expect(find.text('Lisbon'), findsOneWidget);
     expect(find.text('Portugal'), findsOneWidget);
   });
+
+  // ---------------------------------------------------------------------------
+  // City visit creation
+  // ---------------------------------------------------------------------------
+
   testWidgets('creates a city visit without creating a country visit', (
     tester,
   ) async {
@@ -470,7 +719,62 @@ void main() {
       cityVisitsRepository: cityVisitsRepository,
     );
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(cityVisitsRepository.createCalls, 1);
+    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+    final visit = cityVisitsRepository.createdVisits.single;
+
+    expect(visit.startedOn, DateTime(2024, 6, 1));
+    expect(visit.endedOn, DateTime(2024, 8, 1));
+
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(visit.endedOnPrecision, VisitDatePrecision.month);
+
+    // A city visit must not automatically create a country visit.
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
+
+  testWidgets('rejects creating a city visit without dates', (tester) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('City'));
@@ -493,13 +797,69 @@ void main() {
     await tester.tap(find.text('Save Visit'));
     await tester.pumpAndSettle();
 
+    expect(cityVisitsRepository.createCalls, 0);
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Start and end dates are required.'), findsOneWidget);
+  });
+
+  testWidgets('creates a city visit with month precision', (tester) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('City'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 9);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
     expect(cityVisitsRepository.createCalls, 1);
     expect(cityVisitsRepository.lastCreatedCityId, 2267057);
 
-    expect(countriesRepository.createCalls, 0);
+    final visit = cityVisitsRepository.createdVisits.single;
 
-    expect(find.text('Add Destination'), findsNothing);
+    expect(visit.startedOn, DateTime(2024, 6, 1));
+    expect(visit.endedOn, DateTime(2024, 9, 1));
+
+    expect(visit.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(visit.endedOnPrecision, VisitDatePrecision.month);
+
+    // Country history remains independent.
+    expect(countriesRepository.createCalls, 0);
   });
+
+  // ---------------------------------------------------------------------------
+  // Repository provider placement
+  // ---------------------------------------------------------------------------
+
   testWidgets(
     'city search works when repositories are scoped below MaterialApp on mobile',
     (tester) async {
@@ -514,6 +874,7 @@ void main() {
       final cityVisitsRepository = FakeCityVisitsRepository();
 
       final cubit = ExploreCubit(repository: countriesRepository);
+
       addTearDown(cubit.close);
 
       await cubit.load();
@@ -537,7 +898,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Add Destination'));
+      await tester.tap(addDestinationButton);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('City'));
@@ -555,6 +916,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(cityRepository.searchCalls, 1);
+
       expect(
         find
             .text('Madrid')
@@ -562,13 +924,16 @@ void main() {
             .where((element) => element.widget is Text),
         hasLength(1),
       );
+
       expect(find.text('Lisbon'), findsNothing);
+
       expect(
         find.text('Unable to search cities. Please try again.'),
         findsNothing,
       );
     },
   );
+
   testWidgets(
     'city search works when repositories are scoped below MaterialApp on desktop',
     (tester) async {
@@ -583,6 +948,7 @@ void main() {
       final cityVisitsRepository = FakeCityVisitsRepository();
 
       final cubit = ExploreCubit(repository: countriesRepository);
+
       addTearDown(cubit.close);
 
       await cubit.load();
@@ -606,7 +972,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Add Destination'));
+      await tester.tap(addDestinationButton);
       await tester.pumpAndSettle();
 
       expect(find.byType(Dialog), findsOneWidget);
@@ -626,6 +992,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(cityRepository.searchCalls, 1);
+
       expect(
         find
             .text('Madrid')
@@ -633,78 +1000,47 @@ void main() {
             .where((element) => element.widget is Text),
         hasLength(1),
       );
+
       expect(find.text('Lisbon'), findsNothing);
+
       expect(
         find.text('Unable to search cities. Please try again.'),
         findsNothing,
       );
     },
   );
-  testWidgets('creates a country visit with month precision', (tester) async {
-    final repository = FakeCountriesRepository();
+  testWidgets('shows required date fields without initial errors', (
+    tester,
+  ) async {
+    await pumpExplore(tester);
 
-    await pumpExplore(tester, repository: repository);
-
-    // Open Add Destination.
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
-    // Select Portugal.
-    await tester.tap(find.text('Select a country'));
-    await tester.pumpAndSettle();
+    expect(find.text('START DATE'), findsOneWidget);
+    expect(find.text('END DATE'), findsOneWidget);
 
-    await tester.tap(find.text('Portugal'));
-    await tester.pumpAndSettle();
-
-    // Open start date picker.
-    await tester.tap(find.text('START DATE'));
-    await tester.pumpAndSettle();
-
-    // Choose month precision.
-    await tester.tap(find.text('Month and year'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Select month and year'), findsOneWidget);
-
-    // Select 2024.
-    final yearDropdown = find.byType(DropdownButton<int>).first;
-
-    await tester.tap(yearDropdown);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('2024').last);
-    await tester.pumpAndSettle();
-
-    // Select June.
-    final monthDropdown = find.byType(DropdownButton<int>).last;
-
-    await tester.tap(monthDropdown);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('June 2024').last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-
-    // Save visit.
-    await tester.tap(find.text('Save Visit'));
-    await tester.pumpAndSettle();
-
-    expect(repository.createCalls, 1);
-    expect(repository.createdVisits.single.startedOn, DateTime(2024, 6, 1));
     expect(
-      repository.createdVisits.single.startedOnPrecision,
-      VisitDatePrecision.month,
+      find.text(
+        'Start and end dates are required. Choose an exact date, month, or year.',
+      ),
+      findsOneWidget,
     );
-    expect(repository.createdVisits.single.endedOn, isNull);
+
+    expect(find.text('*'), findsNWidgets(2));
+    expect(find.text('Select date'), findsNWidgets(2));
+
+    // Errors must not be shown before submission.
+    expect(find.text('Required'), findsNothing);
   });
-  testWidgets('creates a country visit with an end date only', (tester) async {
+  testWidgets('shows errors for both missing dates after submission', (
+    tester,
+  ) async {
     final repository = FakeCountriesRepository();
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Select a country'));
@@ -713,102 +1049,44 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    // The end date must be available without a start date.
-    await tester.tap(find.text('END DATE'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Year only'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(YearPicker), findsOneWidget);
-
-    // Select the year 2024.
-    await tester.tap(find.text('2024').last);
-    await tester.pumpAndSettle();
-
     await tester.tap(find.text('Save Visit'));
     await tester.pumpAndSettle();
 
-    expect(repository.createCalls, 1);
+    expect(repository.createCalls, 0);
 
-    final visit = repository.createdVisits.single;
+    expect(find.text('Required'), findsNWidgets(2));
 
-    expect(visit.startedOn, isNull);
-    expect(visit.startedOnPrecision, isNull);
-    expect(visit.endedOn, DateTime(2024, 1, 1));
-    expect(visit.endedOnPrecision, VisitDatePrecision.year);
+    expect(find.text('Start and end dates are required.'), findsOneWidget);
   });
-  testWidgets('creates a city visit with month precision', (tester) async {
-    final countriesRepository = FakeCountriesRepository();
-    final cityVisitsRepository = FakeCityVisitsRepository();
+  testWidgets('clears only the corrected date field error', (tester) async {
+    final repository = FakeCountriesRepository();
 
-    await pumpExplore(
-      tester,
-      repository: countriesRepository,
-      cityVisitsRepository: cityVisitsRepository,
-    );
+    await pumpExplore(tester, repository: repository);
 
-    // Open Add Destination.
-    await tester.tap(find.byTooltip('Add Destination'));
+    await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
-    // Switch to City.
-    await tester.tap(find.text('City'));
+    await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
 
-    // Select Lisbon.
-    await tester.tap(find.text('Select a city'));
+    await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('destinationCitySearch')),
-      'lis',
-    );
-
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Lisbon'));
-    await tester.pumpAndSettle();
-
-    // Select a partial start date.
-    await tester.tap(find.text('START DATE'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Month and year'));
-    await tester.pumpAndSettle();
-
-    // Select 2024.
-    await tester.tap(find.byType(DropdownButton<int>).first);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('2024').last);
-    await tester.pumpAndSettle();
-
-    // Select June.
-    await tester.tap(find.byType(DropdownButton<int>).last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('June 2024').last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-
-    // Save the city visit.
+    // Trigger validation.
     await tester.tap(find.text('Save Visit'));
     await tester.pumpAndSettle();
 
-    expect(cityVisitsRepository.createCalls, 1);
-    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+    expect(find.text('Required'), findsNWidgets(2));
 
-    final visit = cityVisitsRepository.createdVisits.single;
+    // Correct only the start date.
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
 
-    expect(visit.startedOn, DateTime(2024, 6, 1));
-    expect(visit.startedOnPrecision, VisitDatePrecision.month);
-    expect(visit.endedOn, isNull);
+    // The start date error disappears, but the end date remains required.
+    expect(find.text('Required'), findsOneWidget);
 
-    // A city visit must not create a country visit.
-    expect(countriesRepository.createCalls, 0);
+    expect(find.text('June 2024'), findsOneWidget);
+
+    // The visit must not have been created.
+    expect(repository.createCalls, 0);
   });
 }

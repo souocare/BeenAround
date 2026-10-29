@@ -28,10 +28,10 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   @override
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
   }) {
     throw UnimplementedError();
   }
@@ -343,36 +343,40 @@ void main() {
     expect(find.text('10 Oct 2026 – 15 Oct 2026'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('cityVisitMenu-visit-1')));
-
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
-    final clearEndButton = find.byKey(const Key('editCityVisitClearEndDate'));
-
-    await tester.ensureVisible(clearEndButton);
+    await tester.tap(find.byKey(const Key('editCityVisitEndDate')));
     await tester.pumpAndSettle();
 
-    await tester.tap(clearEndButton);
+    await tester.tap(find.text('Exact date'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('20').last);
+    await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
     expect(repository.receivedVisitId, 'visit-1');
 
     expect(repository.receivedChanges, {
-      'ended_on': null,
-      'ended_on_precision': null,
+      'ended_on': DateTime(2026, 10, 20),
+      'ended_on_precision': VisitDatePrecision.day,
     });
 
     expect(repository.loadCalls, 2);
 
-    expect(find.text('From 10 Oct 2026'), findsOneWidget);
+    final updated = repository.visits.single;
 
+    expect(updated.startedOn, DateTime(2026, 10, 10));
+    expect(updated.endedOn, DateTime(2026, 10, 20));
+
+    expect(find.text('10 Oct 2026 – 20 Oct 2026'), findsOneWidget);
     expect(find.text('10 Oct 2026 – 15 Oct 2026'), findsNothing);
   });
   testWidgets('does not update visit when editing is cancelled', (
@@ -402,43 +406,64 @@ void main() {
   testWidgets('editing one visit preserves other visits', (tester) async {
     final repository = FakeCityVisitsRepository(
       visits: [
-        cityVisit(id: 'visit-1', startedOn: DateTime(2026, 10, 10)),
-        cityVisit(id: 'visit-2', startedOn: DateTime(2025, 5, 20)),
+        cityVisit(
+          id: 'visit-1',
+          startedOn: DateTime(2026, 10, 10),
+          endedOn: DateTime(2026, 10, 15),
+        ),
+        cityVisit(
+          id: 'visit-2',
+          startedOn: DateTime(2025, 5, 20),
+          endedOn: DateTime(2025, 5, 25),
+        ),
       ],
     );
 
     await pumpCityDetails(tester, repository);
 
     await tester.tap(find.byKey(const Key('cityVisitMenu-visit-1')));
-
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Edit visit'));
     await tester.pumpAndSettle();
 
-    final clearStartButton = find.byKey(
-      const Key('editCityVisitClearStartDate'),
-    );
-
-    await tester.ensureVisible(clearStartButton);
+    await tester.tap(find.byKey(const Key('editCityVisitStartDate')));
     await tester.pumpAndSettle();
 
-    await tester.tap(clearStartButton);
+    await tester.tap(find.text('Exact date'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('12').last);
+    await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
     expect(repository.receivedVisitId, 'visit-1');
 
-    expect(
-      repository.visits.singleWhere((visit) => visit.id == 'visit-2').startedOn,
-      DateTime(2025, 5, 20),
+    expect(repository.receivedChanges, {
+      'started_on': DateTime(2026, 10, 12),
+      'started_on_precision': VisitDatePrecision.day,
+    });
+
+    final firstVisit = repository.visits.singleWhere(
+      (visit) => visit.id == 'visit-1',
     );
 
-    expect(find.text('From 20 May 2025'), findsOneWidget);
+    final secondVisit = repository.visits.singleWhere(
+      (visit) => visit.id == 'visit-2',
+    );
+
+    expect(firstVisit.startedOn, DateTime(2026, 10, 12));
+    expect(firstVisit.endedOn, DateTime(2026, 10, 15));
+
+    expect(secondVisit.startedOn, DateTime(2025, 5, 20));
+    expect(secondVisit.endedOn, DateTime(2025, 5, 25));
+
+    expect(find.text('12 Oct 2026 – 15 Oct 2026'), findsOneWidget);
+    expect(find.text('20 May 2025 – 25 May 2025'), findsOneWidget);
   });
   testWidgets('deletes selected city visit and refreshes history', (
     tester,

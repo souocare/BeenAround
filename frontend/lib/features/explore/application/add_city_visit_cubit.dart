@@ -52,16 +52,19 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
 
       return false;
     }
+    // The validator guarantees both dates exist before repository submission.
+    final validStartedOn = startedOn!;
+    final validEndedOn = endedOn!;
 
     emit(const AddCityVisitState(phase: AddCityVisitPhase.submitting));
 
     try {
       await _repository.createCityVisit(
         cityId: cityId,
-        startedOn: startedOn,
-        endedOn: endedOn,
-        startedOnPrecision: startedOnPrecision,
-        endedOnPrecision: endedOnPrecision,
+        startedOn: validStartedOn,
+        endedOn: validEndedOn,
+        startedOnPrecision: startedOnPrecision ?? VisitDatePrecision.day,
+        endedOnPrecision: endedOnPrecision ?? VisitDatePrecision.day,
       );
 
       if (isClosed) return false;

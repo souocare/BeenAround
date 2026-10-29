@@ -4,21 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('CountryVisitDateValidator', () {
-    test('accepts visits without dates', () {
-      expect(CountryVisitDateValidator.validate(), isNull);
-    });
-
-    test('accepts a start date without an end date', () {
+    test('rejects visits without dates', () {
       expect(
-        CountryVisitDateValidator.validate(startedOn: DateTime(2026, 10, 10)),
-        isNull,
+        CountryVisitDateValidator.validate(),
+        'Start and end dates are required.',
       );
     });
 
-    test('accepts an end date without a start date', () {
+    test('rejects a start date without an end date', () {
+      expect(
+        CountryVisitDateValidator.validate(startedOn: DateTime(2026, 10, 10)),
+        'Start and end dates are required.',
+      );
+    });
+
+    test('rejects an end date without a start date', () {
       expect(
         CountryVisitDateValidator.validate(endedOn: DateTime(2026, 10, 15)),
-        isNull,
+        'Start and end dates are required.',
       );
     });
 

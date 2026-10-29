@@ -128,88 +128,6 @@ void main() {
     expect(find.text('15/10/2026'), findsOneWidget);
   });
 
-  testWidgets('clears start date without clearing end date', (tester) async {
-    final repository = FakeCityVisitsRepository();
-
-    await pumpSheet(
-      tester,
-      repository: repository,
-      visit: makeVisit(
-        startedOn: DateTime(2026, 10, 10),
-        endedOn: DateTime(2026, 10, 15),
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('editCityVisitClearStartDate')));
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('10/10/2026'), findsNothing);
-    expect(find.text('15/10/2026'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 1);
-
-    expect(repository.receivedChanges, {
-      'started_on': null,
-      'started_on_precision': null,
-    });
-  });
-
-  testWidgets('clears end date without clearing start date', (tester) async {
-    final repository = FakeCityVisitsRepository();
-
-    await pumpSheet(
-      tester,
-      repository: repository,
-      visit: makeVisit(
-        startedOn: DateTime(2026, 10, 10),
-        endedOn: DateTime(2026, 10, 15),
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('editCityVisitClearEndDate')));
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('10/10/2026'), findsOneWidget);
-    expect(find.text('15/10/2026'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 1);
-
-    expect(repository.receivedChanges, {
-      'ended_on': null,
-      'ended_on_precision': null,
-    });
-  });
-
-  testWidgets('supports visits with only an end date', (tester) async {
-    final repository = FakeCityVisitsRepository();
-
-    await pumpSheet(
-      tester,
-      repository: repository,
-      visit: makeVisit(endedOn: DateTime(2025, 6, 15)),
-    );
-
-    expect(find.text('Not set'), findsOneWidget);
-    expect(find.text('15/06/2025'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 0);
-    expect(repository.receivedChanges, isNull);
-  });
-
   testWidgets('disables save while submitting', (tester) async {
     final repository = FakeCityVisitsRepository();
     final pending = Completer<CityVisit>();
@@ -219,27 +137,84 @@ void main() {
     await pumpSheet(
       tester,
       repository: repository,
-      visit: makeVisit(startedOn: DateTime(2026, 10, 10)),
+      visit: makeVisit(
+        startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2024, 3, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
+      ),
     );
 
-    await tester.tap(find.byKey(const Key('editCityVisitClearStartDate')));
-
+    // Open the start date picker.
+    await tester.tap(find.byKey(const Key('editCityVisitStartDate')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
+    expect(find.text('How precise is your date?'), findsOneWidget);
 
+    // Select month precision.
+    await tester.tap(find.text('Month and year'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select month and year'), findsOneWidget);
+
+    // Change the start month to February.
+    final monthDropdown = find.byType(DropdownButton<int>).last;
+
+    await tester.tap(monthDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('February 2024').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Verify both displayed dates.
+    expect(find.text('February 2024'), findsOneWidget);
+    expect(find.text('March 2024'), findsOneWidget);
+
+    // Submit.
+    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
     await tester.pump();
+
+    expect(repository.updateCalls, 1);
+
+    // PATCH must preserve the existing end date.
+    expect(repository.receivedChanges, {
+      'started_on': DateTime(2024, 2, 1),
+      'started_on_precision': VisitDatePrecision.month,
+    });
 
     expect(find.text('Saving...'), findsOneWidget);
 
+    // Save must be disabled.
     final saveButton = tester.widget<FilledButton>(
       find.byKey(const Key('editCityVisitSaveButton')),
     );
 
     expect(saveButton.onPressed, isNull);
-    expect(repository.updateCalls, 1);
 
-    pending.complete(makeVisit());
+    // Both date fields must be disabled.
+    final startDateTile = tester.widget<ListTile>(
+      find.byKey(const Key('editCityVisitStartDate')),
+    );
+
+    final endDateTile = tester.widget<ListTile>(
+      find.byKey(const Key('editCityVisitEndDate')),
+    );
+
+    expect(startDateTile.onTap, isNull);
+    expect(endDateTile.onTap, isNull);
+
+    // Complete the request.
+    pending.complete(
+      makeVisit(
+        startedOn: DateTime(2024, 2, 1),
+        endedOn: DateTime(2024, 3, 1),
+        startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
+      ),
+    );
 
     await tester.pumpAndSettle();
   });
@@ -251,7 +226,9 @@ void main() {
       repository: repository,
       visit: makeVisit(
         startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2024, 3, 1),
         startedOnPrecision: VisitDatePrecision.month,
+        endedOnPrecision: VisitDatePrecision.month,
       ),
     );
 
@@ -266,16 +243,17 @@ void main() {
       repository: repository,
       visit: makeVisit(
         startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2025, 1, 1),
         startedOnPrecision: VisitDatePrecision.year,
+        endedOnPrecision: VisitDatePrecision.year,
       ),
     );
 
     expect(find.text('2024'), findsOneWidget);
     expect(find.text('01/01/2024'), findsNothing);
   });
-  testWidgets('clearing end date preserves existing start precision', (
-    tester,
-  ) async {
+
+  testWidgets('does not expose date clearing actions', (tester) async {
     final repository = FakeCityVisitsRepository();
 
     await pumpSheet(
@@ -283,32 +261,17 @@ void main() {
       repository: repository,
       visit: makeVisit(
         startedOn: DateTime(2024, 1, 1),
+        endedOn: DateTime(2024, 3, 1),
         startedOnPrecision: VisitDatePrecision.month,
-        endedOn: DateTime(2024, 2, 1),
         endedOnPrecision: VisitDatePrecision.month,
       ),
     );
 
-    await tester.tap(find.byKey(const Key('editCityVisitClearEndDate')));
+    expect(find.byKey(const Key('editCityVisitClearStartDate')), findsNothing);
 
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editCityVisitClearEndDate')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('editCityVisitSaveButton')));
-
-    await tester.pumpAndSettle();
-
-    expect(repository.updateCalls, 1);
-
-    expect(repository.receivedChanges, {
-      'ended_on': null,
-      'ended_on_precision': null,
-    });
-
-    expect(repository.receivedChanges!.containsKey('started_on'), isFalse);
-
-    expect(
-      repository.receivedChanges!.containsKey('started_on_precision'),
-      isFalse,
-    );
+    expect(find.text('January 2024'), findsOneWidget);
+    expect(find.text('March 2024'), findsOneWidget);
   });
 }

@@ -18,7 +18,7 @@ class CountryVisitDateValidator {
     }
 
     if (startedOn == null || endedOn == null) {
-      return null;
+      return 'Start and end dates are required.';
     }
 
     final startBounds = _bounds(
