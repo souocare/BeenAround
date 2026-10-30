@@ -5,10 +5,15 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import CurrentApiUser, DatabaseSession
+from app.domain.city_country_visit_association import (
+    VisitDateRange,
+    validate_city_country_association,
+)
 from app.domain.visit_dates import (
     DatePrecision,
     resolve_partial_visit_update,
 )
+from app.repositories.city_visits import CityVisitRepository
 from app.repositories.countries import CountryRepository
 from app.repositories.country_visits import CountryVisitRepository
 from app.schemas.country_visits import (
@@ -17,7 +22,6 @@ from app.schemas.country_visits import (
     CountryVisitResponse,
     CountryVisitUpdate,
 )
-
 
 router = APIRouter(
     prefix="/country-visits",
@@ -151,6 +155,41 @@ def update_country_visit(
             )
 
         country_code = country.code
+
+    # Validate all existing city associations against the proposed final state.
+    associated_cities = CityVisitRepository(session).list_for_country_visit(
+        country_visit_id=visit.id,
+        user_id=user.id,
+    )
+
+    if associated_cities:
+        proposed_country_dates = VisitDateRange(
+            started_on=started_on,
+            started_on_precision=started_on_precision,
+            ended_on=ended_on,
+            ended_on_precision=ended_on_precision,
+        )
+
+        for city_visit, city_country_code in associated_cities:
+            city_dates = VisitDateRange(
+                started_on=city_visit.started_on,
+                started_on_precision=DatePrecision(city_visit.started_on_precision),
+                ended_on=city_visit.ended_on,
+                ended_on_precision=DatePrecision(city_visit.ended_on_precision),
+            )
+
+            try:
+                validate_city_country_association(
+                    city_country_code=city_country_code,
+                    country_visit_country_code=country_code,
+                    city_dates=city_dates,
+                    country_dates=proposed_country_dates,
+                )
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(error),
+                ) from error
 
     updated_visit = repository.update(
         visit=visit,

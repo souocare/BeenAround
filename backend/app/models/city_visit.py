@@ -34,6 +34,10 @@ class CityVisit(TimestampMixin, Base):
             "user_id",
             "city_id",
         ),
+        Index(
+            "ix_city_visits_country_visit_id",
+            "country_visit_id",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -52,6 +56,13 @@ class CityVisit(TimestampMixin, Base):
         Integer,
         ForeignKey("cities.id", ondelete="RESTRICT"),
         nullable=False,
+    )
+
+    country_visit_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("country_visits.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
     )
 
     started_on: Mapped[date] = mapped_column(

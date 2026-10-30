@@ -6,11 +6,10 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.domain.visit_dates import DatePrecision
 from app.models.city import City
 from app.models.city_visit import CityVisit
 from app.models.country import Country
-from app.domain.visit_dates import DatePrecision
-
 
 type CityVisitRow = tuple[CityVisit, str, str, str]
 
@@ -63,6 +62,26 @@ class CityVisitRepository:
             )
         )
 
+    def list_for_country_visit(
+        self,
+        *,
+        country_visit_id: UUID,
+        user_id: UUID,
+    ) -> list[tuple[CityVisit, str]]:
+        """Return city visits linked to a country visit, including country codes."""
+
+        statement = (
+            select(CityVisit, City.country_code)
+            .join(City, City.id == CityVisit.city_id)
+            .where(
+                CityVisit.country_visit_id == country_visit_id,
+                CityVisit.user_id == user_id,
+            )
+            .order_by(CityVisit.id)
+        )
+
+        return list(self._session.execute(statement).all())
+
     def get_city(self, city_id: int) -> City | None:
         """Retrieve a city from the shared catalog."""
 
@@ -77,12 +96,15 @@ class CityVisitRepository:
         started_on_precision: DatePrecision | None,
         ended_on: date | None,
         ended_on_precision: DatePrecision | None,
+        country_visit_id: UUID | None = None,
+        commit: bool = True,
     ) -> CityVisit:
-        """Persist a new city visit."""
+        """Persist a new city visit with an optional country visit association."""
 
         visit = CityVisit(
             user_id=user_id,
             city_id=city_id,
+            country_visit_id=country_visit_id,
             started_on=started_on,
             started_on_precision=started_on_precision,
             ended_on=ended_on,
@@ -90,8 +112,12 @@ class CityVisitRepository:
         )
 
         self._session.add(visit)
-        self._session.commit()
-        self._session.refresh(visit)
+
+        if commit:
+            self._session.commit()
+            self._session.refresh(visit)
+        else:
+            self._session.flush()
 
         return visit
 
@@ -104,17 +130,23 @@ class CityVisitRepository:
         started_on_precision: DatePrecision | None,
         ended_on: date | None,
         ended_on_precision: DatePrecision | None,
+        country_visit_id: UUID | None,
+        commit: bool = True,
     ) -> CityVisit:
-        """Persist validated changes to an existing visit."""
+        """Persist validated changes to an existing city visit."""
 
         visit.city_id = city_id
+        visit.country_visit_id = country_visit_id
         visit.started_on = started_on
         visit.started_on_precision = started_on_precision
         visit.ended_on = ended_on
         visit.ended_on_precision = ended_on_precision
 
-        self._session.commit()
-        self._session.refresh(visit)
+        if commit:
+            self._session.commit()
+            self._session.refresh(visit)
+        else:
+            self._session.flush()
 
         return visit
 

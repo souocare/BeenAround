@@ -3,11 +3,12 @@
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.models.country_visit import CountryVisit
+from app.domain.city_country_visit_association import VisitDateRange
 from app.domain.visit_dates import DatePrecision
+from app.models.country_visit import CountryVisit
 
 
 class CountryVisitRepository:
@@ -39,6 +40,7 @@ class CountryVisitRepository:
         ended_on: date | None,
         started_on_precision: DatePrecision | None,
         ended_on_precision: DatePrecision | None,
+        commit: bool = True,
     ) -> CountryVisit:
         """Persist a new country visit."""
 
@@ -52,8 +54,12 @@ class CountryVisitRepository:
         )
 
         self._session.add(visit)
-        self._session.commit()
-        self._session.refresh(visit)
+
+        if commit:
+            self._session.commit()
+            self._session.refresh(visit)
+        else:
+            self._session.flush()
 
         return visit
 
@@ -94,6 +100,42 @@ class CountryVisitRepository:
         self._session.refresh(visit)
 
         return visit
+
+    def update_dates_if_unchanged(
+        self,
+        *,
+        visit_id: UUID,
+        user_id: UUID,
+        expected: VisitDateRange,
+        proposed: VisitDateRange,
+    ) -> bool:
+        """Update dates only when the country visit still matches the expected state.
+
+        The caller owns the transaction. This method never commits.
+        """
+
+        statement = (
+            update(CountryVisit)
+            .where(
+                CountryVisit.id == visit_id,
+                CountryVisit.user_id == user_id,
+                CountryVisit.started_on == expected.started_on,
+                CountryVisit.started_on_precision == expected.started_on_precision,
+                CountryVisit.ended_on == expected.ended_on,
+                CountryVisit.ended_on_precision == expected.ended_on_precision,
+            )
+            .values(
+                started_on=proposed.started_on,
+                started_on_precision=proposed.started_on_precision,
+                ended_on=proposed.ended_on,
+                ended_on_precision=proposed.ended_on_precision,
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        result = self._session.execute(statement)
+
+        return result.rowcount == 1
 
     def delete_for_user(
         self,

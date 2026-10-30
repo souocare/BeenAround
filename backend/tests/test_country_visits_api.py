@@ -13,11 +13,14 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import create_database_engine, get_db
 from app.main import create_app
+from app.models.city import City
 from app.models.country import Country
 from app.models.country_visit import CountryVisit
 from app.models.user import User
 
 TEST_PASSWORD = "correct-password-123"
+LISBON_ID = 2267057
+ORIGIN = {"Origin": "http://testserver"}
 
 
 @pytest.fixture
@@ -44,6 +47,21 @@ def visits_client(
                     continent="EU",
                 ),
             ]
+        )
+
+        session.flush()
+
+        session.add(
+            City(
+                id=LISBON_ID,
+                country_code="PT",
+                name="Lisbon",
+                ascii_name="Lisbon",
+                latitude=38.71667,
+                longitude=-9.13333,
+                population=517802,
+                feature_code="PPLC",
+            )
         )
 
         first_user = User(
@@ -179,6 +197,33 @@ def create_visit_for_test(
     )
 
     assert response.status_code == 201
+
+    return response.json()["id"]
+
+
+def create_associated_city_visit(
+    client: TestClient,
+    *,
+    country_visit_id: str,
+    started_on: str = "2025-06-12",
+    ended_on: str = "2025-06-15",
+) -> str:
+    """Create a Lisbon visit explicitly linked to a country visit."""
+
+    response = client.post(
+        "/api/v1/city-visits",
+        json={
+            "city_id": LISBON_ID,
+            "started_on": started_on,
+            "ended_on": ended_on,
+            "country_visit_id": country_visit_id,
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201
+
+    assert response.json()["country_visit_id"] == country_visit_id
 
     return response.json()["id"]
 
@@ -1170,3 +1215,141 @@ def test_country_visit_patch_precision_persists(
 
     assert saved["started_on"] == "2026-09-01"
     assert saved["started_on_precision"] == "month"
+
+
+def test_country_visit_patch_rejects_dates_excluding_associated_city(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    country_visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2025-06-10",
+        ended_on="2025-06-20",
+    )
+
+    create_associated_city_visit(
+        visits_client,
+        country_visit_id=country_visit_id,
+        started_on="2025-06-12",
+        ended_on="2025-06-15",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{country_visit_id}",
+        json={"ended_on": "2025-06-13"},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+    assert "extend beyond" in response.json()["detail"]
+
+    # The rejected update must preserve the original country dates.
+    listed = visits_client.get("/api/v1/country-visits")
+
+    saved = next(item for item in listed.json()["items"] if item["id"] == country_visit_id)
+
+    assert saved["started_on"] == "2025-06-10"
+    assert saved["ended_on"] == "2025-06-20"
+
+
+def test_country_visit_patch_allows_dates_containing_associated_city(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    country_visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2025-06-10",
+        ended_on="2025-06-20",
+    )
+
+    create_associated_city_visit(
+        visits_client,
+        country_visit_id=country_visit_id,
+        started_on="2025-06-12",
+        ended_on="2025-06-15",
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{country_visit_id}",
+        json={
+            "started_on": "2025-06-11",
+            "ended_on": "2025-06-18",
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["started_on"] == "2025-06-11"
+    assert body["ended_on"] == "2025-06-18"
+
+
+def test_country_visit_patch_rejects_country_change_with_associated_city(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    country_visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2025-06-10",
+        ended_on="2025-06-20",
+    )
+
+    create_associated_city_visit(
+        visits_client,
+        country_visit_id=country_visit_id,
+    )
+
+    response = visits_client.patch(
+        f"/api/v1/country-visits/{country_visit_id}",
+        json={"country_code": "ES"},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+    assert "same country" in response.json()["detail"]
+
+    listed = visits_client.get("/api/v1/country-visits")
+
+    saved = next(item for item in listed.json()["items"] if item["id"] == country_visit_id)
+
+    assert saved["country_code"] == "PT"
+
+
+def test_deleting_country_visit_preserves_associated_city(
+    visits_client: TestClient,
+) -> None:
+    login_web(visits_client)
+
+    country_visit_id = create_visit_for_test(
+        visits_client,
+        started_on="2025-06-10",
+        ended_on="2025-06-20",
+    )
+
+    city_visit_id = create_associated_city_visit(
+        visits_client,
+        country_visit_id=country_visit_id,
+    )
+
+    response = visits_client.delete(
+        f"/api/v1/country-visits/{country_visit_id}",
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 204
+
+    cities = visits_client.get("/api/v1/city-visits")
+
+    assert cities.status_code == 200
+
+    saved = next(item for item in cities.json()["items"] if item["id"] == city_visit_id)
+
+    assert saved["country_visit_id"] is None
+    assert saved["city_id"] == LISBON_ID
+    assert saved["started_on"] == "2025-06-12"
+    assert saved["ended_on"] == "2025-06-15"

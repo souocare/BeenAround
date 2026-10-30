@@ -15,6 +15,7 @@ from app.models.city import City
 from app.models.city_visit import CityVisit
 from app.models.country import Country
 from app.models.user import User
+from app.models.country_visit import CountryVisit
 
 
 CITY_ID = 2267057
@@ -347,3 +348,104 @@ def test_city_with_visits_cannot_be_deleted(database_engine) -> None:
             session.commit()
 
         session.rollback()
+
+
+def test_city_visit_does_not_require_country_visit(
+    database_engine,
+) -> None:
+    with Session(database_engine) as session:
+        seed_city(session)
+
+        user = make_user("user_without_association")
+        session.add(user)
+        session.flush()
+
+        visit = make_city_visit(user.id)
+
+        session.add(visit)
+        session.commit()
+
+        assert visit.country_visit_id is None
+
+
+def test_city_visit_can_reference_country_visit(
+    database_engine,
+) -> None:
+    with Session(database_engine) as session:
+        seed_city(session)
+
+        user = make_user("user_with_association")
+        session.add(user)
+        session.flush()
+
+        country_visit = CountryVisit(
+            user_id=user.id,
+            country_code="PT",
+            started_on=date(2026, 9, 28),
+            started_on_precision="day",
+            ended_on=date(2026, 10, 3),
+            ended_on_precision="day",
+        )
+
+        session.add(country_visit)
+        session.flush()
+
+        city_visit = make_city_visit(user.id)
+        city_visit.country_visit_id = country_visit.id
+
+        session.add(city_visit)
+        session.commit()
+
+        assert city_visit.country_visit_id == country_visit.id
+
+
+def test_deleting_country_visit_preserves_city_visit(
+    database_engine,
+) -> None:
+    with Session(database_engine) as session:
+        seed_city(session)
+
+        user = make_user("user_country_deletion")
+        session.add(user)
+        session.flush()
+
+        country_visit = CountryVisit(
+            user_id=user.id,
+            country_code="PT",
+            started_on=date(2026, 9, 28),
+            started_on_precision="day",
+            ended_on=date(2026, 10, 3),
+            ended_on_precision="day",
+        )
+
+        session.add(country_visit)
+        session.flush()
+
+        city_visit = make_city_visit(user.id)
+        city_visit.country_visit_id = country_visit.id
+
+        session.add(city_visit)
+        session.commit()
+
+        city_visit_id = city_visit.id
+        country_visit_id = country_visit.id
+
+        session.delete(country_visit)
+        session.commit()
+
+    with Session(database_engine) as session:
+        saved_city_visit = session.get(
+            CityVisit,
+            city_visit_id,
+        )
+
+        assert saved_city_visit is not None
+        assert saved_city_visit.country_visit_id is None
+
+        assert (
+            session.get(
+                CountryVisit,
+                country_visit_id,
+            )
+            is None
+        )
