@@ -3,8 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../geography/domain/city_visits_repository.dart';
+import '../../geography/domain/country_visit_date_expansion.dart';
+import '../../geography/domain/new_country_visit_input.dart';
 import '../domain/country_visit_date_validator.dart';
 import 'add_city_visit_state.dart';
+import 'pending_city_visit_creation.dart';
 
 class AddCityVisitCubit extends Cubit<AddCityVisitState> {
   AddCityVisitCubit({required CityVisitsRepository repository})
@@ -19,8 +22,13 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
     DateTime? endedOn,
     VisitDatePrecision? startedOnPrecision,
     VisitDatePrecision? endedOnPrecision,
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
   }) async {
-    if (state.isSubmitting || state.phase == AddCityVisitPhase.success) {
+    if (isClosed ||
+        state.isSubmitting ||
+        state.phase == AddCityVisitPhase.success) {
       return false;
     }
 
@@ -31,7 +39,6 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
           errorMessage: 'Please select a city.',
         ),
       );
-
       return false;
     }
 
@@ -49,12 +56,40 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
           errorMessage: dateError,
         ),
       );
-
       return false;
     }
-    // The validator guarantees both dates exist before repository submission.
+
     final validStartedOn = startedOn!;
     final validEndedOn = endedOn!;
+    final validStartPrecision = startedOnPrecision ?? VisitDatePrecision.day;
+    final validEndPrecision = endedOnPrecision ?? VisitDatePrecision.day;
+
+    // A confirmation must match the exact request that generated it.
+    if (countryDateExpansion != null) {
+      final pending = state.pendingCreation;
+
+      if (state.phase != AddCityVisitPhase.expansionRequired ||
+          pending == null ||
+          !identical(pending.expansion, countryDateExpansion) ||
+          countryVisitId == null ||
+          newCountryVisit != null ||
+          !pending.matches(
+            cityId: cityId,
+            startedOn: validStartedOn,
+            endedOn: validEndedOn,
+            startedOnPrecision: validStartPrecision,
+            endedOnPrecision: validEndPrecision,
+            countryVisitId: countryVisitId,
+          )) {
+        emit(
+          const AddCityVisitState(
+            phase: AddCityVisitPhase.failure,
+            errorMessage: 'The country visit confirmation is no longer valid.',
+          ),
+        );
+        return false;
+      }
+    }
 
     emit(const AddCityVisitState(phase: AddCityVisitPhase.submitting));
 
@@ -63,8 +98,11 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
         cityId: cityId,
         startedOn: validStartedOn,
         endedOn: validEndedOn,
-        startedOnPrecision: startedOnPrecision ?? VisitDatePrecision.day,
-        endedOnPrecision: endedOnPrecision ?? VisitDatePrecision.day,
+        startedOnPrecision: validStartPrecision,
+        endedOnPrecision: validEndPrecision,
+        countryVisitId: countryVisitId,
+        newCountryVisit: newCountryVisit,
+        countryDateExpansion: countryDateExpansion,
       );
 
       if (isClosed) return false;
@@ -72,6 +110,45 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
       emit(const AddCityVisitState(phase: AddCityVisitPhase.success));
 
       return true;
+    } on CountryVisitDateExpansionRequired catch (error) {
+      if (isClosed) return false;
+
+      if (countryVisitId == null || newCountryVisit != null) {
+        emit(
+          const AddCityVisitState(
+            phase: AddCityVisitPhase.failure,
+            errorMessage: 'Invalid country visit expansion proposal.',
+          ),
+        );
+        return false;
+      }
+
+      if (error.expansion.countryVisitId != countryVisitId) {
+        emit(
+          const AddCityVisitState(
+            phase: AddCityVisitPhase.failure,
+            errorMessage: 'The country visit proposal does not match.',
+          ),
+        );
+        return false;
+      }
+
+      emit(
+        AddCityVisitState(
+          phase: AddCityVisitPhase.expansionRequired,
+          pendingCreation: PendingCityVisitCreation(
+            cityId: cityId,
+            startedOn: validStartedOn,
+            endedOn: validEndedOn,
+            startedOnPrecision: validStartPrecision,
+            endedOnPrecision: validEndPrecision,
+            countryVisitId: countryVisitId,
+            expansion: error.expansion,
+          ),
+        ),
+      );
+
+      return false;
     } on ApiException catch (error) {
       if (isClosed) return false;
 
@@ -98,7 +175,15 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
   }
 
   void clearError() {
-    if (state.phase != AddCityVisitPhase.failure) return;
+    if (isClosed || state.phase != AddCityVisitPhase.failure) return;
+
+    emit(const AddCityVisitState());
+  }
+
+  void dismissExpansion() {
+    if (isClosed || state.phase != AddCityVisitPhase.expansionRequired) {
+      return;
+    }
 
     emit(const AddCityVisitState());
   }

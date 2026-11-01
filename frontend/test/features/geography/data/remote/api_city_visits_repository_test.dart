@@ -8,6 +8,8 @@ import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/geography/data/remote/api_city_visits_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 
 class FakeCityVisitsHttpAdapter implements HttpClientAdapter {
   FakeCityVisitsHttpAdapter(this.handler);
@@ -46,6 +48,7 @@ Map<String, dynamic> visitResponse({
   String cityName = 'Lisbon',
   String countryCode = 'PT',
   String countryName = 'Portugal',
+  String? countryVisitId,
   String startedOn = '2025-07-10',
   String endedOn = '2025-07-15',
   String startedOnPrecision = 'day',
@@ -57,6 +60,7 @@ Map<String, dynamic> visitResponse({
     'city_name': cityName,
     'country_code': countryCode,
     'country_name': countryName,
+    'country_visit_id': countryVisitId,
     'started_on': startedOn,
     'ended_on': endedOn,
     'started_on_precision': startedOnPrecision,
@@ -76,6 +80,26 @@ ApiCityVisitsRepository createRepository(
   return ApiCityVisitsRepository(
     apiClient: ApiClient(serverConfig: config, dio: dio),
   );
+}
+
+CountryVisitDateExpansion sampleExpansion({
+  String countryVisitId = '550e8400-e29b-41d4-a716-446655440001',
+}) {
+  return CountryVisitDateExpansion.fromJson({
+    'country_visit_id': countryVisitId,
+    'current': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-15',
+      'ended_on_precision': 'day',
+    },
+    'proposed': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-18',
+      'ended_on_precision': 'day',
+    },
+  });
 }
 
 void main() {
@@ -341,6 +365,428 @@ void main() {
       expect(visit.startedOn, DateTime(2024, 1, 1));
       expect(visit.startedOnPrecision, VisitDatePrecision.year);
     });
+    test(
+      'creates a city visit associated with an existing country visit',
+      () async {
+        const countryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+        final repository = createRepository((options) {
+          expect(options.method, 'POST');
+          expect(options.uri.path, '/api/v1/city-visits');
+
+          expect(options.data, {
+            'city_id': 2267057,
+            'started_on': '2025-06-12',
+            'started_on_precision': 'day',
+            'ended_on': '2025-06-18',
+            'ended_on_precision': 'day',
+            'country_visit_id': countryVisitId,
+          });
+
+          return jsonResponse(
+            visitResponse(countryVisitId: countryVisitId),
+            statusCode: 201,
+          );
+        });
+
+        final visit = await repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          countryVisitId: countryVisitId,
+        );
+
+        expect(visit.countryVisitId, countryVisitId);
+      },
+    );
+    test('creates a city and a new country visit in one request', () async {
+      const createdCountryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+      final repository = createRepository((options) {
+        expect(options.method, 'POST');
+
+        expect(options.data, {
+          'city_id': 2267057,
+          'started_on': '2025-06-12',
+          'started_on_precision': 'day',
+          'ended_on': '2025-06-18',
+          'ended_on_precision': 'day',
+          'new_country_visit': {
+            'started_on': '2025-06-01',
+            'started_on_precision': 'month',
+            'ended_on': '2025-06-30',
+            'ended_on_precision': 'day',
+          },
+        });
+
+        return jsonResponse(
+          visitResponse(countryVisitId: createdCountryVisitId),
+          statusCode: 201,
+        );
+      });
+
+      final visit = await repository.createCityVisit(
+        cityId: 2267057,
+        startedOn: DateTime(2025, 6, 12),
+        endedOn: DateTime(2025, 6, 18),
+        newCountryVisit: NewCountryVisitInput(
+          startedOn: DateTime(2025, 6, 1),
+          startedOnPrecision: VisitDatePrecision.month,
+          endedOn: DateTime(2025, 6, 30),
+          endedOnPrecision: VisitDatePrecision.day,
+        ),
+      );
+
+      expect(visit.countryVisitId, createdCountryVisitId);
+    });
+    test('rejects simultaneous existing and new country visits', () async {
+      var requestCount = 0;
+
+      final repository = createRepository((_) {
+        requestCount++;
+        return jsonResponse(visitResponse(), statusCode: 201);
+      });
+
+      await expectLater(
+        repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          countryVisitId: '550e8400-e29b-41d4-a716-446655440001',
+          newCountryVisit: NewCountryVisitInput(
+            startedOn: DateTime(2025, 6, 10),
+            endedOn: DateTime(2025, 6, 20),
+          ),
+        ),
+        throwsArgumentError,
+      );
+
+      expect(requestCount, 0);
+    });
+    test(
+      'rejects an empty country visit ID before sending a request',
+      () async {
+        var requestCount = 0;
+
+        final repository = createRepository((_) {
+          requestCount++;
+          return jsonResponse(visitResponse(), statusCode: 201);
+        });
+
+        await expectLater(
+          repository.createCityVisit(
+            cityId: 2267057,
+            startedOn: DateTime(2025, 6, 12),
+            endedOn: DateTime(2025, 6, 18),
+            countryVisitId: '   ',
+          ),
+          throwsArgumentError,
+        );
+
+        expect(requestCount, 0);
+      },
+    );
+    test('parses a country date expansion proposal on creation', () async {
+      const countryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': {
+            'code': 'COUNTRY_VISIT_DATE_EXPANSION_REQUIRED',
+            'message': 'Country visit dates must be expanded.',
+            'country_visit_id': countryVisitId,
+            'current': {
+              'started_on': '2025-06-10',
+              'started_on_precision': 'day',
+              'ended_on': '2025-06-15',
+              'ended_on_precision': 'day',
+            },
+            'proposed': {
+              'started_on': '2025-06-10',
+              'started_on_precision': 'day',
+              'ended_on': '2025-06-18',
+              'ended_on_precision': 'day',
+            },
+          },
+        }, statusCode: 409),
+      );
+
+      await expectLater(
+        repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          countryVisitId: countryVisitId,
+        ),
+        throwsA(
+          isA<CountryVisitDateExpansionRequired>()
+              .having(
+                (error) => error.expansion.countryVisitId,
+                'countryVisitId',
+                countryVisitId,
+              )
+              .having(
+                (error) => error.expansion.proposed.endedOn,
+                'proposed end date',
+                DateTime(2025, 6, 18),
+              ),
+        ),
+      );
+    });
+    test('parses a country date expansion proposal on update', () async {
+      const countryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': {
+            'code': 'COUNTRY_VISIT_DATE_EXPANSION_REQUIRED',
+            'country_visit_id': countryVisitId,
+            'current': {
+              'started_on': '2025-06-10',
+              'started_on_precision': 'day',
+              'ended_on': '2025-06-15',
+              'ended_on_precision': 'day',
+            },
+            'proposed': {
+              'started_on': '2025-06-10',
+              'started_on_precision': 'day',
+              'ended_on': '2025-06-18',
+              'ended_on_precision': 'day',
+            },
+          },
+        }, statusCode: 409),
+      );
+
+      await expectLater(
+        repository.updateCityVisit(
+          visitId: visitId,
+          changes: {'country_visit_id': countryVisitId},
+        ),
+        throwsA(isA<CountryVisitDateExpansionRequired>()),
+      );
+    });
+    test(
+      'does not interpret unrelated conflicts as expansion proposals',
+      () async {
+        final repository = createRepository(
+          (_) => jsonResponse({
+            'detail': {
+              'code': 'COUNTRY_VISIT_DATE_EXPANSION_STALE',
+              'message': 'Country visit dates changed.',
+            },
+          }, statusCode: 409),
+        );
+
+        await expectLater(
+          repository.updateCityVisit(
+            visitId: visitId,
+            changes: {
+              'country_visit_id': '550e8400-e29b-41d4-a716-446655440001',
+            },
+          ),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.statusCode,
+              'statusCode',
+              409,
+            ),
+          ),
+        );
+      },
+    );
+    test('falls back to API error for malformed expansion proposals', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': {
+            'code': 'COUNTRY_VISIT_DATE_EXPANSION_REQUIRED',
+            'country_visit_id': '550e8400-e29b-41d4-a716-446655440001',
+            'current': 'invalid',
+            'proposed': null,
+          },
+        }, statusCode: 409),
+      );
+
+      await expectLater(
+        repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+        ),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            409,
+          ),
+        ),
+      );
+    });
+    test(
+      'creates a city visit with confirmed country date expansion',
+      () async {
+        final expansion = sampleExpansion();
+
+        final repository = createRepository((options) {
+          expect(options.method, 'POST');
+
+          expect(options.data, {
+            'city_id': 2267057,
+            'started_on': '2025-06-12',
+            'started_on_precision': 'day',
+            'ended_on': '2025-06-18',
+            'ended_on_precision': 'day',
+            'country_visit_id': expansion.countryVisitId,
+            'country_date_expansion': expansion.toConfirmationJson(),
+          });
+
+          return jsonResponse(
+            visitResponse(countryVisitId: expansion.countryVisitId),
+            statusCode: 201,
+          );
+        });
+
+        final visit = await repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          countryVisitId: expansion.countryVisitId,
+          countryDateExpansion: expansion,
+        );
+
+        expect(visit.countryVisitId, expansion.countryVisitId);
+      },
+    );
+    test(
+      'updates a city visit with confirmed country date expansion',
+      () async {
+        final expansion = sampleExpansion();
+
+        final repository = createRepository((options) {
+          expect(options.method, 'PATCH');
+
+          expect(options.data, {
+            'country_visit_id': expansion.countryVisitId,
+            'country_date_expansion': expansion.toConfirmationJson(),
+          });
+
+          return jsonResponse(
+            visitResponse(countryVisitId: expansion.countryVisitId),
+          );
+        });
+
+        final visit = await repository.updateCityVisit(
+          visitId: visitId,
+          changes: {
+            'country_visit_id': expansion.countryVisitId,
+            'country_date_expansion': expansion,
+          },
+        );
+
+        expect(visit.countryVisitId, expansion.countryVisitId);
+      },
+    );
+    test(
+      'confirms expansion without resending an unchanged association',
+      () async {
+        final expansion = sampleExpansion();
+
+        final repository = createRepository((options) {
+          expect(options.method, 'PATCH');
+
+          expect(options.data, {
+            'country_date_expansion': expansion.toConfirmationJson(),
+          });
+
+          return jsonResponse(
+            visitResponse(countryVisitId: expansion.countryVisitId),
+          );
+        });
+
+        final visit = await repository.updateCityVisit(
+          visitId: visitId,
+          changes: {'country_date_expansion': expansion},
+        );
+
+        expect(visit.countryVisitId, expansion.countryVisitId);
+      },
+    );
+    test('rejects a confirmation for a different country visit', () async {
+      var requestCount = 0;
+
+      final repository = createRepository((_) {
+        requestCount++;
+        return jsonResponse(visitResponse());
+      });
+
+      final expansion = sampleExpansion();
+
+      await expectLater(
+        repository.createCityVisit(
+          cityId: 2267057,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          countryVisitId: secondVisitId,
+          countryDateExpansion: expansion,
+        ),
+        throwsArgumentError,
+      );
+
+      await expectLater(
+        repository.updateCityVisit(
+          visitId: visitId,
+          changes: {
+            'country_visit_id': secondVisitId,
+            'country_date_expansion': expansion,
+          },
+        ),
+        throwsArgumentError,
+      );
+
+      expect(requestCount, 0);
+    });
+    test(
+      'rejects country expansion confirmation without an association',
+      () async {
+        var requestCount = 0;
+
+        final repository = createRepository((_) {
+          requestCount++;
+          return jsonResponse(visitResponse(), statusCode: 201);
+        });
+
+        await expectLater(
+          repository.createCityVisit(
+            cityId: 2267057,
+            startedOn: DateTime(2025, 6, 12),
+            endedOn: DateTime(2025, 6, 18),
+            countryDateExpansion: sampleExpansion(),
+          ),
+          throwsArgumentError,
+        );
+
+        expect(requestCount, 0);
+      },
+    );
+    test('rejects malformed confirmation values before HTTP', () async {
+      var requestCount = 0;
+
+      final repository = createRepository((_) {
+        requestCount++;
+        return jsonResponse(visitResponse());
+      });
+
+      for (final invalidValue in [null, 'invalid', <String, dynamic>{}]) {
+        await expectLater(
+          repository.updateCityVisit(
+            visitId: visitId,
+            changes: {'country_date_expansion': invalidValue},
+          ),
+          throwsArgumentError,
+        );
+      }
+
+      expect(requestCount, 0);
+    });
   });
 
   group('ApiCityVisitsRepository - updates', () {
@@ -546,6 +992,93 @@ void main() {
         throwsFormatException,
       );
     });
+    test('associates a city visit with an existing country visit', () async {
+      const countryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+      final repository = createRepository((options) {
+        expect(options.method, 'PATCH');
+        expect(options.uri.path, '/api/v1/city-visits/$visitId');
+
+        expect(options.data, {'country_visit_id': countryVisitId});
+
+        return jsonResponse(visitResponse(countryVisitId: countryVisitId));
+      });
+
+      final visit = await repository.updateCityVisit(
+        visitId: visitId,
+        changes: {'country_visit_id': countryVisitId},
+      );
+
+      expect(visit.countryVisitId, countryVisitId);
+    });
+    test('removes a country visit association with explicit null', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'PATCH');
+        expect(options.uri.path, '/api/v1/city-visits/$visitId');
+
+        final payload = Map<String, dynamic>.from(options.data as Map);
+
+        expect(payload.containsKey('country_visit_id'), isTrue);
+        expect(payload['country_visit_id'], isNull);
+
+        return jsonResponse(visitResponse());
+      });
+
+      final visit = await repository.updateCityVisit(
+        visitId: visitId,
+        changes: {'country_visit_id': null},
+      );
+
+      expect(visit.countryVisitId, isNull);
+    });
+    test('omits country visit association when updating dates', () async {
+      const countryVisitId = '550e8400-e29b-41d4-a716-446655440001';
+
+      final repository = createRepository((options) {
+        expect(options.method, 'PATCH');
+
+        final payload = Map<String, dynamic>.from(options.data as Map);
+
+        expect(payload, {'ended_on': '2025-07-18'});
+
+        expect(payload.containsKey('country_visit_id'), isFalse);
+
+        return jsonResponse(
+          visitResponse(countryVisitId: countryVisitId, endedOn: '2025-07-18'),
+        );
+      });
+
+      final visit = await repository.updateCityVisit(
+        visitId: visitId,
+        changes: {'ended_on': DateTime(2025, 7, 18)},
+      );
+
+      expect(visit.countryVisitId, countryVisitId);
+      expect(visit.endedOn, DateTime(2025, 7, 18));
+    });
+    test(
+      'rejects invalid country visit IDs before sending a request',
+      () async {
+        var requestCount = 0;
+
+        final repository = createRepository((_) {
+          requestCount++;
+          return jsonResponse(visitResponse());
+        });
+
+        for (final invalidId in ['', '   ', 123, false]) {
+          await expectLater(
+            repository.updateCityVisit(
+              visitId: visitId,
+              changes: {'country_visit_id': invalidId},
+            ),
+            throwsArgumentError,
+          );
+        }
+
+        expect(requestCount, 0);
+      },
+    );
   });
 
   group('ApiCityVisitsRepository - deletion', () {

@@ -4,9 +4,15 @@ import 'package:beenaround/features/explore/domain/visited_city.dart';
 import 'package:beenaround/features/explore/presentation/pages/city_details_page.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/explore/data/countries_repository.dart';
+import 'package:beenaround/features/explore/data/countries_repository.dart';
+import 'package:beenaround/features/explore/domain/country.dart';
+import 'package:beenaround/features/explore/domain/country_visit.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
   FakeCityVisitsRepository({required this.visits});
@@ -32,7 +38,10 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required DateTime endedOn,
     VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
     VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
-  }) {
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
+  }) async {
     throw UnimplementedError();
   }
 
@@ -70,18 +79,27 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
       cityName: previous.cityName,
       countryCode: previous.countryCode,
       countryName: previous.countryName,
+
+      countryVisitId: changes.containsKey('country_visit_id')
+          ? changes['country_visit_id'] as String?
+          : previous.countryVisitId,
+
       startedOn: changes.containsKey('started_on')
           ? changes['started_on'] as DateTime?
           : previous.startedOn,
+
       endedOn: changes.containsKey('ended_on')
           ? changes['ended_on'] as DateTime?
           : previous.endedOn,
+
       startedOnPrecision: changes.containsKey('started_on_precision')
           ? changes['started_on_precision'] as VisitDatePrecision?
           : previous.startedOnPrecision,
+
       endedOnPrecision: changes.containsKey('ended_on_precision')
           ? changes['ended_on_precision'] as VisitDatePrecision?
           : previous.endedOnPrecision,
+
       createdAt: previous.createdAt,
       updatedAt: DateTime(2026, 10, 24),
     );
@@ -102,6 +120,45 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     }
 
     visits.removeWhere((visit) => visit.id == visitId);
+  }
+}
+
+class FakeCountriesRepository implements CountriesRepository {
+  FakeCountriesRepository({List<CountryVisit> visits = const []})
+    : visits = List.of(visits);
+
+  final List<CountryVisit> visits;
+
+  @override
+  Future<List<Country>> getCountries() async => const [];
+
+  @override
+  Future<List<CountryVisit>> getCountryVisits() async {
+    return List.unmodifiable(visits);
+  }
+
+  @override
+  Future<CountryVisit> createCountryVisit({
+    required String countryCode,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CountryVisit> updateCountryVisit({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteCountryVisit({required String visitId}) {
+    throw UnimplementedError();
   }
 }
 
@@ -144,6 +201,8 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
+    final countriesRepository = FakeCountriesRepository();
+
     final cubit = VisitedCitiesCubit(repository: repository);
     await cubit.load();
 
@@ -156,8 +215,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-      RepositoryProvider<CityVisitsRepository>.value(
-        value: repository,
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CityVisitsRepository>.value(value: repository),
+          RepositoryProvider<CountriesRepository>.value(
+            value: countriesRepository,
+          ),
+        ],
         child: BlocProvider<VisitedCitiesCubit>.value(
           value: cubit,
           child: MaterialApp(home: CityDetailsPage(city: city)),

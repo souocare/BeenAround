@@ -5,6 +5,8 @@ import 'package:beenaround/features/explore/application/visited_cities_cubit.dar
 import 'package:beenaround/features/explore/application/visited_cities_state.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
@@ -32,11 +34,14 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   @override
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
-  }) {
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
+  }) async {
     throw UnimplementedError();
   }
 

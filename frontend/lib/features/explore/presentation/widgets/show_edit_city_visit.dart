@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../application/edit_city_visit_cubit.dart';
+import '../../data/countries_repository.dart';
 import '../../domain/visited_city.dart';
 import '../../../geography/domain/city_visit.dart';
 import '../../../geography/domain/city_visits_repository.dart';
@@ -12,13 +13,18 @@ Future<bool> showEditCityVisit(
   required VisitedCity city,
   required CityVisit visit,
 }) async {
-  final repository = context.read<CityVisitsRepository>();
+  final cityVisitsRepository = context.read<CityVisitsRepository>();
+  final countriesRepository = context.read<CountriesRepository>();
+
   final width = MediaQuery.sizeOf(context).width;
 
   Widget buildContent(BuildContext context) {
-    return BlocProvider<EditCityVisitCubit>(
-      create: (_) => EditCityVisitCubit(repository: repository),
-      child: EditCityVisitSheet(city: city, visit: visit),
+    return RepositoryProvider<CountriesRepository>.value(
+      value: countriesRepository,
+      child: BlocProvider<EditCityVisitCubit>(
+        create: (_) => EditCityVisitCubit(repository: cityVisitsRepository),
+        child: EditCityVisitSheet(city: city, visit: visit),
+      ),
     );
   }
 

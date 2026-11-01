@@ -241,11 +241,14 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
         RepositoryProvider<CityVisitsRepository>(
           create: (_) => ApiCityVisitsRepository(apiClient: widget.apiClient),
         ),
+        RepositoryProvider<CountriesRepository>(
+          create: (_) => ApiCountriesRepository(apiClient: widget.apiClient),
+        ),
       ],
-      child: BlocProvider(
-        create: (_) => ExploreCubit(
-          repository: ApiCountriesRepository(apiClient: widget.apiClient),
-        )..load(),
+      child: BlocProvider<ExploreCubit>(
+        create: (context) =>
+            ExploreCubit(repository: context.read<CountriesRepository>())
+              ..load(),
         child: AuthenticatedAppShell(
           user: widget.user,
           onLogout: widget.onLogout,

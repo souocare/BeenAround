@@ -8,6 +8,7 @@ import '../../domain/country.dart';
 import '../../application/add_city_visit_cubit.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../geography/domain/city_repository.dart';
+import '../../data/countries_repository.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -21,8 +22,11 @@ Future<bool> showAddDestination(
   final width = MediaQuery.sizeOf(context).width;
 
   Widget buildContent(BuildContext context) {
-    return RepositoryProvider<CityRepository>.value(
-      value: cityRepository,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<CityRepository>.value(value: cityRepository),
+        RepositoryProvider<CountriesRepository>.value(value: repository),
+      ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider<ExploreCubit>.value(value: exploreCubit),

@@ -11,6 +11,7 @@ class CityVisit {
     required this.endedOn,
     required this.createdAt,
     required this.updatedAt,
+    this.countryVisitId,
     this.startedOnPrecision,
     this.endedOnPrecision,
   });
@@ -20,6 +21,11 @@ class CityVisit {
   final String cityName;
   final String countryCode;
   final String countryName;
+
+  /// Explicit association with an existing country visit.
+  ///
+  /// Null means this city visit is independent of any country visit.
+  final String? countryVisitId;
 
   final DateTime? startedOn;
   final VisitDatePrecision? startedOnPrecision;
@@ -43,6 +49,7 @@ class CityVisit {
       cityName: json['city_name'] as String,
       countryCode: json['country_code'] as String,
       countryName: json['country_name'] as String,
+      countryVisitId: json['country_visit_id'] as String?,
       startedOn: startedOn == null ? null : DateTime.parse(startedOn),
       startedOnPrecision: startedOnPrecision == null
           ? null

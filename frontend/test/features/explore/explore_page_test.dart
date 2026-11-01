@@ -5,6 +5,8 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/explore/presentation/pages/explore_page.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,14 +85,16 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     return List.unmodifiable(visits);
   }
 
-  @override
   Future<CityVisit> createCityVisit({
     required int cityId,
-    DateTime? startedOn,
-    DateTime? endedOn,
-    VisitDatePrecision? startedOnPrecision,
-    VisitDatePrecision? endedOnPrecision,
-  }) {
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
+  }) async {
     throw UnimplementedError();
   }
 

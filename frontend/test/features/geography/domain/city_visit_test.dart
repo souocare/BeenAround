@@ -157,5 +157,58 @@ void main() {
       expect(visit.startedOnPrecision, isNull);
       expect(visit.endedOnPrecision, isNull);
     });
+    test('parses an explicit country visit association', () {
+      final visit = CityVisit.fromJson({
+        'id': 'city-visit-123',
+        'city_id': 1,
+        'city_name': 'Lisbon',
+        'country_code': 'PT',
+        'country_name': 'Portugal',
+        'country_visit_id': 'country-visit-456',
+        'started_on': '2025-06-12',
+        'started_on_precision': 'day',
+        'ended_on': '2025-06-18',
+        'ended_on_precision': 'day',
+        'created_at': '2025-06-20T12:00:00Z',
+        'updated_at': '2025-06-20T12:00:00Z',
+      });
+
+      expect(visit.countryVisitId, 'country-visit-456');
+    });
+    test('supports a city visit without a country association', () {
+      final visit = CityVisit.fromJson({
+        'id': 'city-visit-123',
+        'city_id': 1,
+        'city_name': 'Lisbon',
+        'country_code': 'PT',
+        'country_name': 'Portugal',
+        'country_visit_id': null,
+        'started_on': '2025-06-12',
+        'started_on_precision': 'day',
+        'ended_on': '2025-06-18',
+        'ended_on_precision': 'day',
+        'created_at': '2025-06-20T12:00:00Z',
+        'updated_at': '2025-06-20T12:00:00Z',
+      });
+
+      expect(visit.countryVisitId, isNull);
+    });
+    test('supports responses without country_visit_id', () {
+      final visit = CityVisit.fromJson({
+        'id': 'city-visit-123',
+        'city_id': 1,
+        'city_name': 'Lisbon',
+        'country_code': 'PT',
+        'country_name': 'Portugal',
+        'started_on': '2025-06-12',
+        'started_on_precision': 'day',
+        'ended_on': '2025-06-18',
+        'ended_on_precision': 'day',
+        'created_at': '2025-06-20T12:00:00Z',
+        'updated_at': '2025-06-20T12:00:00Z',
+      });
+
+      expect(visit.countryVisitId, isNull);
+    });
   });
 }

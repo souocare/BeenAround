@@ -9,6 +9,9 @@ import '../../../../core/models/partial_visit_date.dart';
 import '../../../../core/models/visit_date_precision.dart';
 import '../../domain/country_visit_date_validator.dart';
 import 'partial_visit_date_picker.dart';
+import 'country_visit_date_expansion_dialog.dart';
+import '../../data/countries_repository.dart';
+import '../../domain/country_visit.dart';
 
 class EditCityVisitSheet extends StatefulWidget {
   const EditCityVisitSheet({
@@ -29,19 +32,262 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
   DateTime? _endedOn;
   VisitDatePrecision? _startedOnPrecision;
   VisitDatePrecision? _endedOnPrecision;
+  String? _selectedCountryVisitId;
+
+  List<CountryVisit> _availableCountryVisits = const [];
+
+  bool _loadingCountryVisits = false;
+  bool _countryVisitsLoaded = false;
+
+  String? _countryVisitsError;
+  String? _associationSelectionError;
+  bool _showCountryVisitOptions = false;
 
   @override
   void initState() {
     super.initState();
-
+    _selectedCountryVisitId = widget.visit.countryVisitId;
+    _showCountryVisitOptions = _selectedCountryVisitId != null;
     _startedOn = widget.visit.startedOn;
     _endedOn = widget.visit.endedOn;
 
     _startedOnPrecision = widget.visit.startedOnPrecision;
     _endedOnPrecision = widget.visit.endedOnPrecision;
+
+    if (_selectedCountryVisitId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadCountryVisits();
+        }
+      });
+    }
+  }
+
+  Future<void> _loadCountryVisits() async {
+    if (_loadingCountryVisits || _countryVisitsLoaded) return;
+
+    setState(() {
+      _loadingCountryVisits = true;
+      _countryVisitsError = null;
+    });
+
+    try {
+      final visits = await context
+          .read<CountriesRepository>()
+          .getCountryVisits();
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableCountryVisits = visits;
+        _countryVisitsLoaded = true;
+        _loadingCountryVisits = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingCountryVisits = false;
+        _countryVisitsError =
+            'Unable to load your country visits. Please try again.';
+      });
+    }
+  }
+
+  List<CountryVisit> get _matchingCountryVisits {
+    return _availableCountryVisits
+        .where((visit) => visit.countryCode == widget.visit.countryCode)
+        .toList(growable: false);
+  }
+
+  bool get _isInteractionBlocked {
+    final state = context.read<EditCityVisitCubit>().state;
+
+    return state.isSubmitting ||
+        state.phase == EditCityVisitPhase.expansionRequired;
+  }
+
+  void _selectCountryVisit(String? countryVisitId) {
+    if (_isInteractionBlocked) return;
+
+    setState(() {
+      _selectedCountryVisitId = countryVisitId;
+      _showCountryVisitOptions = countryVisitId != null;
+      _associationSelectionError = null;
+    });
+
+    context.read<EditCityVisitCubit>().clearError();
+  }
+
+  Widget _buildCountryVisitAssociation() {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final matchingVisits = _matchingCountryVisits;
+    final selectedVisitMissing =
+        _countryVisitsLoaded &&
+        _selectedCountryVisitId != null &&
+        !matchingVisits.any((visit) => visit.id == _selectedCountryVisitId);
+
+    return BlocBuilder<EditCityVisitCubit, EditCityVisitState>(
+      builder: (context, state) {
+        final disabled =
+            state.isSubmitting ||
+            state.phase == EditCityVisitPhase.expansionRequired ||
+            state.phase == EditCityVisitPhase.success;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'COUNTRY VISIT ASSOCIATION',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              'Optionally link this city visit to an existing visit '
+              'to ${widget.city.countryName}.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    key: const Key('editCityAssociationNone'),
+                    leading: Icon(
+                      _selectedCountryVisitId == null
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: const Text('Not associated'),
+                    subtitle: const Text('Keep this city visit independent.'),
+                    onTap: disabled ? null : () => _selectCountryVisit(null),
+                  ),
+
+                  const Divider(height: 1),
+
+                  ListTile(
+                    key: const Key('editCityAssociationExisting'),
+                    leading: Icon(
+                      _selectedCountryVisitId != null
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: const Text('Link existing country visit'),
+                    subtitle: const Text('Choose a visit to this country.'),
+                    onTap: disabled
+                        ? null
+                        : () {
+                            setState(() {
+                              _showCountryVisitOptions = true;
+                              _associationSelectionError = null;
+                            });
+
+                            _loadCountryVisits();
+                          },
+                  ),
+                ],
+              ),
+            ),
+
+            if (_showCountryVisitOptions && _loadingCountryVisits) ...[
+              const SizedBox(height: 12),
+              const Center(child: CircularProgressIndicator()),
+            ],
+
+            if (_showCountryVisitOptions && _countryVisitsError != null) ...[
+              const SizedBox(height: 12),
+
+              Text(_countryVisitsError!, style: TextStyle(color: colors.error)),
+
+              TextButton(
+                onPressed: disabled ? null : _loadCountryVisits,
+                child: const Text('Retry'),
+              ),
+            ],
+
+            if (_showCountryVisitOptions && _countryVisitsLoaded) ...[
+              const SizedBox(height: 12),
+
+              if (matchingVisits.isEmpty)
+                Text(
+                  'No country visits available for '
+                  '${widget.city.countryName}.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                )
+              else
+                Card(
+                  child: Column(
+                    children: [
+                      for (final visit in matchingVisits)
+                        ListTile(
+                          key: Key('editCountryVisitOption_${visit.id}'),
+                          leading: Icon(
+                            _selectedCountryVisitId == visit.id
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                          ),
+                          title: Text(
+                            '${_formatDate(visit.startedOn, visit.startedOnPrecision)} – ${_formatDate(visit.endedOn, visit.endedOnPrecision)}',
+                          ),
+                          onTap: disabled
+                              ? null
+                              : () => _selectCountryVisit(visit.id),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+
+            // NEW: Warn when the selected country visit is unavailable.
+            if (_showCountryVisitOptions && selectedVisitMissing) ...[
+              const SizedBox(height: 12),
+
+              Text(
+                'The currently selected country visit is no longer available. '
+                'Choose another visit or remove the association.',
+                style: TextStyle(color: colors.error),
+              ),
+            ],
+
+            // Existing validation error.
+            if (_associationSelectionError != null) ...[
+              const SizedBox(height: 12),
+
+              Text(
+                _associationSelectionError!,
+                style: TextStyle(color: colors.error),
+              ),
+            ],
+
+            if (_associationSelectionError != null) ...[
+              const SizedBox(height: 12),
+
+              Text(
+                _associationSelectionError!,
+                style: TextStyle(color: colors.error),
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _pickStartDate() async {
+    if (_isInteractionBlocked) return;
     final selected = await showPartialVisitDatePicker(
       context: context,
       initialValue: _startedOn == null
@@ -52,7 +298,7 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
             ),
     );
 
-    if (!mounted || selected == null) return;
+    if (!mounted || selected == null || _isInteractionBlocked) return;
 
     setState(() {
       _startedOn = selected.date;
@@ -108,6 +354,24 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
       endedOnPrecision: _endedOnPrecision,
     );
 
+    if (_selectedCountryVisitId != widget.visit.countryVisitId) {
+      if (_selectedCountryVisitId != null) {
+        final isValidSelection =
+            _countryVisitsLoaded &&
+            _matchingCountryVisits.any(
+              (visit) => visit.id == _selectedCountryVisitId,
+            );
+
+        if (!isValidSelection) {
+          setState(() {
+            _associationSelectionError =
+                'Please select a valid visit to this country.';
+          });
+          return;
+        }
+      }
+    }
+
     if (dateError != null) {
       ScaffoldMessenger.of(
         context,
@@ -141,19 +405,87 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
       changes['ended_on'] = endedOn;
       changes['ended_on_precision'] = endedOnPrecision;
     }
+
+    if (_selectedCountryVisitId != widget.visit.countryVisitId) {
+      changes['country_visit_id'] = _selectedCountryVisitId;
+    }
+
     if (changes.isEmpty) {
       Navigator.of(context).pop(false);
       return;
     }
 
-    final success = await context.read<EditCityVisitCubit>().submit(
+    final cubit = context.read<EditCityVisitCubit>();
+
+    var success = await cubit.submit(
       visitId: widget.visit.id,
       changes: changes,
     );
 
+    if (!mounted) return;
+
+    // A backend-proposed expansion requires explicit user confirmation.
+    if (!success && cubit.state.phase == EditCityVisitPhase.expansionRequired) {
+      success = await _confirmCountryDateExpansion(
+        visitId: widget.visit.id,
+        changes: changes,
+      );
+    }
+
     if (!mounted || !success) return;
 
     Navigator.of(context).pop(true);
+  }
+
+  Future<bool> _confirmCountryDateExpansion({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) async {
+    final cubit = context.read<EditCityVisitCubit>();
+    final expansion = cubit.state.pendingExpansion;
+
+    if (expansion == null) {
+      return false;
+    }
+
+    final confirmed = await showCountryVisitDateExpansionDialog(
+      context,
+      expansion: expansion,
+    );
+
+    if (!mounted || cubit.isClosed) {
+      return false;
+    }
+
+    if (!confirmed) {
+      cubit.dismissExpansion();
+      return false;
+    }
+
+    // Repeat the exact original PATCH with the backend proposal.
+    // The Cubit validates that the request has not changed.
+    final success = await cubit.submit(
+      visitId: visitId,
+      changes: changes,
+      countryDateExpansion: expansion,
+    );
+
+    if (!mounted || cubit.isClosed) return false;
+
+    if (!success && cubit.state.phase == EditCityVisitPhase.expansionRequired) {
+      cubit.dismissExpansion();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The country visit dates have changed. '
+            'Please review and save again.',
+          ),
+        ),
+      );
+    }
+
+    return success;
   }
 
   @override
@@ -186,7 +518,10 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                   builder: (context, state) {
                     return IconButton(
                       tooltip: 'Close',
-                      onPressed: state.isSubmitting
+                      onPressed:
+                          state.isSubmitting ||
+                              state.phase ==
+                                  EditCityVisitPhase.expansionRequired
                           ? null
                           : () => Navigator.of(context).pop(false),
                       icon: const Icon(Icons.close),
@@ -290,7 +625,11 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                       _startedOnPrecision,
                                     ),
                                   ),
-                                  onTap: state.isSubmitting
+                                  onTap:
+                                      state.isSubmitting ||
+                                          state.phase ==
+                                              EditCityVisitPhase
+                                                  .expansionRequired
                                       ? null
                                       : _pickStartDate,
                                 ),
@@ -314,7 +653,11 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                                   subtitle: Text(
                                     _formatDate(_endedOn, _endedOnPrecision),
                                   ),
-                                  onTap: state.isSubmitting
+                                  onTap:
+                                      state.isSubmitting ||
+                                          state.phase ==
+                                              EditCityVisitPhase
+                                                  .expansionRequired
                                       ? null
                                       : _pickEndDate,
                                 ),
@@ -326,6 +669,9 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                     );
                   },
                 ),
+                const SizedBox(height: 28),
+
+                _buildCountryVisitAssociation(),
               ],
             ),
           ),
@@ -352,7 +698,9 @@ class _EditCityVisitSheetState extends State<EditCityVisitSheet> {
                         key: const Key('editCityVisitSaveButton'),
                         onPressed:
                             state.isSubmitting ||
-                                state.phase == EditCityVisitPhase.success
+                                state.phase == EditCityVisitPhase.success ||
+                                state.phase ==
+                                    EditCityVisitPhase.expansionRequired
                             ? null
                             : _saveChanges,
                         icon: state.isSubmitting

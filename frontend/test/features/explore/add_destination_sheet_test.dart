@@ -11,6 +11,8 @@ import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/geography/domain/country_city_count.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -176,6 +178,13 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
 
   DateTime? lastStartedOn;
   DateTime? lastEndedOn;
+  String? lastCountryVisitId;
+  NewCountryVisitInput? lastNewCountryVisit;
+  CountryVisitDateExpansion? lastCountryDateExpansion;
+
+  VisitDatePrecision? lastStartedOnPrecision;
+  VisitDatePrecision? lastEndedOnPrecision;
+  CountryVisitDateExpansion? expansionOnFirstCreate;
 
   final List<CityVisit> createdVisits = [];
 
@@ -191,11 +200,28 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required DateTime endedOn,
     VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
     VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
   }) async {
     createCalls++;
+
     lastCreatedCityId = cityId;
+
     lastStartedOn = startedOn;
     lastEndedOn = endedOn;
+
+    lastStartedOnPrecision = startedOnPrecision;
+    lastEndedOnPrecision = endedOnPrecision;
+
+    lastCountryVisitId = countryVisitId;
+    lastNewCountryVisit = newCountryVisit;
+    lastCountryDateExpansion = countryDateExpansion;
+    // Simulate a backend proposal on the first request only.
+    // No city visit is persisted until confirmation succeeds.
+    if (createCalls == 1 && expansionOnFirstCreate != null) {
+      throw CountryVisitDateExpansionRequired(expansionOnFirstCreate!);
+    }
 
     final visit = CityVisit(
       id: 'city-visit-$createCalls',
@@ -209,6 +235,7 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
       endedOnPrecision: endedOnPrecision,
       createdAt: DateTime(2026, 10, 24),
       updatedAt: DateTime(2026, 10, 24),
+      countryVisitId: countryVisitId,
     );
 
     createdVisits.add(visit);
@@ -240,7 +267,14 @@ Future<void> selectVisitMonth(
   required int year,
   required int month,
 }) async {
-  await tester.ensureVisible(find.text(field));
+  await tester.scrollUntilVisible(
+    find.text(field),
+    150,
+    scrollable: find.byType(Scrollable).last,
+  );
+
+  await tester.pumpAndSettle();
+
   await tester.tap(find.text(field));
   await tester.pumpAndSettle();
 
@@ -303,6 +337,105 @@ Future<void> selectVisitYear(
 
   await tester.ensureVisible(yearFinder);
   await tester.tap(yearFinder);
+  await tester.pumpAndSettle();
+}
+
+CountryVisit sampleCountryVisit({
+  required String id,
+  required String countryCode,
+  int year = 2025,
+  int startMonth = 6,
+  int endMonth = 6,
+}) {
+  return CountryVisit(
+    id: id,
+    countryCode: countryCode,
+    startedOn: DateTime(year, startMonth, 1),
+    endedOn: DateTime(year, endMonth, 1),
+    startedOnPrecision: VisitDatePrecision.month,
+    endedOnPrecision: VisitDatePrecision.month,
+    createdAt: DateTime(2026, 10, 24),
+    updatedAt: DateTime(2026, 10, 24),
+  );
+}
+
+Future<void> selectCity(WidgetTester tester, {required String name}) async {
+  await tester.tap(addDestinationButton);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('City'));
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('Select a city'));
+  await tester.pumpAndSettle();
+
+  await tester.enterText(
+    find.byKey(const Key('destinationCitySearch')),
+    name.toLowerCase(),
+  );
+
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text(name));
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectAssociationMode(WidgetTester tester, String key) async {
+  final option = find.byKey(Key(key));
+
+  await tester.scrollUntilVisible(
+    option,
+    150,
+    scrollable: find.byType(Scrollable).last,
+  );
+
+  await tester.pumpAndSettle();
+
+  await tester.tap(option);
+  await tester.pumpAndSettle();
+}
+
+CountryVisitDateExpansion sampleDateExpansion() {
+  return CountryVisitDateExpansion.fromJson({
+    'country_visit_id': 'pt-visit-1',
+    'current': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-15',
+      'ended_on_precision': 'day',
+    },
+    'proposed': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-18',
+      'ended_on_precision': 'day',
+    },
+  });
+}
+
+Future<void> prepareCityWithExistingCountryVisit(WidgetTester tester) async {
+  await selectCity(tester, name: 'Lisbon');
+
+  await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+  await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+  await selectAssociationMode(tester, 'cityAssociationExisting');
+
+  final countryVisitOption = find.byKey(
+    const Key('countryVisitOption_pt-visit-1'),
+  );
+
+  await tester.scrollUntilVisible(
+    countryVisitOption,
+    150,
+    scrollable: find.byType(Scrollable).last,
+  );
+
+  await tester.pumpAndSettle();
+
+  await tester.tap(countryVisitOption);
   await tester.pumpAndSettle();
 }
 
@@ -1088,5 +1221,539 @@ void main() {
 
     // The visit must not have been created.
     expect(repository.createCalls, 0);
+  });
+  testWidgets('does not show country association before selecting a city', (
+    tester,
+  ) async {
+    await pumpExplore(tester);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cityAssociationNone')), findsNothing);
+
+    expect(find.byKey(const Key('cityAssociationExisting')), findsNothing);
+
+    expect(find.byKey(const Key('cityAssociationCreateNew')), findsNothing);
+  });
+  testWidgets('creating a country visit does not create a city visit', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(countriesRepository.createCalls, 1);
+    expect(cityVisitsRepository.createCalls, 0);
+  });
+  testWidgets(
+    'city visit is independent by default even with existing country visits',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+
+      countriesRepository.createdVisits.add(
+        sampleCountryVisit(id: 'pt-visit-1', countryCode: 'PT'),
+      );
+
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        cityVisitsRepository: cityVisitsRepository,
+      );
+
+      await selectCity(tester, name: 'Lisbon');
+
+      // First, fill in the city visit dates.
+      // These fields appear above the association section.
+      await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+      await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+      // Now scroll down to the association section.
+      final noneFinder = find.byKey(const Key('cityAssociationNone'));
+
+      await tester.scrollUntilVisible(
+        noneFinder,
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
+
+      await tester.pumpAndSettle();
+
+      // The default association must be "Not associated".
+      final noneOption = tester.widget<ListTile>(noneFinder);
+
+      final noneIcon = noneOption.leading! as Icon;
+
+      expect(noneIcon.icon, Icons.radio_button_checked);
+
+      // No country visit should have been selected automatically.
+      final existingOption = tester.widget<ListTile>(
+        find.byKey(const Key('cityAssociationExisting')),
+      );
+
+      final existingIcon = existingOption.leading! as Icon;
+
+      expect(existingIcon.icon, Icons.radio_button_unchecked);
+
+      // Save the city visit.
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(cityVisitsRepository.createCalls, 1);
+
+      expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+      // No association must be inferred.
+      expect(cityVisitsRepository.lastCountryVisitId, isNull);
+      expect(cityVisitsRepository.lastNewCountryVisit, isNull);
+      expect(cityVisitsRepository.lastCountryDateExpansion, isNull);
+
+      // No separate country visit creation request.
+      expect(countriesRepository.createCalls, 0);
+
+      expect(find.text('Add Destination'), findsNothing);
+    },
+  );
+  testWidgets(
+    'existing country visits are filtered by the selected city country',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+
+      countriesRepository.createdVisits.addAll([
+        sampleCountryVisit(
+          id: 'pt-visit-1',
+          countryCode: 'PT',
+          startMonth: 6,
+          endMonth: 7,
+        ),
+        sampleCountryVisit(
+          id: 'pt-visit-2',
+          countryCode: 'PT',
+          startMonth: 9,
+          endMonth: 9,
+        ),
+        sampleCountryVisit(
+          id: 'es-visit-1',
+          countryCode: 'ES',
+          startMonth: 8,
+          endMonth: 8,
+        ),
+      ]);
+
+      await pumpExplore(tester, repository: countriesRepository);
+
+      await selectCity(tester, name: 'Lisbon');
+
+      await selectAssociationMode(tester, 'cityAssociationExisting');
+
+      final portugalVisit = find.byKey(
+        const Key('countryVisitOption_pt-visit-1'),
+      );
+
+      await tester.scrollUntilVisible(
+        portugalVisit,
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(portugalVisit, findsOneWidget);
+
+      expect(
+        find.byKey(const Key('countryVisitOption_es-visit-1')),
+        findsNothing,
+      );
+
+      expect(
+        find.byKey(const Key('countryVisitOption_pt-visit-1')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byKey(const Key('countryVisitOption_pt-visit-2')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byKey(const Key('countryVisitOption_es-visit-1')),
+        findsNothing,
+      );
+    },
+  );
+  testWidgets(
+    'existing association requires an explicit country visit selection',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+
+      countriesRepository.createdVisits.add(
+        sampleCountryVisit(id: 'pt-visit-1', countryCode: 'PT'),
+      );
+
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        cityVisitsRepository: cityVisitsRepository,
+      );
+
+      await selectCity(tester, name: 'Lisbon');
+
+      await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+      await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+      await selectAssociationMode(tester, 'cityAssociationExisting');
+
+      // Do not select any country visit.
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(cityVisitsRepository.createCalls, 0);
+      expect(countriesRepository.createCalls, 0);
+
+      expect(
+        find.byKey(const Key('countryVisitSelectionError')),
+        findsOneWidget,
+      );
+
+      expect(find.text('Please select a country visit.'), findsOneWidget);
+
+      expect(find.text('Add Destination'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'creates a city visit linked to an explicitly selected country visit',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+
+      countriesRepository.createdVisits.addAll([
+        sampleCountryVisit(
+          id: 'pt-visit-1',
+          countryCode: 'PT',
+          startMonth: 6,
+          endMonth: 7,
+        ),
+        sampleCountryVisit(
+          id: 'pt-visit-2',
+          countryCode: 'PT',
+          startMonth: 9,
+          endMonth: 9,
+        ),
+      ]);
+
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        cityVisitsRepository: cityVisitsRepository,
+      );
+
+      await selectCity(tester, name: 'Lisbon');
+
+      await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+      await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+      await selectAssociationMode(tester, 'cityAssociationExisting');
+
+      final countryVisitOption = find.byKey(
+        const Key('countryVisitOption_pt-visit-1'),
+      );
+
+      await tester.ensureVisible(countryVisitOption);
+      await tester.pumpAndSettle();
+
+      await tester.tap(countryVisitOption);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(cityVisitsRepository.createCalls, 1);
+
+      expect(cityVisitsRepository.lastCountryVisitId, 'pt-visit-1');
+
+      expect(cityVisitsRepository.lastNewCountryVisit, isNull);
+      expect(cityVisitsRepository.lastCountryDateExpansion, isNull);
+
+      // No separate country visit creation request.
+      expect(countriesRepository.createCalls, 0);
+
+      expect(find.text('Add Destination'), findsNothing);
+    },
+  );
+  testWidgets('creates city and country visit together in a single request', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await selectCity(tester, name: 'Lisbon');
+
+    // City visit: June 2025.
+    await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+    await selectAssociationMode(tester, 'cityAssociationCreateNew');
+
+    // Country visit: May–July 2025.
+    await selectVisitMonth(
+      tester,
+      field: 'COUNTRY START',
+      year: 2025,
+      month: 5,
+    );
+
+    await selectVisitMonth(tester, field: 'COUNTRY END', year: 2025, month: 7);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    // One request creates both records atomically in the real backend.
+    expect(cityVisitsRepository.createCalls, 1);
+
+    // No separate country repository creation call.
+    expect(countriesRepository.createCalls, 0);
+
+    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+    expect(cityVisitsRepository.lastCountryVisitId, isNull);
+
+    final newCountryVisit = cityVisitsRepository.lastNewCountryVisit;
+
+    expect(newCountryVisit, isNotNull);
+
+    expect(newCountryVisit!.startedOn, DateTime(2025, 5, 1));
+
+    expect(newCountryVisit.endedOn, DateTime(2025, 7, 1));
+
+    expect(newCountryVisit.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(newCountryVisit.endedOnPrecision, VisitDatePrecision.month);
+
+    expect(cityVisitsRepository.lastCountryDateExpansion, isNull);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
+  testWidgets('new country visit requires country dates before saving', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await selectCity(tester, name: 'Lisbon');
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2025, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2025, month: 6);
+
+    await selectAssociationMode(tester, 'cityAssociationCreateNew');
+
+    // Country dates deliberately omitted.
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(cityVisitsRepository.createCalls, 0);
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.byKey(const Key('newCountryVisitDateError')), findsOneWidget);
+
+    expect(find.text('Start and end dates are required.'), findsOneWidget);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+  });
+  testWidgets('shows expansion confirmation when the backend requires it', (
+    tester,
+  ) async {
+    final expansion = sampleDateExpansion();
+
+    final countriesRepository = FakeCountriesRepository();
+
+    countriesRepository.createdVisits.add(
+      sampleCountryVisit(id: expansion.countryVisitId, countryCode: 'PT'),
+    );
+
+    final cityVisitsRepository = FakeCityVisitsRepository()
+      ..expansionOnFirstCreate = expansion;
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await prepareCityWithExistingCountryVisit(tester);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Extend country visit dates?'), findsOneWidget);
+
+    expect(
+      find.byKey(const Key('countryExpansionCurrentDates')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.byKey(const Key('countryExpansionProposedDates')),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const Key('cancelCountryExpansion')), findsOneWidget);
+
+    expect(find.byKey(const Key('confirmCountryExpansion')), findsOneWidget);
+
+    // Only the initial request has been sent.
+    expect(cityVisitsRepository.createCalls, 1);
+
+    // No record was created before explicit confirmation.
+    expect(cityVisitsRepository.createdVisits, isEmpty);
+
+    expect(cityVisitsRepository.lastCountryDateExpansion, isNull);
+
+    expect(countriesRepository.createCalls, 0);
+  });
+  testWidgets(
+    'cancelling country date expansion does not create the city visit',
+    (tester) async {
+      final expansion = sampleDateExpansion();
+
+      final countriesRepository = FakeCountriesRepository();
+
+      countriesRepository.createdVisits.add(
+        sampleCountryVisit(id: expansion.countryVisitId, countryCode: 'PT'),
+      );
+
+      final cityVisitsRepository = FakeCityVisitsRepository()
+        ..expansionOnFirstCreate = expansion;
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        cityVisitsRepository: cityVisitsRepository,
+      );
+
+      await prepareCityWithExistingCountryVisit(tester);
+
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Extend country visit dates?'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('cancelCountryExpansion')));
+
+      await tester.pumpAndSettle();
+
+      // The dialog closes.
+      expect(find.text('Extend country visit dates?'), findsNothing);
+
+      // The destination form remains open.
+      expect(find.text('Add Destination'), findsOneWidget);
+
+      // No confirmation request was sent.
+      expect(cityVisitsRepository.createCalls, 1);
+
+      expect(cityVisitsRepository.createdVisits, isEmpty);
+
+      expect(cityVisitsRepository.lastCountryDateExpansion, isNull);
+
+      expect(countriesRepository.createCalls, 0);
+    },
+  );
+  testWidgets('confirming country date expansion creates the city visit', (
+    tester,
+  ) async {
+    final expansion = sampleDateExpansion();
+
+    final countriesRepository = FakeCountriesRepository();
+
+    countriesRepository.createdVisits.add(
+      sampleCountryVisit(id: expansion.countryVisitId, countryCode: 'PT'),
+    );
+
+    final cityVisitsRepository = FakeCityVisitsRepository()
+      ..expansionOnFirstCreate = expansion;
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+    );
+
+    await prepareCityWithExistingCountryVisit(tester);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Extend country visit dates?'), findsOneWidget);
+
+    expect(cityVisitsRepository.createCalls, 1);
+
+    await tester.tap(find.byKey(const Key('confirmCountryExpansion')));
+
+    await tester.pumpAndSettle();
+
+    // Initial request + explicitly confirmed request.
+    expect(cityVisitsRepository.createCalls, 2);
+
+    // The selected country visit is preserved.
+    expect(cityVisitsRepository.lastCountryVisitId, expansion.countryVisitId);
+
+    // The exact backend proposal is sent again.
+    expect(cityVisitsRepository.lastCountryDateExpansion, same(expansion));
+
+    // No new country visit was requested.
+    expect(cityVisitsRepository.lastNewCountryVisit, isNull);
+
+    // Only one city visit was actually created.
+    expect(cityVisitsRepository.createdVisits.length, 1);
+
+    expect(cityVisitsRepository.createdVisits.single.cityId, 2267057);
+
+    // No separate request to create a country visit.
+    expect(countriesRepository.createCalls, 0);
+
+    // The form closes after successful confirmation.
+    expect(find.text('Add Destination'), findsNothing);
   });
 }

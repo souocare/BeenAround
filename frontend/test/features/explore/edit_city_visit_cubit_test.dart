@@ -5,6 +5,8 @@ import 'package:beenaround/features/explore/application/edit_city_visit_cubit.da
 import 'package:beenaround/features/explore/application/edit_city_visit_state.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
@@ -25,7 +27,10 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
     required DateTime endedOn,
     VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
     VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
-  }) {
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
+  }) async {
     throw UnimplementedError();
   }
 
@@ -64,6 +69,24 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   Future<void> deleteCityVisit({required String visitId}) {
     throw UnimplementedError();
   }
+}
+
+CountryVisitDateExpansion sampleExpansion() {
+  return CountryVisitDateExpansion.fromJson({
+    'country_visit_id': '550e8400-e29b-41d4-a716-446655440001',
+    'current': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-15',
+      'ended_on_precision': 'day',
+    },
+    'proposed': {
+      'started_on': '2025-06-10',
+      'started_on_precision': 'day',
+      'ended_on': '2025-06-18',
+      'ended_on_precision': 'day',
+    },
+  });
 }
 
 void main() {
@@ -269,6 +292,214 @@ void main() {
 
       expect(await first, isTrue);
       expect(cubit.state.phase, EditCityVisitPhase.success);
+
+      await cubit.close();
+    });
+    test(
+      'stores an expansion proposal without automatic confirmation',
+      () async {
+        final expansion = sampleExpansion();
+
+        final repository = FakeCityVisitsRepository()
+          ..updateHandler = () async {
+            throw CountryVisitDateExpansionRequired(expansion);
+          };
+
+        final cubit = EditCityVisitCubit(repository: repository);
+
+        final success = await cubit.submit(
+          visitId: 'visit-1',
+          changes: {'country_visit_id': expansion.countryVisitId},
+        );
+
+        expect(success, isFalse);
+        expect(cubit.state.phase, EditCityVisitPhase.expansionRequired);
+        expect(cubit.state.pendingExpansion, same(expansion));
+        expect(cubit.state.errorMessage, isNull);
+        expect(repository.updateCalls, 1);
+
+        await cubit.close();
+      },
+    );
+    test('submits the original update after explicit confirmation', () async {
+      final expansion = sampleExpansion();
+      final repository = FakeCityVisitsRepository();
+
+      repository.updateHandler = () async {
+        if (repository.updateCalls == 1) {
+          throw CountryVisitDateExpansionRequired(expansion);
+        }
+
+        return CityVisit(
+          id: 'visit-1',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+          countryVisitId: expansion.countryVisitId,
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          createdAt: DateTime(2026, 10, 20),
+          updatedAt: DateTime(2026, 10, 24),
+        );
+      };
+
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      final changes = {'country_visit_id': expansion.countryVisitId};
+
+      await cubit.submit(visitId: 'visit-1', changes: changes);
+
+      expect(cubit.state.phase, EditCityVisitPhase.expansionRequired);
+      expect(repository.updateCalls, 1);
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: changes,
+        countryDateExpansion: cubit.state.pendingExpansion,
+      );
+
+      expect(success, isTrue);
+      expect(cubit.state.phase, EditCityVisitPhase.success);
+      expect(repository.updateCalls, 2);
+      expect(
+        repository.receivedChanges!['country_visit_id'],
+        expansion.countryVisitId,
+      );
+      expect(
+        repository.receivedChanges!['country_date_expansion'],
+        same(expansion),
+      );
+
+      await cubit.close();
+    });
+    test('rejects expansion confirmation after changing the update', () async {
+      final expansion = sampleExpansion();
+
+      final repository = FakeCityVisitsRepository()
+        ..updateHandler = () async {
+          throw CountryVisitDateExpansionRequired(expansion);
+        };
+
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'country_visit_id': expansion.countryVisitId,
+          'ended_on': DateTime(2025, 6, 18),
+        },
+      );
+
+      final success = await cubit.submit(
+        visitId: 'visit-1',
+        changes: {
+          'country_visit_id': expansion.countryVisitId,
+          'ended_on': DateTime(2025, 6, 20),
+        },
+        countryDateExpansion: cubit.state.pendingExpansion,
+      );
+
+      expect(success, isFalse);
+      expect(cubit.state.phase, EditCityVisitPhase.failure);
+      expect(repository.updateCalls, 1);
+
+      await cubit.close();
+    });
+    test('rejects confirmation for a different city visit', () async {
+      final expansion = sampleExpansion();
+
+      final repository = FakeCityVisitsRepository()
+        ..updateHandler = () async {
+          throw CountryVisitDateExpansionRequired(expansion);
+        };
+
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      await cubit.submit(
+        visitId: 'visit-1',
+        changes: {'country_visit_id': expansion.countryVisitId},
+      );
+
+      final success = await cubit.submit(
+        visitId: 'visit-2',
+        changes: {'country_visit_id': expansion.countryVisitId},
+        countryDateExpansion: cubit.state.pendingExpansion,
+      );
+
+      expect(success, isFalse);
+      expect(cubit.state.phase, EditCityVisitPhase.failure);
+      expect(repository.updateCalls, 1);
+
+      await cubit.close();
+    });
+    test(
+      'dismisses an expansion proposal without updating the visit',
+      () async {
+        final expansion = sampleExpansion();
+
+        final repository = FakeCityVisitsRepository()
+          ..updateHandler = () async {
+            throw CountryVisitDateExpansionRequired(expansion);
+          };
+
+        final cubit = EditCityVisitCubit(repository: repository);
+
+        await cubit.submit(
+          visitId: 'visit-1',
+          changes: {'country_visit_id': expansion.countryVisitId},
+        );
+
+        expect(cubit.state.phase, EditCityVisitPhase.expansionRequired);
+
+        cubit.dismissExpansion();
+
+        expect(cubit.state.phase, EditCityVisitPhase.idle);
+        expect(cubit.state.pendingExpansion, isNull);
+        expect(repository.updateCalls, 1);
+
+        await cubit.close();
+      },
+    );
+    test('does not mutate the original changes when confirming', () async {
+      final expansion = sampleExpansion();
+      final repository = FakeCityVisitsRepository();
+
+      repository.updateHandler = () async {
+        if (repository.updateCalls == 1) {
+          throw CountryVisitDateExpansionRequired(expansion);
+        }
+
+        return CityVisit(
+          id: 'visit-1',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+          startedOn: DateTime(2025, 6, 12),
+          endedOn: DateTime(2025, 6, 18),
+          createdAt: DateTime(2026, 10, 20),
+          updatedAt: DateTime(2026, 10, 24),
+        );
+      };
+
+      final cubit = EditCityVisitCubit(repository: repository);
+
+      final changes = <String, dynamic>{
+        'country_visit_id': expansion.countryVisitId,
+      };
+
+      await cubit.submit(visitId: 'visit-1', changes: changes);
+
+      await cubit.submit(
+        visitId: 'visit-1',
+        changes: changes,
+        countryDateExpansion: cubit.state.pendingExpansion,
+      );
+
+      expect(changes, {'country_visit_id': expansion.countryVisitId});
+
+      expect(changes.containsKey('country_date_expansion'), isFalse);
 
       await cubit.close();
     });
