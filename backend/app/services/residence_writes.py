@@ -75,6 +75,7 @@ def create_residence(
             started_on_precision=period.started_on_precision,
             ended_on=period.ended_on,
             ended_on_precision=period.ended_on_precision,
+            note=payload.note,
             commit=False,
         )
 
@@ -104,6 +105,13 @@ def update_residence(
         changes = payload.model_dump(
             exclude_unset=True,
             exclude={"overlap_confirmation"},
+        )
+
+        note_only_update = set(changes) == {"note"}
+
+        note = changes.get(
+            "note",
+            existing.note,
         )
 
         country_code = changes.get(
@@ -147,19 +155,20 @@ def update_residence(
             period=period,
         )
 
-        overlaps = find_overlapping_residences(
-            repository=repository,
-            user_id=user_id,
-            proposed_period=period,
-            exclude_residence_id=residence_id,
-        )
+        if not note_only_update:
+            overlaps = find_overlapping_residences(
+                repository=repository,
+                user_id=user_id,
+                proposed_period=period,
+                exclude_residence_id=residence_id,
+            )
 
-        validate_residence_overlap_confirmation(
-            requested=requested,
-            overlaps=overlaps,
-            confirmation=payload.overlap_confirmation,
-            existing_residence=existing,
-        )
+            validate_residence_overlap_confirmation(
+                requested=requested,
+                overlaps=overlaps,
+                confirmation=payload.overlap_confirmation,
+                existing_residence=existing,
+            )
 
         updated = repository.update(
             residence=existing,
@@ -169,6 +178,7 @@ def update_residence(
             started_on_precision=period.started_on_precision,
             ended_on=period.ended_on,
             ended_on_precision=period.ended_on_precision,
+            note=note,
             commit=False,
         )
 

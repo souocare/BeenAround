@@ -67,6 +67,7 @@ class ResidenceRepository:
         started_on_precision: DatePrecision,
         ended_on: date,
         ended_on_precision: DatePrecision,
+        note: str | None = None,
         commit: bool = True,
     ) -> Residence:
         """Persist a new historical residence.
@@ -82,6 +83,7 @@ class ResidenceRepository:
             started_on_precision=started_on_precision,
             ended_on=ended_on,
             ended_on_precision=ended_on_precision,
+            note=note,
         )
 
         self._session.add(residence)
@@ -104,6 +106,7 @@ class ResidenceRepository:
         started_on_precision: DatePrecision,
         ended_on: date,
         ended_on_precision: DatePrecision,
+        note: str | None = None,
         commit: bool = True,
     ) -> Residence:
         """Persist validated changes to an existing residence.
@@ -118,6 +121,7 @@ class ResidenceRepository:
         residence.started_on_precision = started_on_precision
         residence.ended_on = ended_on
         residence.ended_on_precision = ended_on_precision
+        residence.note = note
 
         if commit:
             self._session.commit()

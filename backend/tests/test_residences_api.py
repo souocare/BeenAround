@@ -567,6 +567,102 @@ def test_create_accepts_exact_overlap_confirmation(
 
     assert listing.json()["total"] == 2
 
+def test_patch_note_on_overlapping_residence_without_reconfirmation(
+    residences_client: TestClient,
+) -> None:
+    """Editing only a note must not require confirming existing overlaps."""
+
+    login_web(residences_client)
+
+    # Create the first residence.
+    first_id = create_residence(residences_client)
+
+    # Propose a second, overlapping residence.
+    second_payload = residence_payload(
+        country_code="ES",
+        city_id=MADRID_ID,
+        started_on="2022-01-01",
+        ended_on="2022-12-01",
+    )
+
+    conflict = residences_client.post(
+        BASE_URL,
+        json=second_payload,
+        headers=ORIGIN,
+    )
+
+    confirmation = get_overlap_confirmation(conflict)
+
+    # Explicitly confirm the second residence.
+    confirmed = residences_client.post(
+        BASE_URL,
+        json=second_payload
+        | {
+            "overlap_confirmation": confirmation,
+        },
+        headers=ORIGIN,
+    )
+
+    assert confirmed.status_code == 201, confirmed.text
+
+    second_id = confirmed.json()["id"]
+
+    # Read the original state before editing.
+    first_before_response = residences_client.get(
+        f"{BASE_URL}/{first_id}",
+    )
+    second_before_response = residences_client.get(
+        f"{BASE_URL}/{second_id}",
+    )
+
+    assert first_before_response.status_code == 200
+    assert second_before_response.status_code == 200
+
+    first_before = first_before_response.json()
+    second_before = second_before_response.json()
+
+    # Only update the first residence's note.
+    # No overlap confirmation is provided.
+    updated = residences_client.patch(
+        f"{BASE_URL}/{first_id}",
+        json={
+            "note": "Updated without changing my residence period.",
+        },
+        headers=ORIGIN,
+    )
+
+    assert updated.status_code == 200, updated.text
+
+    updated_data = updated.json()
+
+    assert updated_data["note"] == (
+        "Updated without changing my residence period."
+    )
+
+    # The destination and date range remain unchanged.
+    for field in (
+        "country_code",
+        "city_id",
+        "started_on",
+        "started_on_precision",
+        "ended_on",
+        "ended_on_precision",
+    ):
+        assert updated_data[field] == first_before[field]
+
+    # The second residence must remain completely untouched.
+    second_after_response = residences_client.get(
+        f"{BASE_URL}/{second_id}",
+    )
+
+    assert second_after_response.status_code == 200
+    assert second_after_response.json() == second_before
+
+    # Both residence records must still exist.
+    listing = residences_client.get(BASE_URL)
+
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 2
 
 def test_create_rejects_stale_overlap_confirmation(
     residences_client: TestClient,
@@ -914,3 +1010,129 @@ def test_residence_does_not_create_been_records(
 
     assert country_visits.json()["total"] == 0
     assert city_visits.json()["total"] == 0
+
+
+def test_create_residence_with_note(
+    residences_client: TestClient,
+) -> None:
+    client = residences_client
+
+    login_web(client)
+
+    payload = residence_payload(
+        city_id=None,
+    )
+
+    payload["note"] = "Lived here during university."
+
+    response = client.post(
+        BASE_URL,
+        json=payload,
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 201, response.text
+
+    data = response.json()
+
+    assert data["note"] == "Lived here during university."
+    assert data["country_code"] == "PT"
+
+
+def test_patch_residence_note_only(
+    residences_client: TestClient,
+) -> None:
+    client = residences_client
+
+    login_web(client)
+
+    entry_id = create_residence(client)
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={
+            "note": "My first apartment.",
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+
+    assert data["note"] == "My first apartment."
+    assert data["started_on"] == "2020-01-01"
+    assert data["ended_on"] == "2023-12-01"
+
+
+def test_patch_residence_note_to_null(
+    residences_client: TestClient,
+) -> None:
+    client = residences_client
+
+    login_web(client)
+
+    payload = residence_payload()
+    payload["note"] = "Original note."
+
+    entry_id = create_residence(
+        client,
+        payload=payload,
+    )
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={"note": None},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["note"] is None
+
+
+def test_patch_residence_rejects_long_note(
+    residences_client: TestClient,
+) -> None:
+    client = residences_client
+
+    login_web(client)
+
+    entry_id = create_residence(client)
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={
+            "note": "A" * 1001,
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_residence_dates_preserves_note(
+    residences_client: TestClient,
+) -> None:
+    client = residences_client
+
+    login_web(client)
+
+    payload = residence_payload()
+    payload["note"] = "Keep this note."
+
+    entry_id = create_residence(
+        client,
+        payload=payload,
+    )
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={
+            "ended_on": "2024-06-01",
+            "ended_on_precision": "month",
+        },
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["note"] == "Keep this note."

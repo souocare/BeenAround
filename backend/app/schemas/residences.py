@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     field_validator,
     model_validator,
 )
@@ -65,6 +66,17 @@ class ResidenceOverlapConfirmation(BaseModel):
     expected_target: ResidenceTargetState | None = None
 
 
+def normalize_residence_note(value: str | None) -> str | None:
+    """Normalize an optional plain-text residence note."""
+
+    if value is None:
+        return None
+
+    normalized = value.strip()
+
+    return normalized or None
+
+
 class ResidenceCreate(BaseModel):
     """Data required to register a historical residence."""
 
@@ -78,6 +90,10 @@ class ResidenceCreate(BaseModel):
 
     ended_on: date
     ended_on_precision: DatePrecision
+    note: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
 
     overlap_confirmation: ResidenceOverlapConfirmation | None = None
 
@@ -110,6 +126,11 @@ class ResidenceCreate(BaseModel):
 
         return self
 
+    @field_validator("note")
+    @classmethod
+    def validate_note(cls, value: str | None) -> str | None:
+        return normalize_residence_note(value)
+
 
 class ResidenceUpdate(BaseModel):
     """Fields that may be changed on an existing residence."""
@@ -124,6 +145,10 @@ class ResidenceUpdate(BaseModel):
 
     ended_on: date | None = None
     ended_on_precision: DatePrecision | None = None
+    note: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
 
     overlap_confirmation: ResidenceOverlapConfirmation | None = None
 
@@ -158,6 +183,9 @@ class ResidenceUpdate(BaseModel):
         if fields == {"overlap_confirmation"}:
             raise ValueError("Overlap confirmation requires residence changes.")
 
+        if "overlap_confirmation" in fields and not (fields - {"overlap_confirmation", "note"}):
+            raise ValueError("Overlap confirmation requires destination or date changes.")
+
         for name in (
             "started_on",
             "started_on_precision",
@@ -183,6 +211,11 @@ class ResidenceUpdate(BaseModel):
 
         return self
 
+    @field_validator("note")
+    @classmethod
+    def validate_note(cls, value: str | None) -> str | None:
+        return normalize_residence_note(value)
+
 
 class ResidenceResponse(BaseModel):
     """Representation of a historical residence."""
@@ -202,6 +235,7 @@ class ResidenceResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    note: str | None
 
 
 class ResidenceListResponse(BaseModel):

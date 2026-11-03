@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Uuid,
+    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -102,4 +103,9 @@ class Residence(TimestampMixin, Base):
     ended_on_precision: Mapped[str] = mapped_column(
         String(5),
         nullable=False,
+    )
+
+    note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )

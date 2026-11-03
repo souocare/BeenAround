@@ -276,3 +276,72 @@ def test_update_rejects_confirmation_without_changes() -> None:
                 "overlap_confirmation": valid_overlap_confirmation(),
             }
         )
+
+
+def test_create_accepts_optional_note() -> None:
+    payload = ResidenceCreate.model_validate(
+        {
+            "country_code": "PT",
+            "city_id": None,
+            "started_on": "2020-01-01",
+            "started_on_precision": "month",
+            "ended_on": "2023-12-01",
+            "ended_on_precision": "month",
+            "note": "Lived here during university.",
+        }
+    )
+
+    assert payload.note == "Lived here during university."
+
+
+def test_create_normalizes_empty_note() -> None:
+    payload = ResidenceCreate.model_validate(
+        {
+            "country_code": "PT",
+            "started_on": "2020-01-01",
+            "started_on_precision": "month",
+            "ended_on": "2023-12-01",
+            "ended_on_precision": "month",
+            "note": "   ",
+        }
+    )
+
+    assert payload.note is None
+
+
+def test_create_rejects_note_over_limit() -> None:
+    with pytest.raises(ValidationError):
+        ResidenceCreate.model_validate(
+            {
+                "country_code": "PT",
+                "started_on": "2020-01-01",
+                "started_on_precision": "month",
+                "ended_on": "2023-12-01",
+                "ended_on_precision": "month",
+                "note": "A" * 1001,
+            }
+        )
+
+
+def test_update_accepts_note_only() -> None:
+    payload = ResidenceUpdate.model_validate({"note": "My first apartment."})
+
+    assert payload.note == "My first apartment."
+    assert payload.model_fields_set == {"note"}
+
+
+def test_update_accepts_note_removal() -> None:
+    payload = ResidenceUpdate.model_validate({"note": None})
+
+    assert payload.note is None
+    assert "note" in payload.model_fields_set
+
+
+def test_update_rejects_note_with_only_overlap_confirmation() -> None:
+    with pytest.raises(ValidationError):
+        ResidenceUpdate.model_validate(
+            {
+                "note": "Updated note.",
+                "overlap_confirmation": None,
+            }
+        )
