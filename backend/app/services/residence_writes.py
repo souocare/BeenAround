@@ -1,11 +1,10 @@
 """Transactional write operations for historical residences."""
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from uuid import UUID
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+from app.db.write_transactions import sqlite_write_session
 
 from app.domain.residences import ResidencePeriod
 from app.models.residence import Residence
@@ -23,36 +22,7 @@ class ResidenceNotFound(Exception):
     """The requested residence does not exist or is not owned by the user."""
 
 
-@contextmanager
-def residence_write_session(engine: Engine) -> Iterator[Session]:
-    """Open a SQLite write transaction before reading residence data.
-
-    BEGIN IMMEDIATE serializes cooperating SQLite writers before overlap
-    detection, avoiding a read-then-write race.
-
-    The caller must not use this helper with an existing transaction.
-    """
-
-    if engine.dialect.name != "sqlite":
-        raise RuntimeError("Residence write transaction requires SQLite.")
-
-    with engine.connect() as connection:
-        connection.exec_driver_sql("BEGIN IMMEDIATE")
-
-        try:
-            with Session(
-                bind=connection,
-                autoflush=False,
-                expire_on_commit=False,
-            ) as session:
-                yield session
-
-                session.flush()
-                connection.commit()
-
-        except Exception:
-            connection.rollback()
-            raise
+residence_write_session = sqlite_write_session
 
 
 def create_residence(
