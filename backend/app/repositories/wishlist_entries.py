@@ -91,6 +91,7 @@ class WishlistEntryRepository:
         user_id: UUID,
         country_code: str | None = None,
         city_id: int | None = None,
+        note: str | None = None,
         commit: bool = True,
     ) -> WishlistEntry:
         """Persist a wishlist entry.
@@ -107,6 +108,7 @@ class WishlistEntryRepository:
             user_id=user_id,
             country_code=country_code,
             city_id=city_id,
+            note=note,
         )
 
         self._session.add(entry)
@@ -140,3 +142,24 @@ class WishlistEntryRepository:
             self._session.commit()
 
         return deleted
+
+    def update_note(
+        self,
+        *,
+        entry: WishlistEntry,
+        note: str | None,
+        commit: bool = True,
+    ) -> WishlistEntry:
+        """Update an already ownership-validated wishlist entry."""
+
+        entry.note = note
+
+        self._session.add(entry)
+
+        if commit:
+            self._session.commit()
+            self._session.refresh(entry)
+        else:
+            self._session.flush()
+
+        return entry

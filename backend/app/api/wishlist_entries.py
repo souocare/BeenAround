@@ -12,12 +12,14 @@ from app.schemas.wishlist_entries import (
     WishlistEntryCreateResponse,
     WishlistEntryListResponse,
     WishlistEntryResponse,
+    WishlistEntryUpdate,
 )
 from app.services.wishlist_entries import (
     WishlistDestinationNotFound,
     WishlistEntryNotFound,
     add_wishlist_entries,
     delete_wishlist_entry,
+    update_wishlist_entry,
 )
 
 
@@ -33,9 +35,7 @@ def get_write_engine(session: DatabaseSession) -> Engine:
     bind = session.get_bind()
 
     if not isinstance(bind, Engine):
-        raise RuntimeError(
-            "Wishlist write operations require an engine-bound session."
-        )
+        raise RuntimeError("Wishlist write operations require an engine-bound session.")
 
     return bind
 
@@ -55,10 +55,7 @@ def list_wishlist_entries(
     entries = repository.list_for_user(user.id)
 
     return WishlistEntryListResponse(
-        items=[
-            WishlistEntryResponse.model_validate(entry)
-            for entry in entries
-        ],
+        items=[WishlistEntryResponse.model_validate(entry) for entry in entries],
         total=len(entries),
     )
 
@@ -133,15 +130,38 @@ def create_wishlist_entries(
         response.status_code = status.HTTP_200_OK
 
     return WishlistEntryCreateResponse(
-        created=[
-            WishlistEntryResponse.model_validate(entry)
-            for entry in result.created
-        ],
-        existing=[
-            WishlistEntryResponse.model_validate(entry)
-            for entry in result.existing
-        ],
+        created=[WishlistEntryResponse.model_validate(entry) for entry in result.created],
+        existing=[WishlistEntryResponse.model_validate(entry) for entry in result.existing],
     )
+
+
+@router.patch(
+    "/{entry_id}",
+    response_model=WishlistEntryResponse,
+)
+def update_wishlist_entry_endpoint(
+    entry_id: UUID,
+    payload: WishlistEntryUpdate,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> WishlistEntryResponse:
+    """Update the optional note of an owned wishlist entry."""
+
+    try:
+        entry = update_wishlist_entry(
+            engine=get_write_engine(session),
+            user_id=user.id,
+            entry_id=entry_id,
+            payload=payload,
+        )
+
+    except WishlistEntryNotFound as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return WishlistEntryResponse.model_validate(entry)
 
 
 @router.delete(

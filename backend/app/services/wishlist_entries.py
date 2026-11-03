@@ -9,6 +9,7 @@ from app.db.write_transactions import sqlite_write_session
 from app.models.wishlist_entry import WishlistEntry
 from app.repositories.wishlist_entries import WishlistEntryRepository
 from app.schemas.wishlist_entries import WishlistEntryCreate
+from app.schemas.wishlist_entries import WishlistEntryCreate, WishlistEntryUpdate
 
 
 class WishlistDestinationNotFound(Exception):
@@ -33,6 +34,7 @@ def _get_or_create_country_entry(
     user_id: UUID,
     country_code: str,
     result: WishlistCreationResult,
+    note: str | None = None,
 ) -> None:
     """Add an existing or newly created country entry to the result."""
 
@@ -48,6 +50,7 @@ def _get_or_create_country_entry(
     entry = repository.create(
         user_id=user_id,
         country_code=country_code,
+        note=note,
         commit=False,
     )
 
@@ -60,6 +63,7 @@ def _get_or_create_city_entry(
     user_id: UUID,
     city_id: int,
     result: WishlistCreationResult,
+    note: str | None = None,
 ) -> None:
     """Add an existing or newly created city entry to the result."""
 
@@ -75,6 +79,7 @@ def _get_or_create_city_entry(
     entry = repository.create(
         user_id=user_id,
         city_id=city_id,
+        note=note,
         commit=False,
     )
 
@@ -112,6 +117,7 @@ def add_wishlist_entries(
                 user_id=user_id,
                 country_code=country.code,
                 result=result,
+                note=payload.note,
             )
 
         # Option 2: Add a city and optionally its country.
@@ -128,6 +134,7 @@ def add_wishlist_entries(
                 user_id=user_id,
                 city_id=city.id,
                 result=result,
+                note=payload.note,
             )
 
             if payload.include_country:
@@ -141,6 +148,7 @@ def add_wishlist_entries(
                     user_id=user_id,
                     country_code=country.code,
                     result=result,
+                    note=None,
                 )
 
         # Load timestamps before the dedicated session is closed.
@@ -170,3 +178,35 @@ def delete_wishlist_entry(
 
         if not deleted:
             raise WishlistEntryNotFound("Wishlist entry not found.")
+
+
+def update_wishlist_entry(
+    *,
+    engine: Engine,
+    user_id: UUID,
+    entry_id: UUID,
+    payload: WishlistEntryUpdate,
+) -> WishlistEntry:
+    """Update the note of an owned wishlist entry."""
+
+    with sqlite_write_session(engine) as session:
+        repository = WishlistEntryRepository(session)
+
+        entry = repository.get_for_user(
+            entry_id=entry_id,
+            user_id=user_id,
+        )
+
+        if entry is None:
+            raise WishlistEntryNotFound("Wishlist entry not found.")
+
+        updated = repository.update_note(
+            entry=entry,
+            note=payload.note,
+            commit=False,
+        )
+
+        # Ensure timestamps are loaded before the session closes.
+        session.refresh(updated)
+
+        return updated

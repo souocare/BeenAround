@@ -21,6 +21,10 @@ class WishlistEntryCreate(BaseModel):
     city_id: int | None = Field(default=None, strict=True, gt=0)
 
     include_country: bool = False
+    note: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
 
     @field_validator("country_code")
     @classmethod
@@ -52,6 +56,41 @@ class WishlistEntryCreate(BaseModel):
 
         return self
 
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        """Normalize optional plain-text wishlist notes."""
+
+        if value is None:
+            return None
+
+        normalized = value.strip()
+
+        return normalized or None
+
+
+class WishlistEntryUpdate(BaseModel):
+    """Update the optional note of an existing wishlist entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(
+        ...,
+        max_length=1000,
+    )
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        """Normalize an updated wishlist note."""
+
+        if value is None:
+            return None
+
+        normalized = value.strip()
+
+        return normalized or None
+
 
 class WishlistEntryResponse(BaseModel):
     """A persisted global wishlist entry."""
@@ -65,6 +104,7 @@ class WishlistEntryResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    note: str | None
 
 
 class WishlistEntryListResponse(BaseModel):

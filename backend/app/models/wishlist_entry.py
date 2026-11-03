@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Uuid,
+    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,5 +66,10 @@ class WishlistEntry(TimestampMixin, Base):
     city_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("cities.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    note: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
     )

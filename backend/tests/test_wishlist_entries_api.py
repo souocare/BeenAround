@@ -2,7 +2,7 @@
 
 from collections.abc import Generator
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -892,3 +892,184 @@ def test_wishlist_does_not_create_been_or_lived_records(
         assert session.scalars(select(Residence)).all() == []
 
         assert len(session.scalars(select(WishlistEntry)).all()) == 2
+
+
+def test_create_wishlist_entry_with_note(
+    wishlist_client: tuple[TestClient, Engine],
+) -> None:
+    client, engine = wishlist_client
+
+    login_web(client)
+
+    response = post_wishlist(
+        client,
+        {
+            "country_code": "PT",
+            "note": "Explore the Douro Valley.",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+
+    entry = response.json()["created"][0]
+
+    assert entry["note"] == "Explore the Douro Valley."
+
+    with Session(engine) as session:
+        saved = session.get(WishlistEntry, UUID(entry["id"]))
+
+        assert saved is not None
+        assert saved.note == "Explore the Douro Valley."
+
+
+def test_patch_wishlist_note(
+    wishlist_client: tuple[TestClient, Engine],
+) -> None:
+    client, engine = wishlist_client
+
+    login_web(client)
+
+    entry_id = create_country(client)
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={"note": "Visit the Azores."},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+
+    assert data["id"] == entry_id
+    assert data["country_code"] == "PT"
+    assert data["city_id"] is None
+    assert data["note"] == "Visit the Azores."
+    assert data["updated_at"] is not None
+
+    with Session(engine) as session:
+        saved = session.get(WishlistEntry, UUID(entry_id))
+
+        assert saved is not None
+        assert saved.note == "Visit the Azores."
+
+
+def test_patch_wishlist_note_to_null(
+    wishlist_client: tuple[TestClient, Engine],
+) -> None:
+    client, engine = wishlist_client
+
+    login_web(client)
+
+    created = post_wishlist(
+        client,
+        {
+            "country_code": "PT",
+            "note": "Original note.",
+        },
+    )
+
+    assert created.status_code == 201
+
+    entry_id = created.json()["created"][0]["id"]
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={"note": None},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["note"] is None
+
+    with Session(engine) as session:
+        saved = session.get(WishlistEntry, UUID(entry_id))
+
+        assert saved is not None
+        assert saved.note is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"note": "A" * 1001},
+        {"country_code": "ES"},
+        {"note": "Updated", "city_id": LISBON_ID},
+        {"note": 123},
+    ],
+)
+def test_patch_rejects_invalid_payload(
+    wishlist_client: tuple[TestClient, Engine],
+    payload: dict,
+) -> None:
+    client, _ = wishlist_client
+
+    login_web(client)
+
+    entry_id = create_country(client)
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json=payload,
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_rejects_other_user(
+    wishlist_client: tuple[TestClient, Engine],
+) -> None:
+    client, engine = wishlist_client
+
+    login_web(client, "goncalo")
+
+    entry_id = create_country(client)
+
+    login_web(client, "anotheruser")
+
+    response = client.patch(
+        f"{BASE_URL}/{entry_id}",
+        json={"note": "Unauthorized change."},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 404
+
+    with Session(engine) as session:
+        saved = session.get(WishlistEntry, UUID(entry_id))
+
+        assert saved is not None
+        assert saved.note is None
+
+
+def test_repeated_post_preserves_existing_note(
+    wishlist_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = wishlist_client
+
+    login_web(client)
+
+    first = post_wishlist(
+        client,
+        {
+            "country_code": "PT",
+            "note": "Original note.",
+        },
+    )
+
+    assert first.status_code == 201
+
+    second = post_wishlist(
+        client,
+        {
+            "country_code": "PT",
+            "note": "Different note.",
+        },
+    )
+
+    assert second.status_code == 200
+
+    assert second.json()["created"] == []
+    assert second.json()["existing"][0]["note"] == "Original note."

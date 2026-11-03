@@ -11,6 +11,7 @@ from app.schemas.wishlist_entries import (
     WishlistEntryCreateResponse,
     WishlistEntryListResponse,
     WishlistEntryResponse,
+    WishlistEntryUpdate,
 )
 
 
@@ -162,6 +163,7 @@ def test_response_serializes_country_entry() -> None:
         city_id=None,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     data = response.model_dump(mode="json")
@@ -180,6 +182,7 @@ def test_response_serializes_city_entry() -> None:
         city_id=LISBON_ID,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     data = response.model_dump(mode="json")
@@ -197,6 +200,7 @@ def test_list_response_contains_total() -> None:
         city_id=None,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     response = WishlistEntryListResponse(
@@ -217,6 +221,7 @@ def test_create_response_distinguishes_created_and_existing() -> None:
         city_id=LISBON_ID,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     country = WishlistEntryResponse(
@@ -225,6 +230,7 @@ def test_create_response_distinguishes_created_and_existing() -> None:
         city_id=None,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     response = WishlistEntryCreateResponse(
@@ -248,6 +254,7 @@ def test_create_response_allows_no_new_entries() -> None:
         city_id=None,
         created_at=now,
         updated_at=now,
+        note=None,
     )
 
     response = WishlistEntryCreateResponse(
@@ -257,3 +264,105 @@ def test_create_response_allows_no_new_entries() -> None:
 
     assert response.created == []
     assert len(response.existing) == 1
+
+
+def test_create_accepts_optional_note() -> None:
+    payload = WishlistEntryCreate.model_validate(
+        {
+            "country_code": "JP",
+            "note": "Visit during cherry blossom season.",
+        }
+    )
+
+    assert payload.note == "Visit during cherry blossom season."
+
+
+def test_create_without_note_defaults_to_none() -> None:
+    payload = WishlistEntryCreate.model_validate({"country_code": "JP"})
+
+    assert payload.note is None
+
+
+def test_create_normalizes_note_whitespace() -> None:
+    payload = WishlistEntryCreate.model_validate(
+        {
+            "country_code": "JP",
+            "note": "  Visit Kyoto  ",
+        }
+    )
+
+    assert payload.note == "Visit Kyoto"
+
+
+def test_create_normalizes_empty_note_to_none() -> None:
+    payload = WishlistEntryCreate.model_validate(
+        {
+            "country_code": "JP",
+            "note": "   ",
+        }
+    )
+
+    assert payload.note is None
+
+
+def test_create_rejects_note_over_1000_characters() -> None:
+    with pytest.raises(ValidationError):
+        WishlistEntryCreate.model_validate(
+            {
+                "country_code": "JP",
+                "note": "A" * 1001,
+            }
+        )
+
+
+def test_create_accepts_note_of_1000_characters() -> None:
+    payload = WishlistEntryCreate.model_validate(
+        {
+            "country_code": "JP",
+            "note": "A" * 1000,
+        }
+    )
+
+    assert len(payload.note) == 1000
+
+
+def test_update_accepts_note() -> None:
+    payload = WishlistEntryUpdate.model_validate({"note": "New travel plans"})
+
+    assert payload.note == "New travel plans"
+
+
+def test_update_accepts_explicit_null() -> None:
+    payload = WishlistEntryUpdate.model_validate({"note": None})
+
+    assert payload.note is None
+
+
+def test_update_rejects_empty_payload() -> None:
+    with pytest.raises(ValidationError):
+        WishlistEntryUpdate.model_validate({})
+
+
+def test_update_rejects_destination_changes() -> None:
+    with pytest.raises(ValidationError):
+        WishlistEntryUpdate.model_validate(
+            {
+                "note": "Updated",
+                "country_code": "PT",
+            }
+        )
+
+
+def test_update_rejects_long_note() -> None:
+    with pytest.raises(ValidationError):
+        WishlistEntryUpdate.model_validate(
+            {
+                "note": "A" * 1001,
+            }
+        )
+
+
+def test_update_normalizes_blank_note_to_none() -> None:
+    payload = WishlistEntryUpdate.model_validate({"note": "   "})
+
+    assert payload.note is None

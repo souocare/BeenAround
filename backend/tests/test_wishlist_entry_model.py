@@ -420,3 +420,48 @@ def test_multiple_destinations_are_supported(
         ).all()
 
         assert len(entries) == 4
+
+
+def test_wishlist_entry_note_is_persisted(
+    database_engine: Engine,
+) -> None:
+    """An optional wishlist note survives a database round trip."""
+
+    with Session(database_engine) as session:
+        user_id, _ = seed_data(session)
+
+        entry = WishlistEntry(
+            user_id=user_id,
+            country_code="PT",
+            note="Explore the Douro Valley.",
+        )
+
+        session.add(entry)
+        session.commit()
+
+        entry_id = entry.id
+
+    with Session(database_engine) as session:
+        saved = session.get(WishlistEntry, entry_id)
+
+        assert saved is not None
+        assert saved.note == "Explore the Douro Valley."
+
+
+def test_wishlist_entry_note_can_be_null(
+    database_engine: Engine,
+) -> None:
+    """Wishlist entries do not require notes."""
+
+    with Session(database_engine) as session:
+        user_id, _ = seed_data(session)
+
+        entry = WishlistEntry(
+            user_id=user_id,
+            country_code="PT",
+        )
+
+        session.add(entry)
+        session.commit()
+
+        assert entry.note is None

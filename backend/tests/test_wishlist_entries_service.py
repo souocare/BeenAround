@@ -22,8 +22,9 @@ from app.services.wishlist_entries import (
     WishlistEntryNotFound,
     add_wishlist_entries,
     delete_wishlist_entry,
+    update_wishlist_entry,
 )
-
+from app.schemas.wishlist_entries import WishlistEntryCreate, WishlistEntryUpdate
 
 LISBON_ID = 2267057
 MADRID_ID = 3117735
@@ -485,3 +486,197 @@ def test_delete_missing_entry(
             user_id=user_id,
             entry_id=uuid4(),
         )
+
+
+def test_create_country_with_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(
+            country_code="PT",
+            note="Visit the Douro Valley.",
+        ),
+    )
+
+    assert len(result.created) == 1
+    assert result.created[0].note == "Visit the Douro Valley."
+
+    entries = list_entries(database_engine, user_id)
+
+    assert len(entries) == 1
+    assert entries[0].note == "Visit the Douro Valley."
+
+
+def test_city_and_country_note_applies_only_to_city(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(
+            city_id=LISBON_ID,
+            include_country=True,
+            note="Explore Alfama.",
+        ),
+    )
+
+    assert len(result.created) == 2
+
+    entries = list_entries(database_engine, user_id)
+
+    city = next(entry for entry in entries if entry.city_id == LISBON_ID)
+    country = next(entry for entry in entries if entry.country_code == "PT")
+
+    assert city.note == "Explore Alfama."
+    assert country.note is None
+
+
+def test_repeated_create_does_not_modify_existing_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    original = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(
+            country_code="PT",
+            note="Original note.",
+        ),
+    )
+
+    repeated = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(
+            country_code="PT",
+            note="Replacement note.",
+        ),
+    )
+
+    assert repeated.created == []
+    assert len(repeated.existing) == 1
+
+    assert repeated.existing[0].id == original.created[0].id
+    assert repeated.existing[0].note == "Original note."
+
+    assert list_entries(database_engine, user_id)[0].note == "Original note."
+
+
+def test_update_wishlist_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(country_code="PT"),
+    )
+
+    entry_id = result.created[0].id
+
+    updated = update_wishlist_entry(
+        engine=database_engine,
+        user_id=user_id,
+        entry_id=entry_id,
+        payload=WishlistEntryUpdate(note="New travel plans."),
+    )
+
+    assert updated.note == "New travel plans."
+    assert updated.updated_at is not None
+
+    assert list_entries(database_engine, user_id)[0].note == "New travel plans."
+
+
+def test_update_wishlist_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(country_code="PT"),
+    )
+
+    entry_id = result.created[0].id
+
+    updated = update_wishlist_entry(
+        engine=database_engine,
+        user_id=user_id,
+        entry_id=entry_id,
+        payload=WishlistEntryUpdate(note="New travel plans."),
+    )
+
+    assert updated.note == "New travel plans."
+    assert updated.updated_at is not None
+
+    assert list_entries(database_engine, user_id)[0].note == "New travel plans."
+
+
+def test_clear_wishlist_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    user_id, _ = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=user_id,
+        payload=WishlistEntryCreate(
+            country_code="PT",
+            note="Original note.",
+        ),
+    )
+
+    entry_id = result.created[0].id
+
+    updated = update_wishlist_entry(
+        engine=database_engine,
+        user_id=user_id,
+        entry_id=entry_id,
+        payload=WishlistEntryUpdate(note=None),
+    )
+
+    assert updated.note is None
+    assert list_entries(database_engine, user_id)[0].note is None
+
+
+def test_other_user_cannot_update_wishlist_note(
+    database_engine: Engine,
+    user_ids: tuple[UUID, UUID],
+) -> None:
+    owner, other_user = user_ids
+
+    result = add_wishlist_entries(
+        engine=database_engine,
+        user_id=owner,
+        payload=WishlistEntryCreate(
+            country_code="PT",
+            note="Private plans.",
+        ),
+    )
+
+    entry_id = result.created[0].id
+
+    with pytest.raises(WishlistEntryNotFound):
+        update_wishlist_entry(
+            engine=database_engine,
+            user_id=other_user,
+            entry_id=entry_id,
+            payload=WishlistEntryUpdate(note="Unauthorized change."),
+        )
+
+    assert list_entries(database_engine, owner)[0].note == "Private plans."
