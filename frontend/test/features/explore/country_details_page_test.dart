@@ -18,6 +18,18 @@ import 'package:beenaround/features/geography/domain/city_search_result.dart';
 import 'package:beenaround/features/geography/domain/city_sort.dart';
 import 'package:beenaround/features/geography/domain/country_city_count.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:beenaround/features/residences/domain/residence.dart';
+import 'package:beenaround/features/residences/domain/residence_changes.dart';
+import 'package:beenaround/features/residences/domain/residence_input.dart';
+import 'package:beenaround/features/residences/domain/residence_overlap.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+
+import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
+import '../residences/application/fake_residence_repository.dart';
+import '../wishlist/application/fake_wishlist_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -279,6 +291,12 @@ void main() {
             value: FakeCityVisitsRepository(),
           ),
           RepositoryProvider<CityRepository>.value(value: FakeCityRepository()),
+          RepositoryProvider<ResidenceRepository>.value(
+            value: FakeResidenceRepository(),
+          ),
+          RepositoryProvider<WishlistRepository>.value(
+            value: FakeWishlistRepository(),
+          ),
         ],
         child: MaterialApp(
           home: BlocProvider.value(

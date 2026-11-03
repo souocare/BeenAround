@@ -16,6 +16,16 @@ import 'package:beenaround/features/geography/domain/new_country_visit_input.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/residences/domain/residence.dart';
+import 'package:beenaround/features/residences/domain/residence_changes.dart';
+import 'package:beenaround/features/residences/domain/residence_input.dart';
+import 'package:beenaround/features/residences/domain/residence_overlap.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+
+import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 
 // -----------------------------------------------------------------------------
 // Finders
@@ -257,6 +267,68 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }
 }
 
+class FakeResidenceRepository implements ResidenceRepository {
+  @override
+  Future<List<Residence>> getResidences() async => const [];
+
+  @override
+  Future<Residence> getResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> createResidence({
+    required ResidenceInput input,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> updateResidence({
+    required String residenceId,
+    required ResidenceChanges changes,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+}
+
+class FakeWishlistRepository implements WishlistRepository {
+  @override
+  Future<List<WishlistEntry>> getWishlistEntries() async => const [];
+
+  @override
+  Future<WishlistEntry> getWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistCreationResult> addWishlistEntry({
+    required WishlistEntryInput input,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistEntry> updateWishlistNote({
+    required String entryId,
+    required String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Test helpers
 // -----------------------------------------------------------------------------
@@ -469,6 +541,12 @@ void main() {
           ),
           RepositoryProvider<CityVisitsRepository>.value(
             value: cityVisitsRepository ?? FakeCityVisitsRepository(),
+          ),
+          RepositoryProvider<ResidenceRepository>.value(
+            value: FakeResidenceRepository(),
+          ),
+          RepositoryProvider<WishlistRepository>.value(
+            value: FakeWishlistRepository(),
           ),
         ],
         child: BlocProvider.value(
@@ -757,6 +835,12 @@ void main() {
             RepositoryProvider<CityVisitsRepository>.value(
               value: FakeCityVisitsRepository(),
             ),
+            RepositoryProvider<ResidenceRepository>.value(
+              value: FakeResidenceRepository(),
+            ),
+            RepositoryProvider<WishlistRepository>.value(
+              value: FakeWishlistRepository(),
+            ),
           ],
           child: MaterialApp(
             home: BlocProvider.value(
@@ -1020,6 +1104,12 @@ void main() {
               RepositoryProvider<CityVisitsRepository>.value(
                 value: cityVisitsRepository,
               ),
+              RepositoryProvider<ResidenceRepository>.value(
+                value: FakeResidenceRepository(),
+              ),
+              RepositoryProvider<WishlistRepository>.value(
+                value: FakeWishlistRepository(),
+              ),
             ],
             child: BlocProvider.value(
               value: cubit,
@@ -1093,6 +1183,12 @@ void main() {
               RepositoryProvider<CityRepository>.value(value: cityRepository),
               RepositoryProvider<CityVisitsRepository>.value(
                 value: cityVisitsRepository,
+              ),
+              RepositoryProvider<ResidenceRepository>.value(
+                value: FakeResidenceRepository(),
+              ),
+              RepositoryProvider<WishlistRepository>.value(
+                value: FakeWishlistRepository(),
               ),
             ],
             child: BlocProvider.value(
@@ -1755,5 +1851,38 @@ void main() {
 
     // The form closes after successful confirmation.
     expect(find.text('Add Destination'), findsNothing);
+  });
+  testWidgets('allows selecting Been, Lived and Wish', (tester) async {
+    final repository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: repository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where have you been?'), findsOneWidget);
+
+    await tester.tap(find.text('Wish'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where do you want to go?'), findsOneWidget);
+
+    // Wish cannot accidentally submit a Been visit.
+    final saveVisitButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Save Visit'),
+    );
+
+    expect(saveVisitButton.onPressed, isNull);
+    expect(repository.createCalls, 0);
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where have you lived?'), findsOneWidget);
+
+    await tester.tap(find.text('Been'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where have you been?'), findsOneWidget);
   });
 }

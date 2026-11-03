@@ -9,6 +9,11 @@ import '../../application/add_city_visit_cubit.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../geography/domain/city_repository.dart';
 import '../../data/countries_repository.dart';
+import '../../../residences/domain/residence_repository.dart';
+import '../../../residences/application/save_residence_cubit.dart';
+
+import '../../../wishlist/domain/wishlist_repository.dart';
+import '../../../wishlist/application/add_wishlist_entry_cubit.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -18,6 +23,8 @@ Future<bool> showAddDestination(
   final repository = exploreCubit.repository;
   final cityVisitsRepository = context.read<CityVisitsRepository>();
   final cityRepository = context.read<CityRepository>();
+  final residenceRepository = context.read<ResidenceRepository>();
+  final wishlistRepository = context.read<WishlistRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
 
@@ -35,6 +42,13 @@ Future<bool> showAddDestination(
           ),
           BlocProvider<AddCityVisitCubit>(
             create: (_) => AddCityVisitCubit(repository: cityVisitsRepository),
+          ),
+          BlocProvider<SaveResidenceCubit>(
+            create: (_) => SaveResidenceCubit(repository: residenceRepository),
+          ),
+          BlocProvider<AddWishlistEntryCubit>(
+            create: (_) =>
+                AddWishlistEntryCubit(repository: wishlistRepository),
           ),
         ],
         child: AddDestinationSheet(initialCountry: initialCountry),

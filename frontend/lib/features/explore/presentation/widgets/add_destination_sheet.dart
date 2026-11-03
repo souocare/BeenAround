@@ -25,6 +25,8 @@ import '../../../geography/domain/new_country_visit_input.dart';
 import '../../domain/country_visit_date_validator.dart';
 import 'country_visit_date_expansion_dialog.dart';
 
+import '../../domain/destination_status.dart';
+
 enum _CityCountryAssociationMode { none, existing, createNew }
 
 class AddDestinationSheet extends StatefulWidget {
@@ -53,6 +55,12 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   VisitDatePrecision? _cityEndedOnPrecision;
   String? _associationSelectionError;
   String? _newCountryDateError;
+
+  DestinationStatus _selectedStatus = DestinationStatus.been;
+
+  bool get _isBeen => _selectedStatus == DestinationStatus.been;
+  bool get _isLived => _selectedStatus == DestinationStatus.lived;
+  bool get _isWish => _selectedStatus == DestinationStatus.wish;
 
   bool get _isCountry => _selectedDestinationType == 0;
 
@@ -140,6 +148,24 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     return _availableCountryVisits
         .where((visit) => visit.countryCode == city.countryCode)
         .toList(growable: false);
+  }
+
+  void _selectStatus(DestinationStatus status) {
+    if (_isAnySubmissionInProgress || _selectedStatus == status) {
+      return;
+    }
+
+    setState(() {
+      _selectedStatus = status;
+      _showDateErrors = false;
+      _associationSelectionError = null;
+      _newCountryDateError = null;
+    });
+
+    // The existing Been error state belongs only to the Been form.
+    if (_isBeen) {
+      _clearActiveError();
+    }
   }
 
   Future<void> _pickNewCountryStartDate() async {
@@ -616,6 +642,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _saveVisit() async {
+    if (!_isBeen || _isAnySubmissionInProgress) {
+      return;
+    }
     setState(() {
       _showDateErrors = true;
     });
@@ -860,14 +889,24 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
-          'Where have you been?',
+          switch (_selectedStatus) {
+            DestinationStatus.been => 'Where have you been?',
+            DestinationStatus.lived => 'Where have you lived?',
+            DestinationStatus.wish => 'Where do you want to go?',
+          },
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 6),
         Text(
-          'Add a destination to your travel history.',
+          switch (_selectedStatus) {
+            DestinationStatus.been =>
+              'Add a destination to your travel history.',
+            DestinationStatus.lived => 'Record a place where you lived.',
+            DestinationStatus.wish =>
+              'Save a destination you would like to visit.',
+          },
           style: theme.textTheme.bodyMedium?.copyWith(
             color: colors.onSurfaceVariant,
           ),
@@ -878,7 +917,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           onSelected: _selectDestinationType,
         ),
         const SizedBox(height: 16),
-        const _DestinationStatusSelector(),
+        _DestinationStatusSelector(
+          selectedStatus: _selectedStatus,
+          onSelected: _selectStatus,
+        ),
         const SizedBox(height: 24),
         Text(
           'DESTINATION',
@@ -1184,7 +1226,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                         ),
                       ),
                       onPressed:
-                          !hasSelection ||
+                          !_isBeen ||
+                              !hasSelection ||
                               isSubmitting ||
                               isSuccess ||
                               isAwaitingConfirmation
@@ -1439,7 +1482,13 @@ class _DestinationTypeSelector extends StatelessWidget {
 }
 
 class _DestinationStatusSelector extends StatelessWidget {
-  const _DestinationStatusSelector();
+  const _DestinationStatusSelector({
+    required this.selectedStatus,
+    required this.onSelected,
+  });
+
+  final DestinationStatus selectedStatus;
+  final ValueChanged<DestinationStatus> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1454,55 +1503,57 @@ class _DestinationStatusSelector extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (final option in ['Been', 'Lived', 'Wish'])
+          for (final status in DestinationStatus.values)
             Expanded(
               child: Tooltip(
-                message: option == 'Been'
-                    ? 'Record a visit'
-                    : '$option coming later',
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (option == 'Been') ...[
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              shape: BoxShape.circle,
+                message: status.description,
+                child: InkWell(
+                  onTap: () => onSelected(status),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (status == selectedStatus) ...[
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: colors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            status.label,
+                            style: TextStyle(
+                              color: status == selectedStatus
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                              fontWeight: status == selectedStatus
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              fontSize: 14,
                             ),
                           ),
-                          const SizedBox(width: 6),
                         ],
-                        Text(
-                          option,
-                          style: TextStyle(
-                            color: option == 'Been'
-                                ? colors.primary
-                                : colors.onSurfaceVariant,
-                            fontWeight: option == 'Been'
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 2,
-                      width: 34,
-                      decoration: BoxDecoration(
-                        color: option == 'Been'
-                            ? colors.primary
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 2,
+                        width: 34,
+                        decoration: BoxDecoration(
+                          color: status == selectedStatus
+                              ? colors.primary
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

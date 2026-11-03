@@ -26,6 +26,10 @@ import '../../geography/data/lazy_city_repository.dart';
 import '../../geography/domain/city_repository.dart';
 import '../../geography/data/remote/api_city_visits_repository.dart';
 import '../../geography/domain/city_visits_repository.dart';
+import '../../residences/domain/residence_repository.dart';
+import '../../residences/data/remote/api_residence_repository.dart';
+import '../../wishlist/domain/wishlist_repository.dart';
+import '../../wishlist/data/remote/api_wishlist_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -243,6 +247,12 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
         ),
         RepositoryProvider<CountriesRepository>(
           create: (_) => ApiCountriesRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<ResidenceRepository>(
+          create: (_) => ApiResidenceRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<WishlistRepository>(
+          create: (_) => ApiWishlistRepository(apiClient: widget.apiClient),
         ),
       ],
       child: BlocProvider<ExploreCubit>(
