@@ -36,6 +36,7 @@ import '../../../residences/domain/residence_input.dart';
 import 'add_destination_lived_form.dart';
 
 import '../../domain/destination_status.dart';
+import 'residence_overlap_confirmation_dialog.dart';
 
 enum _CityCountryAssociationMode { none, existing, createNew }
 
@@ -122,6 +123,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   String _residenceNote = '';
 
   bool _showResidenceDateErrors = false;
+  bool _overlapDialogOpen = false;
 
   @override
   void initState() {
@@ -431,6 +433,69 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       cubit.dismissOverlap();
     } else {
       cubit.clearError();
+    }
+  }
+
+  Future<void> _handleResidenceOverlap(SaveResidenceCubit cubit) async {
+    if (!mounted || _overlapDialogOpen) {
+      return;
+    }
+
+    setState(() {
+      _overlapDialogOpen = true;
+    });
+
+    try {
+      while (mounted && !cubit.isClosed) {
+        final state = cubit.state;
+
+        if (!state.requiresConfirmation) {
+          return;
+        }
+
+        final proposal = state.pendingProposal;
+
+        if (proposal == null) {
+          return;
+        }
+
+        final confirmed = await showResidenceOverlapConfirmationDialog(
+          context,
+          proposal: proposal,
+        );
+
+        if (!mounted || cubit.isClosed) {
+          return;
+        }
+
+        if (!confirmed) {
+          cubit.dismissOverlap();
+          return;
+        }
+
+        final success = await cubit.confirmOverlap();
+
+        if (!mounted || cubit.isClosed) {
+          return;
+        }
+
+        if (success) {
+          Navigator.of(context).pop(true);
+          return;
+        }
+
+        // A stale confirmation or an API failure leaves the form open.
+        // A new proposal requires another explicit user decision.
+        if (!cubit.state.requiresConfirmation) {
+          return;
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _overlapDialogOpen = false;
+        });
+      }
     }
   }
 
@@ -962,13 +1027,22 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       note: _residenceNote,
     );
 
-    final success = await context.read<SaveResidenceCubit>().create(
-      input: input,
-    );
+    final cubit = context.read<SaveResidenceCubit>();
 
-    if (!mounted || !success) return;
+    final success = await cubit.create(input: input);
 
-    Navigator.of(context).pop(true);
+    if (!mounted || cubit.isClosed) {
+      return;
+    }
+
+    if (success) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    if (cubit.state.requiresConfirmation) {
+      await _handleResidenceOverlap(cubit);
+    }
   }
 
   void _selectDestinationType(int index) {
@@ -1099,21 +1173,20 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                 const SizedBox(height: 12),
               ],
 
-              if (state.requiresConfirmation) ...[
-                const Text(
-                  'This residence overlaps an existing period. '
-                  'Explicit confirmation is required before saving.',
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () {
-                    context.read<SaveResidenceCubit>().dismissOverlap();
-                  },
-                  child: const Text('Edit residence dates'),
-                ),
-                const SizedBox(height: 12),
-              ],
-
+              // if (state.requiresConfirmation) ...[
+              //   const Text(
+              //     'This residence overlaps an existing period. '
+              //     'Explicit confirmation is required before saving.',
+              //   ),
+              //   const SizedBox(height: 12),
+              //   TextButton(
+              //     onPressed: () {
+              //       context.read<SaveResidenceCubit>().dismissOverlap();
+              //     },
+              //     child: const Text('Edit residence dates'),
+              //   ),
+              //   const SizedBox(height: 12),
+              // ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -1126,6 +1199,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                   ),
                   onPressed:
                       !hasSelection ||
+                          _overlapDialogOpen ||
                           state.isSubmitting ||
                           state.isSuccess ||
                           state.requiresConfirmation
@@ -1648,7 +1722,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
     final residenceState = context.read<SaveResidenceCubit>().state;
 
-    return countryState.isSubmitting ||
+    return _overlapDialogOpen ||
+        countryState.isSubmitting ||
         cityState.isSubmitting ||
         cityState.phase == AddCityVisitPhase.expansionRequired ||
         wishlistState.isSubmitting ||

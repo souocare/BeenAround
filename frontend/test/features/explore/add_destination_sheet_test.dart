@@ -282,6 +282,12 @@ class FakeResidenceRepository implements ResidenceRepository {
     throw UnimplementedError();
   }
 
+  Future<Residence> Function(
+    ResidenceInput input,
+    ResidenceOverlapProposal? confirmation,
+  )?
+  createHandler;
+
   @override
   Future<Residence> createResidence({
     required ResidenceInput input,
@@ -290,6 +296,10 @@ class FakeResidenceRepository implements ResidenceRepository {
     createCalls++;
     lastInput = input;
     lastConfirmation = overlapConfirmation;
+
+    if (createHandler != null) {
+      return createHandler!(input, overlapConfirmation);
+    }
 
     if (pendingCreate != null) {
       return pendingCreate!;
@@ -2430,10 +2440,7 @@ void main() {
 
     expect(residenceRepository.lastConfirmation, isNull);
 
-    expect(
-      find.textContaining('Explicit confirmation is required'),
-      findsOneWidget,
-    );
+    expect(find.text('Overlapping residence periods'), findsOneWidget);
 
     final saveButton = tester.widget<FilledButton>(
       find.byKey(const Key('saveResidenceButton')),
@@ -2443,5 +2450,188 @@ void main() {
 
     // The form remains open.
     expect(find.text('Add Destination'), findsOneWidget);
+  });
+  testWidgets('shows residence overlap details before confirmation', (
+    tester,
+  ) async {
+    final proposal = sampleResidenceOverlapProposal();
+
+    final residenceRepository = FakeResidenceRepository()
+      ..createError = ResidenceOverlapRequired(proposal);
+
+    await pumpExplore(tester, residenceRepository: residenceRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2020,
+      month: 3,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2023,
+      month: 8,
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overlapping residence periods'), findsOneWidget);
+
+    expect(find.byKey(const Key('requestedResidencePeriod')), findsOneWidget);
+
+    expect(
+      find.byKey(const Key('overlappingResidence-existing-residence')),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const Key('cancelResidenceOverlap')), findsOneWidget);
+
+    expect(find.byKey(const Key('confirmResidenceOverlap')), findsOneWidget);
+
+    expect(residenceRepository.createCalls, 1);
+    expect(residenceRepository.lastConfirmation, isNull);
+  });
+  testWidgets('cancelling residence overlap does not save again', (
+    tester,
+  ) async {
+    final proposal = sampleResidenceOverlapProposal();
+
+    final residenceRepository = FakeResidenceRepository()
+      ..createError = ResidenceOverlapRequired(proposal);
+
+    await pumpExplore(tester, residenceRepository: residenceRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2020,
+      month: 3,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2023,
+      month: 8,
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 1);
+
+    await tester.tap(find.byKey(const Key('cancelResidenceOverlap')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overlapping residence periods'), findsNothing);
+
+    expect(residenceRepository.createCalls, 1);
+    expect(residenceRepository.lastConfirmation, isNull);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+  });
+  testWidgets('explicit residence overlap confirmation saves the residence', (
+    tester,
+  ) async {
+    final proposal = sampleResidenceOverlapProposal();
+
+    final residenceRepository = FakeResidenceRepository();
+
+    ResidenceInput? initialInput;
+
+    residenceRepository.createHandler = (input, confirmation) async {
+      if (residenceRepository.createCalls == 1) {
+        initialInput = input;
+
+        expect(confirmation, isNull);
+
+        throw ResidenceOverlapRequired(proposal);
+      }
+
+      expect(input, same(initialInput));
+      expect(confirmation, same(proposal));
+
+      return Residence(
+        id: 'confirmed-residence',
+        countryCode: input.countryCode,
+        cityId: input.cityId,
+        startedOn: input.startedOn,
+        startedOnPrecision: input.startedOnPrecision,
+        endedOn: input.endedOn,
+        endedOnPrecision: input.endedOnPrecision,
+        note: input.note,
+        createdAt: DateTime(2026, 11, 3),
+        updatedAt: DateTime(2026, 11, 3),
+      );
+    };
+
+    await pumpExplore(tester, residenceRepository: residenceRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2020,
+      month: 3,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2023,
+      month: 8,
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 1);
+
+    await tester.tap(find.byKey(const Key('confirmResidenceOverlap')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 2);
+
+    expect(residenceRepository.lastConfirmation, same(proposal));
+
+    expect(find.text('Add Destination'), findsNothing);
   });
 }
