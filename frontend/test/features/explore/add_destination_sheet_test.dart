@@ -268,6 +268,12 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
 }
 
 class FakeResidenceRepository implements ResidenceRepository {
+  int createCalls = 0;
+  ResidenceInput? lastInput;
+  ResidenceOverlapProposal? lastConfirmation;
+
+  Object? createError;
+  Future<Residence>? pendingCreate;
   @override
   Future<List<Residence>> getResidences() async => const [];
 
@@ -280,8 +286,31 @@ class FakeResidenceRepository implements ResidenceRepository {
   Future<Residence> createResidence({
     required ResidenceInput input,
     ResidenceOverlapProposal? overlapConfirmation,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    createCalls++;
+    lastInput = input;
+    lastConfirmation = overlapConfirmation;
+
+    if (pendingCreate != null) {
+      return pendingCreate!;
+    }
+
+    if (createError != null) {
+      return Future.error(createError!);
+    }
+
+    return Residence(
+      id: 'residence-$createCalls',
+      countryCode: input.countryCode,
+      cityId: input.cityId,
+      startedOn: input.startedOn,
+      startedOnPrecision: input.startedOnPrecision,
+      endedOn: input.endedOn,
+      endedOnPrecision: input.endedOnPrecision,
+      note: input.note,
+      createdAt: DateTime(2026, 11, 3),
+      updatedAt: DateTime(2026, 11, 3),
+    );
   }
 
   @override
@@ -495,6 +524,61 @@ Future<void> selectAssociationMode(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> selectResidenceMonth(
+  WidgetTester tester, {
+  required String fieldKey,
+  required int year,
+  required int month,
+}) async {
+  final dateField = find.byKey(Key(fieldKey));
+
+  await tester.ensureVisible(dateField);
+  await tester.pumpAndSettle();
+
+  await tester.tap(dateField);
+  await tester.pumpAndSettle();
+
+  expect(find.text('Year only'), findsNothing);
+
+  await tester.tap(find.text('Month and year'));
+  await tester.pumpAndSettle();
+
+  expect(find.text('Select month and year'), findsOneWidget);
+
+  // Select year.
+  final yearDropdown = find.byType(DropdownButton<int>).first;
+
+  final currentYear = tester.widget<DropdownButton<int>>(yearDropdown).value;
+
+  if (currentYear != year) {
+    await tester.tap(yearDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('$year').last);
+    await tester.pumpAndSettle();
+  }
+
+  // Select month.
+  final monthDropdown = find.byType(DropdownButton<int>).last;
+
+  final currentMonth = tester.widget<DropdownButton<int>>(monthDropdown).value;
+
+  if (currentMonth != month) {
+    final monthLabel = MaterialLocalizations.of(
+      tester.element(monthDropdown),
+    ).formatMonthYear(DateTime(year, month));
+
+    await tester.tap(monthDropdown);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(monthLabel).last);
+    await tester.pumpAndSettle();
+  }
+
+  await tester.tap(find.text('Done'));
+  await tester.pumpAndSettle();
+}
+
 CountryVisitDateExpansion sampleDateExpansion() {
   return CountryVisitDateExpansion.fromJson({
     'country_visit_id': 'pt-visit-1',
@@ -538,6 +622,36 @@ Future<void> prepareCityWithExistingCountryVisit(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+ResidenceOverlapProposal sampleResidenceOverlapProposal() {
+  final requested = {
+    'country_code': 'PT',
+    'city_id': null,
+    'started_on': '2020-03-01',
+    'started_on_precision': 'month',
+    'ended_on': '2023-08-01',
+    'ended_on_precision': 'month',
+  };
+
+  return ResidenceOverlapProposal.fromJson({
+    'code': 'RESIDENCE_PERIOD_OVERLAP',
+    'message': 'Residence overlaps with existing periods.',
+    'requested': requested,
+    'overlaps': [
+      {
+        'residence_id': 'existing-residence',
+        'kind': 'certain',
+        'country_code': 'PT',
+        'city_id': null,
+        'started_on': '2021-01-01',
+        'started_on_precision': 'month',
+        'ended_on': '2022-12-01',
+        'ended_on_precision': 'month',
+      },
+    ],
+    'expected_target': null,
+  });
+}
+
 void main() {
   Future<void> pumpExplore(
     WidgetTester tester, {
@@ -546,6 +660,7 @@ void main() {
     FakeCityRepository? cityRepository,
     FakeCityVisitsRepository? cityVisitsRepository,
     WishlistRepository? wishlistRepository,
+    ResidenceRepository? residenceRepository,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 844);
@@ -571,7 +686,7 @@ void main() {
             value: cityVisitsRepository ?? FakeCityVisitsRepository(),
           ),
           RepositoryProvider<ResidenceRepository>.value(
-            value: FakeResidenceRepository(),
+            value: residenceRepository ?? FakeResidenceRepository(),
           ),
           RepositoryProvider<WishlistRepository>.value(
             value: wishlistRepository ?? FakeWishlistRepository(),
@@ -2049,5 +2164,284 @@ void main() {
       find.text('Unable to update your wishlist. Please try again.'),
       findsOneWidget,
     );
+  });
+  testWidgets('residence requires start and end dates', (tester) async {
+    final countriesRepository = FakeCountriesRepository();
+
+    await pumpExplore(tester, repository: countriesRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Required'), findsNWidgets(2));
+
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+  });
+  testWidgets('residence dates do not offer year-only precision', (
+    tester,
+  ) async {
+    await pumpExplore(tester);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('residenceStartDate')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Exact date'), findsOneWidget);
+    expect(find.text('Month and year'), findsOneWidget);
+    expect(find.text('Year only'), findsNothing);
+  });
+  testWidgets('residence requires start and end dates', (tester) async {
+    final residenceRepository = FakeResidenceRepository();
+    final countriesRepository = FakeCountriesRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Required'), findsNWidgets(2));
+
+    expect(residenceRepository.createCalls, 0);
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+  });
+  testWidgets('creates a country residence with month precision and note', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final residenceRepository = FakeResidenceRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('WHEN DID YOU LIVE HERE?'), findsOneWidget);
+    expect(find.text('WHEN DID YOU VISIT?'), findsNothing);
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2020,
+      month: 3,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2023,
+      month: 8,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('residenceNoteField')),
+      'Studied here.',
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 1);
+
+    final input = residenceRepository.lastInput;
+
+    expect(input, isNotNull);
+
+    expect(input!.countryCode, 'PT');
+    expect(input.cityId, isNull);
+
+    expect(input.startedOn, DateTime(2020, 3));
+    expect(input.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(input.endedOn, DateTime(2023, 8));
+    expect(input.endedOnPrecision, VisitDatePrecision.month);
+
+    expect(input.note, 'Studied here.');
+
+    // Lived must never create a Been record.
+    expect(countriesRepository.createCalls, 0);
+
+    // No overlap confirmation is sent for a normal creation.
+    expect(residenceRepository.lastConfirmation, isNull);
+
+    // The sheet closes after a successful save.
+    expect(find.text('Add Destination'), findsNothing);
+  });
+  testWidgets('creates a city residence without creating visits', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+    final residenceRepository = FakeResidenceRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await selectCity(tester, name: 'Lisbon');
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('WHEN DID YOU LIVE HERE?'), findsOneWidget);
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2022,
+      month: 9,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2024,
+      month: 6,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('residenceNoteField')),
+      'Lived in Lisbon for two years.',
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 1);
+
+    final input = residenceRepository.lastInput;
+
+    expect(input, isNotNull);
+
+    expect(input!.countryCode, 'PT');
+    expect(input.cityId, 2267057);
+
+    expect(input.startedOn, DateTime(2022, 9));
+    expect(input.startedOnPrecision, VisitDatePrecision.month);
+
+    expect(input.endedOn, DateTime(2024, 6));
+    expect(input.endedOnPrecision, VisitDatePrecision.month);
+
+    expect(input.note, 'Lived in Lisbon for two years.');
+
+    // Residence is independent of Been.
+    expect(countriesRepository.createCalls, 0);
+    expect(cityVisitsRepository.createCalls, 0);
+
+    expect(residenceRepository.lastConfirmation, isNull);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
+  testWidgets('does not automatically confirm an overlapping residence', (
+    tester,
+  ) async {
+    final proposal = sampleResidenceOverlapProposal();
+
+    final residenceRepository = FakeResidenceRepository()
+      ..createError = ResidenceOverlapRequired(proposal);
+
+    await pumpExplore(tester, residenceRepository: residenceRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lived'));
+    await tester.pumpAndSettle();
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceStartDate',
+      year: 2020,
+      month: 3,
+    );
+
+    await selectResidenceMonth(
+      tester,
+      fieldKey: 'residenceEndDate',
+      year: 2023,
+      month: 8,
+    );
+
+    await tester.tap(find.byKey(const Key('saveResidenceButton')));
+    await tester.pumpAndSettle();
+
+    expect(residenceRepository.createCalls, 1);
+
+    expect(residenceRepository.lastConfirmation, isNull);
+
+    expect(
+      find.textContaining('Explicit confirmation is required'),
+      findsOneWidget,
+    );
+
+    final saveButton = tester.widget<FilledButton>(
+      find.byKey(const Key('saveResidenceButton')),
+    );
+
+    expect(saveButton.onPressed, isNull);
+
+    // The form remains open.
+    expect(find.text('Add Destination'), findsOneWidget);
   });
 }

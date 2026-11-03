@@ -9,7 +9,13 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
   PartialVisitDate? initialValue,
   DateTime? firstDate,
   DateTime? lastDate,
+  List<VisitDatePrecision> allowedPrecisions = const [
+    VisitDatePrecision.day,
+    VisitDatePrecision.month,
+    VisitDatePrecision.year,
+  ],
 }) async {
+  assert(allowedPrecisions.isNotEmpty);
   final minimum = firstDate ?? DateTime(1900);
   final maximum = lastDate ?? DateTime(2100, 12, 31);
 
@@ -20,7 +26,11 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
       : requestedInitial.isAfter(maximum)
       ? maximum
       : requestedInitial;
-  final initialPrecision = initialValue?.precision ?? VisitDatePrecision.day;
+  final requestedPrecision = initialValue?.precision ?? VisitDatePrecision.day;
+
+  final initialPrecision = allowedPrecisions.contains(requestedPrecision)
+      ? requestedPrecision
+      : allowedPrecisions.first;
 
   final precision = await showModalBottomSheet<VisitDatePrecision>(
     context: context,
@@ -36,7 +46,7 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
-              for (final option in VisitDatePrecision.values)
+              for (final option in allowedPrecisions)
                 ListTile(
                   title: Text(switch (option) {
                     VisitDatePrecision.day => 'Exact date',

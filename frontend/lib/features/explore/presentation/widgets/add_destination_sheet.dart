@@ -29,6 +29,11 @@ import '../../../wishlist/application/add_wishlist_entry_state.dart';
 import '../../../wishlist/domain/wishlist_entry_input.dart';
 
 import 'add_destination_wish_form.dart';
+import '../../../residences/application/save_residence_cubit.dart';
+import '../../../residences/application/save_residence_state.dart';
+import '../../../residences/domain/residence_input.dart';
+
+import 'add_destination_lived_form.dart';
 
 import '../../domain/destination_status.dart';
 
@@ -108,6 +113,15 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   bool _loadingCountryVisits = false;
   String? _countryVisitsError;
   bool _countryVisitsLoaded = false;
+  DateTime? _residenceStartedOn;
+  DateTime? _residenceEndedOn;
+
+  VisitDatePrecision? _residenceStartedOnPrecision;
+  VisitDatePrecision? _residenceEndedOnPrecision;
+
+  String _residenceNote = '';
+
+  bool _showResidenceDateErrors = false;
 
   @override
   void initState() {
@@ -282,6 +296,74 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     _clearActiveError();
   }
 
+  Future<void> _pickResidenceStartDate() async {
+    if (_isAnySubmissionInProgress) return;
+
+    final selected = await showPartialVisitDatePicker(
+      context: context,
+      initialValue: _residenceStartedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _residenceStartedOn!,
+              precision: _residenceStartedOnPrecision ?? VisitDatePrecision.day,
+            ),
+      allowedPrecisions: const [
+        VisitDatePrecision.day,
+        VisitDatePrecision.month,
+      ],
+    );
+
+    if (!mounted || selected == null || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    setState(() {
+      _residenceStartedOn = selected.date;
+      _residenceStartedOnPrecision = selected.precision;
+      _showResidenceDateErrors = false;
+    });
+
+    _invalidateResidenceProposal();
+  }
+
+  Future<void> _pickResidenceEndDate() async {
+    if (_isAnySubmissionInProgress) return;
+
+    final selected = await showPartialVisitDatePicker(
+      context: context,
+      initialValue: _residenceEndedOn == null
+          ? null
+          : PartialVisitDate(
+              date: _residenceEndedOn!,
+              precision: _residenceEndedOnPrecision ?? VisitDatePrecision.day,
+            ),
+      allowedPrecisions: const [
+        VisitDatePrecision.day,
+        VisitDatePrecision.month,
+      ],
+    );
+
+    if (!mounted || selected == null || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    setState(() {
+      _residenceEndedOn = selected.date;
+      _residenceEndedOnPrecision = selected.precision;
+      _showResidenceDateErrors = false;
+    });
+
+    _invalidateResidenceProposal();
+  }
+
+  void _onResidenceNoteChanged(String value) {
+    if (_isAnySubmissionInProgress) return;
+
+    _residenceNote = value;
+
+    _invalidateResidenceProposal();
+  }
+
   Future<bool> _confirmCountryDateExpansion({
     required int cityId,
     required DateTime? startedOn,
@@ -340,6 +422,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     }
 
     return success;
+  }
+
+  void _invalidateResidenceProposal() {
+    final cubit = context.read<SaveResidenceCubit>();
+
+    if (cubit.state.requiresConfirmation) {
+      cubit.dismissOverlap();
+    } else {
+      cubit.clearError();
+    }
   }
 
   Widget _buildCountryVisitAssociation(
@@ -830,6 +922,55 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     Navigator.of(context).pop(true);
   }
 
+  Future<void> _saveResidence() async {
+    if (!_isLived || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    final countryCode = _isCountry
+        ? _selectedCountry?.code
+        : _selectedCity?.countryCode;
+
+    final cityId = _isCountry ? null : _selectedCity?.id;
+
+    if (countryCode == null) return;
+
+    final startedOn = _residenceStartedOn;
+    final endedOn = _residenceEndedOn;
+
+    final startedPrecision = _residenceStartedOnPrecision;
+    final endedPrecision = _residenceEndedOnPrecision;
+
+    if (startedOn == null ||
+        endedOn == null ||
+        startedPrecision == null ||
+        endedPrecision == null) {
+      setState(() {
+        _showResidenceDateErrors = true;
+      });
+
+      return;
+    }
+
+    final input = ResidenceInput(
+      countryCode: countryCode,
+      cityId: cityId,
+      startedOn: startedOn,
+      startedOnPrecision: startedPrecision,
+      endedOn: endedOn,
+      endedOnPrecision: endedPrecision,
+      note: _residenceNote,
+    );
+
+    final success = await context.read<SaveResidenceCubit>().create(
+      input: input,
+    );
+
+    if (!mounted || !success) return;
+
+    Navigator.of(context).pop(true);
+  }
+
   void _selectDestinationType(int index) {
     if (_isAnySubmissionInProgress) return;
 
@@ -928,6 +1069,77 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                       : const Icon(Icons.favorite_border, size: 20),
                   label: Text(
                     state.isSubmitting ? 'Saving...' : 'Add to Wishlist',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResidenceFooter(BuildContext context) {
+    return BlocBuilder<SaveResidenceCubit, SaveResidenceState>(
+      builder: (context, state) {
+        final hasSelection = _isCountry
+            ? _selectedCountry != null
+            : _selectedCity != null;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (state.errorMessage != null) ...[
+                Text(
+                  state.errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              if (state.requiresConfirmation) ...[
+                const Text(
+                  'This residence overlaps an existing period. '
+                  'Explicit confirmation is required before saving.',
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    context.read<SaveResidenceCubit>().dismissOverlap();
+                  },
+                  child: const Text('Edit residence dates'),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('saveResidenceButton'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed:
+                      !hasSelection ||
+                          state.isSubmitting ||
+                          state.isSuccess ||
+                          state.requiresConfirmation
+                      ? null
+                      : _saveResidence,
+                  icon: state.isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.home_outlined, size: 20),
+                  label: Text(
+                    state.isSubmitting ? 'Saving...' : 'Save Residence',
                   ),
                 ),
               ),
@@ -1150,10 +1362,24 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
 
         if (_isLived)
-          const _ComingLaterCard(
-            title: 'Lived',
-            subtitle: 'Historical residences will be available here soon.',
-            icon: Icons.home_outlined,
+          AddDestinationLivedForm(
+            key: const ValueKey('addDestinationLivedForm'),
+            startDateLabel: _formatDate(
+              _residenceStartedOn,
+              _residenceStartedOnPrecision,
+            ),
+            endDateLabel: _formatDate(
+              _residenceEndedOn,
+              _residenceEndedOnPrecision,
+            ),
+            onStartDateTap: _pickResidenceStartDate,
+            onEndDateTap: _pickResidenceEndDate,
+            note: _residenceNote,
+            onNoteChanged: _onResidenceNoteChanged,
+            enabled: !_isAnySubmissionInProgress,
+            showDateErrors: _showResidenceDateErrors,
+            startDateMissing: _residenceStartedOn == null,
+            endDateMissing: _residenceEndedOn == null,
           ),
       ],
     );
@@ -1331,6 +1557,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       return _buildWishFooter(context);
     }
 
+    if (_isLived) {
+      return _buildResidenceFooter(context);
+    }
+
     return BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
       builder: (context, countryState) {
         return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
@@ -1411,13 +1641,18 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   bool get _isAnySubmissionInProgress {
     final countryState = context.read<AddCountryVisitCubit>().state;
+
     final cityState = context.read<AddCityVisitCubit>().state;
+
     final wishlistState = context.read<AddWishlistEntryCubit>().state;
+
+    final residenceState = context.read<SaveResidenceCubit>().state;
 
     return countryState.isSubmitting ||
         cityState.isSubmitting ||
         cityState.phase == AddCityVisitPhase.expansionRequired ||
-        wishlistState.isSubmitting;
+        wishlistState.isSubmitting ||
+        residenceState.isSubmitting;
   }
 }
 
