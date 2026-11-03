@@ -11,6 +11,7 @@ from app.models import (
     city_visit,  # noqa: F401
     country,  # noqa: F401
     country_visit,  # noqa: F401
+    residence,  # noqa: F401
     user,  # noqa: F401
 )
 
