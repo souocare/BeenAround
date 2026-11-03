@@ -24,6 +24,11 @@ import '../../domain/country_visit.dart';
 import '../../../geography/domain/new_country_visit_input.dart';
 import '../../domain/country_visit_date_validator.dart';
 import 'country_visit_date_expansion_dialog.dart';
+import '../../../wishlist/application/add_wishlist_entry_cubit.dart';
+import '../../../wishlist/application/add_wishlist_entry_state.dart';
+import '../../../wishlist/domain/wishlist_entry_input.dart';
+
+import 'add_destination_wish_form.dart';
 
 import '../../domain/destination_status.dart';
 
@@ -82,6 +87,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   City? _selectedCity;
   bool _selectingCity = false;
+
+  String _wishlistNote = '';
+  bool _wishlistIncludeCountry = false;
 
   // Explicit city-country visit association.
   // A city is independent by default.
@@ -150,6 +158,24 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         .toList(growable: false);
   }
 
+  void _onWishlistNoteChanged(String value) {
+    if (_isAnySubmissionInProgress) return;
+
+    _wishlistNote = value;
+
+    context.read<AddWishlistEntryCubit>().clearError();
+  }
+
+  void _onWishlistIncludeCountryChanged(bool value) {
+    if (_isAnySubmissionInProgress) return;
+
+    setState(() {
+      _wishlistIncludeCountry = value;
+    });
+
+    context.read<AddWishlistEntryCubit>().clearError();
+  }
+
   void _selectStatus(DestinationStatus status) {
     if (_isAnySubmissionInProgress || _selectedStatus == status) {
       return;
@@ -166,6 +192,45 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     if (_isBeen) {
       _clearActiveError();
     }
+  }
+
+  Future<void> _saveWish() async {
+    if (!_isWish || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    final WishlistEntryInput input;
+
+    if (_isCountry) {
+      final country = _selectedCountry;
+
+      if (country == null) return;
+
+      input = WishlistEntryInput.country(
+        countryCode: country.code,
+        note: _wishlistNote,
+      );
+    } else {
+      final city = _selectedCity;
+
+      if (city == null) return;
+
+      input = WishlistEntryInput.city(
+        cityId: city.id,
+        includeCountry: _wishlistIncludeCountry,
+        note: _wishlistNote,
+      );
+    }
+
+    final success = await context.read<AddWishlistEntryCubit>().submit(
+      input: input,
+    );
+
+    if (!mounted || !success) return;
+
+    // True means that the request completed successfully.
+    // This also includes destinations that already existed.
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _pickNewCountryStartDate() async {
@@ -776,6 +841,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       _selectingCity = false;
       _searchQuery = '';
       _showDateErrors = false;
+      _wishlistIncludeCountry = false;
     });
 
     _clearActiveError();
@@ -791,6 +857,12 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       onCitySelected: (city) {
         setState(() {
           final countryChanged = _selectedCity?.countryCode != city.countryCode;
+
+          final cityChanged = _selectedCity?.id != city.id;
+
+          if (cityChanged) {
+            _wishlistIncludeCountry = false;
+          }
 
           _selectedCity = city;
           _selectingCity = false;
@@ -809,6 +881,59 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         });
 
         context.read<AddCityVisitCubit>().clearError();
+      },
+    );
+  }
+
+  Widget _buildWishFooter(BuildContext context) {
+    return BlocBuilder<AddWishlistEntryCubit, AddWishlistEntryState>(
+      builder: (context, state) {
+        final hasSelection = _isCountry
+            ? _selectedCountry != null
+            : _selectedCity != null;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (state.errorMessage != null) ...[
+                Text(
+                  state.errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('saveWishlistButton'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed:
+                      !hasSelection || state.isSubmitting || state.isSuccess
+                      ? null
+                      : _saveWish,
+                  icon: state.isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.favorite_border, size: 20),
+                  label: Text(
+                    state.isSubmitting ? 'Saving...' : 'Add to Wishlist',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -846,12 +971,20 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                               countryState.isSubmitting ||
                               cityState.isSubmitting;
 
-                          return IconButton(
-                            tooltip: 'Close',
-                            onPressed: isSubmitting
-                                ? null
-                                : () => Navigator.of(context).pop(false),
-                            icon: const Icon(Icons.close),
+                          return BlocBuilder<
+                            AddWishlistEntryCubit,
+                            AddWishlistEntryState
+                          >(
+                            builder: (context, wishlistState) {
+                              return IconButton(
+                                tooltip: 'Close',
+                                onPressed:
+                                    isSubmitting || wishlistState.isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(false),
+                                icon: const Icon(Icons.close),
+                              );
+                            },
                           );
                         },
                       );
@@ -950,58 +1083,78 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             },
           ),
         const SizedBox(height: 24),
-        Text(
-          'WHEN DID YOU VISIT?',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: colors.onSurfaceVariant,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Start and end dates are required. Choose an exact date, month, or year.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _VisitDateCard(
-                label: 'START DATE',
-                value: _formatDate(_startedOn, _startedOnPrecision),
-                onTap: _isAnySubmissionInProgress ? null : _pickStartDate,
-                required: true,
-                hasError: _startDateMissing,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _VisitDateCard(
-                label: 'END DATE',
-                value: _formatDate(_endedOn, _endedOnPrecision),
-                onTap: _isAnySubmissionInProgress ? null : _pickEndDate,
-                required: true,
-                hasError: _endDateMissing,
-              ),
-            ),
-          ],
-        ),
 
-        const SizedBox(height: 24),
+        if (_isBeen) ...[
+          Text(
+            'WHEN DID YOU VISIT?',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colors.onSurfaceVariant,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Start and end dates are required. Choose an exact date, month, or year.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _VisitDateCard(
+                  label: 'START DATE',
+                  value: _formatDate(_startedOn, _startedOnPrecision),
+                  onTap: _isAnySubmissionInProgress ? null : _pickStartDate,
+                  required: true,
+                  hasError: _startDateMissing,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _VisitDateCard(
+                  label: 'END DATE',
+                  value: _formatDate(_endedOn, _endedOnPrecision),
+                  onTap: _isAnySubmissionInProgress ? null : _pickEndDate,
+                  required: true,
+                  hasError: _endDateMissing,
+                ),
+              ),
+            ],
+          ),
 
-        if (!_isCountry && _selectedCity != null) ...[
-          _buildCountryVisitAssociation(context, theme, colors),
           const SizedBox(height: 24),
-        ],
 
-        const _ComingLaterCard(
-          title: 'Associated Trip',
-          subtitle: 'Optionally organize this visit into a Trip later.',
-          icon: Icons.luggage_outlined,
-        ),
+          if (!_isCountry && _selectedCity != null) ...[
+            _buildCountryVisitAssociation(context, theme, colors),
+            const SizedBox(height: 24),
+          ],
+
+          const _ComingLaterCard(
+            title: 'Associated Trip',
+            subtitle: 'Optionally organize this visit into a Trip later.',
+            icon: Icons.luggage_outlined,
+          ),
+        ],
+        if (_isWish)
+          AddDestinationWishForm(
+            key: const ValueKey('addDestinationWishForm'),
+            note: _wishlistNote,
+            onNoteChanged: _onWishlistNoteChanged,
+            includeCountry: _wishlistIncludeCountry,
+            onIncludeCountryChanged: _onWishlistIncludeCountryChanged,
+            enabled: !_isAnySubmissionInProgress,
+            cityCountryName: !_isCountry ? _selectedCity?.countryName : null,
+          ),
+
+        if (_isLived)
+          const _ComingLaterCard(
+            title: 'Lived',
+            subtitle: 'Historical residences will be available here soon.',
+            icon: Icons.home_outlined,
+          ),
       ],
     );
   }
@@ -1174,6 +1327,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Widget _buildFooter(BuildContext context) {
+    if (_isWish) {
+      return _buildWishFooter(context);
+    }
+
     return BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
       builder: (context, countryState) {
         return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
@@ -1255,10 +1412,12 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   bool get _isAnySubmissionInProgress {
     final countryState = context.read<AddCountryVisitCubit>().state;
     final cityState = context.read<AddCityVisitCubit>().state;
+    final wishlistState = context.read<AddWishlistEntryCubit>().state;
 
     return countryState.isSubmitting ||
         cityState.isSubmitting ||
-        cityState.phase == AddCityVisitPhase.expansionRequired;
+        cityState.phase == AddCityVisitPhase.expansionRequired ||
+        wishlistState.isSubmitting;
   }
 }
 

@@ -300,6 +300,13 @@ class FakeResidenceRepository implements ResidenceRepository {
 }
 
 class FakeWishlistRepository implements WishlistRepository {
+  int addCalls = 0;
+
+  WishlistEntryInput? lastInput;
+
+  Object? addError;
+
+  Future<WishlistCreationResult>? pendingAdd;
   @override
   Future<List<WishlistEntry>> getWishlistEntries() async => const [];
 
@@ -311,8 +318,28 @@ class FakeWishlistRepository implements WishlistRepository {
   @override
   Future<WishlistCreationResult> addWishlistEntry({
     required WishlistEntryInput input,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    addCalls++;
+    lastInput = input;
+
+    if (pendingAdd != null) {
+      return pendingAdd!;
+    }
+
+    if (addError != null) {
+      return Future.error(addError!);
+    }
+
+    final entry = WishlistEntry(
+      id: 'wishlist-$addCalls',
+      countryCode: input.countryCode,
+      cityId: input.cityId,
+      note: input.note,
+      createdAt: DateTime(2026, 11, 3),
+      updatedAt: DateTime(2026, 11, 3),
+    );
+
+    return WishlistCreationResult(created: [entry], existing: const []);
   }
 
   @override
@@ -518,6 +545,7 @@ void main() {
     FakeCountriesRepository? repository,
     FakeCityRepository? cityRepository,
     FakeCityVisitsRepository? cityVisitsRepository,
+    WishlistRepository? wishlistRepository,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 844);
@@ -546,7 +574,7 @@ void main() {
             value: FakeResidenceRepository(),
           ),
           RepositoryProvider<WishlistRepository>.value(
-            value: FakeWishlistRepository(),
+            value: wishlistRepository ?? FakeWishlistRepository(),
           ),
         ],
         child: BlocProvider.value(
@@ -1868,21 +1896,158 @@ void main() {
     expect(find.text('Where do you want to go?'), findsOneWidget);
 
     // Wish cannot accidentally submit a Been visit.
-    final saveVisitButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Save Visit'),
+    expect(find.text('Save Visit'), findsNothing);
+
+    final wishlistButton = tester.widget<FilledButton>(
+      find.byKey(const Key('saveWishlistButton')),
     );
 
-    expect(saveVisitButton.onPressed, isNull);
+    expect(wishlistButton.onPressed, isNull);
     expect(repository.createCalls, 0);
 
     await tester.tap(find.text('Lived'));
     await tester.pumpAndSettle();
 
     expect(find.text('Where have you lived?'), findsOneWidget);
+    expect(find.text('Add to Wishlist'), findsNothing);
 
     await tester.tap(find.text('Been'));
     await tester.pumpAndSettle();
 
     expect(find.text('Where have you been?'), findsOneWidget);
+    expect(find.text('Save Visit'), findsOneWidget);
+  });
+  testWidgets('adds a selected country to the wishlist', (tester) async {
+    final countriesRepository = FakeCountriesRepository();
+    final wishlistRepository = FakeWishlistRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Wish'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('YOUR WISHLIST'), findsOneWidget);
+
+    expect(find.text('WHEN DID YOU VISIT?'), findsNothing);
+
+    expect(find.text('Save Visit'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('wishlistNoteField')),
+      'Visit the Azores.',
+    );
+
+    await tester.tap(find.byKey(const Key('saveWishlistButton')));
+    await tester.pumpAndSettle();
+
+    expect(wishlistRepository.addCalls, 1);
+
+    expect(wishlistRepository.lastInput?.countryCode, 'PT');
+    expect(wishlistRepository.lastInput?.cityId, isNull);
+    expect(wishlistRepository.lastInput?.note, 'Visit the Azores.');
+
+    expect(countriesRepository.createCalls, 0);
+
+    expect(find.text('Add Destination'), findsNothing);
+  });
+  testWidgets('adds a city and explicitly includes its country', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+    final wishlistRepository = FakeWishlistRepository();
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await selectCity(tester, name: 'Lisbon');
+
+    await tester.tap(find.text('Wish'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Also add Portugal to my wishlist'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('wishlistNoteField')),
+      'Explore Alfama.',
+    );
+
+    final includeCountryFinder = find.byKey(
+      const Key('wishlistIncludeCountry'),
+    );
+
+    await tester.ensureVisible(includeCountryFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(includeCountryFinder);
+    await tester.pumpAndSettle();
+
+    final checkbox = tester.widget<CheckboxListTile>(includeCountryFinder);
+
+    expect(checkbox.value, isTrue);
+
+    final saveButton = find.byKey(const Key('saveWishlistButton'));
+
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(wishlistRepository.addCalls, 1);
+
+    expect(wishlistRepository.lastInput?.cityId, 2267057);
+    expect(wishlistRepository.lastInput?.countryCode, isNull);
+    expect(wishlistRepository.lastInput?.includeCountry, isTrue);
+    expect(wishlistRepository.lastInput?.note, 'Explore Alfama.');
+
+    expect(countriesRepository.createCalls, 0);
+    expect(cityVisitsRepository.createCalls, 0);
+  });
+  testWidgets('keeps the wishlist form open after an API failure', (
+    tester,
+  ) async {
+    final wishlistRepository = FakeWishlistRepository()
+      ..addError = StateError('Network unavailable');
+
+    await pumpExplore(tester, wishlistRepository: wishlistRepository);
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Wish'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('saveWishlistButton')));
+    await tester.pumpAndSettle();
+
+    expect(wishlistRepository.addCalls, 1);
+
+    expect(find.text('Add Destination'), findsOneWidget);
+
+    expect(
+      find.text('Unable to update your wishlist. Please try again.'),
+      findsOneWidget,
+    );
   });
 }
