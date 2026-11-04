@@ -6,6 +6,7 @@ enum ApiErrorType {
   notFound,
   server,
   unknown,
+  conflict,
 }
 
 class ApiException implements Exception {
