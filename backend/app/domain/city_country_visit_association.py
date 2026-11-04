@@ -152,10 +152,17 @@ def validate_country_date_expansion_confirmation(
     """Validate approval of the exact country date expansion shown to the user."""
 
     if current != expected:
-        raise ValueError("Country visit dates have changed since the expansion was proposed.")
+        raise ValueError(
+            "Country visit dates have changed since the expansion was proposed."
+        )
 
     if proposed is None:
-        raise ValueError("Country visit date expansion is no longer required.")
+        raise ValueError(
+            "Country visit date expansion is no longer required."
+        )
 
     if proposed.date_range != confirmed:
-        raise ValueError("Confirmed country visit dates do not match the current proposal.")
+        raise ValueError(
+            "Confirmed country visit dates do not match the current proposal."
+        )
+
