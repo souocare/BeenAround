@@ -266,6 +266,30 @@ const spain = Country(
   continent: 'Europe',
 );
 
+const lisbon = City(
+  id: 2267057,
+  name: 'Lisbon',
+  asciiName: 'Lisbon',
+  countryCode: 'PT',
+  countryName: 'Portugal',
+  latitude: 38.72,
+  longitude: -9.13,
+  population: 500000,
+  featureCode: 'PPLC',
+);
+
+const madrid = City(
+  id: 3117735,
+  name: 'Madrid',
+  asciiName: 'Madrid',
+  countryCode: 'ES',
+  countryName: 'Spain',
+  latitude: 40.42,
+  longitude: -3.70,
+  population: 3200000,
+  featureCode: 'PPLC',
+);
+
 CountryVisit visit(String id, String countryCode) {
   return CountryVisit(
     id: id,
@@ -303,6 +327,16 @@ WishlistEntry wishlistCountry({
     id: id,
     countryCode: countryCode,
     cityId: null,
+    createdAt: DateTime(2026, 10, 21),
+    updatedAt: DateTime(2026, 10, 21),
+  );
+}
+
+WishlistEntry wishlistCity({required String id, required int cityId}) {
+  return WishlistEntry(
+    id: id,
+    countryCode: null,
+    cityId: cityId,
     createdAt: DateTime(2026, 10, 21),
     updatedAt: DateTime(2026, 10, 21),
   );
@@ -352,7 +386,9 @@ void main() {
             value: cityRepository ?? FakeCityVisitsRepository(),
           ),
           RepositoryProvider<CityRepository>.value(
-            value: catalogRepository ?? FakeCityRepository(),
+            value:
+                catalogRepository ??
+                FakeCityRepository(cities: const [lisbon, madrid]),
           ),
           RepositoryProvider<ResidenceRepository>.value(
             value: residenceRepository ?? FakeResidenceRepository(),
@@ -385,6 +421,24 @@ void main() {
       chip.selected,
       isTrue,
       reason: 'Country filter "$filter" should be selected.',
+    );
+  }
+
+  Future<void> selectCityFilter(WidgetTester tester, String filter) async {
+    final finder = find.byKey(Key('cityFilter-$filter'));
+
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+
+    final chip = tester.widget<ChoiceChip>(finder);
+
+    expect(
+      chip.selected,
+      isTrue,
+      reason: 'City filter "$filter" should be selected.',
     );
   }
 
@@ -1473,5 +1527,463 @@ void main() {
     // A city residence must not create a country visit.
     expect(cubit.state.visits, isEmpty);
     expect(cubit.state.visitedCountryCount, 0);
+  });
+  testWidgets('city Been filter shows only explicitly visited cities', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal, spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, cityRepository: cityRepository);
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    await selectCityFilter(tester, 'been');
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Madrid'), findsNothing);
+
+    await selectCityFilter(tester, 'lived');
+
+    expect(find.text('Lisbon'), findsNothing);
+
+    await selectCityFilter(tester, 'wish');
+
+    expect(find.text('Lisbon'), findsNothing);
+
+    expect(cityRepository.visits, hasLength(1));
+  });
+  testWidgets('city Lived filter shows residence-only cities', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository();
+
+    final residenceRepository = FakeResidenceRepository(
+      residences: [
+        residence(id: 'residence-lisbon', countryCode: 'PT', cityId: 2267057),
+      ],
+    );
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    // All includes cities with residence history.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · Lived'), findsOneWidget);
+
+    await selectCityFilter(tester, 'lived');
+
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    await selectCityFilter(tester, 'been');
+
+    expect(find.text('Lisbon'), findsNothing);
+
+    // A residence must not create visits.
+    expect(cityRepository.visits, isEmpty);
+    expect(cubit.state.visits, isEmpty);
+  });
+  testWidgets('city Wish filter shows wishlist-only cities', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal, spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository();
+
+    final wishlistRepository = FakeWishlistRepository(
+      entries: [wishlistCity(id: 'wishlist-madrid', cityId: 3117735)],
+    );
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    expect(find.text('Madrid'), findsOneWidget);
+    expect(find.text('Spain · Wishlist'), findsOneWidget);
+
+    await selectCityFilter(tester, 'wish');
+
+    expect(find.text('Madrid'), findsOneWidget);
+    expect(find.text('Lisbon'), findsNothing);
+
+    await selectCityFilter(tester, 'been');
+
+    expect(find.text('Madrid'), findsNothing);
+
+    expect(cityRepository.visits, isEmpty);
+  });
+  testWidgets('city with Been Lived and Wish appears only once', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-1',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+        cityVisit(
+          id: 'visit-2',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      residenceRepository: FakeResidenceRepository(
+        residences: [
+          residence(id: 'residence-lisbon', countryCode: 'PT', cityId: 2267057),
+        ],
+      ),
+      wishlistRepository: FakeWishlistRepository(
+        entries: [wishlistCity(id: 'wishlist-lisbon', cityId: 2267057)],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    expect(find.text('Portugal · 2 visits · Lived · Wishlist'), findsOneWidget);
+
+    await selectCityFilter(tester, 'been');
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    await selectCityFilter(tester, 'lived');
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    await selectCityFilter(tester, 'wish');
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    await selectCityFilter(tester, 'multipleVisits');
+    expect(find.text('Lisbon'), findsOneWidget);
+
+    await selectCityFilter(tester, 'all');
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    expect(cityRepository.visits, hasLength(2));
+  });
+  testWidgets('city wishlist does not imply country wishlist', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal, spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      wishlistRepository: FakeWishlistRepository(
+        entries: [wishlistCity(id: 'wishlist-madrid', cityId: 3117735)],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Countries: Madrid's wishlist must not imply Spain's wishlist.
+    await selectCountryFilter(tester, 'wish');
+
+    expect(find.text('Spain'), findsNothing);
+
+    // Cities: Madrid must appear as an explicitly wishlisted city.
+    await openCitiesTab(tester);
+
+    await selectCityFilter(tester, 'wish');
+
+    expect(find.text('Madrid'), findsOneWidget);
+    expect(find.text('Spain · Wishlist'), findsOneWidget);
+
+    expect(cubit.state.visitedCountryCount, 0);
+    expect(cubit.state.visits, isEmpty);
+  });
+  testWidgets('opens residence-only city details without fake visits', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository();
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      residenceRepository: FakeResidenceRepository(
+        residences: [
+          residence(id: 'residence-lisbon', countryCode: 'PT', cityId: 2267057),
+        ],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    final cityCard = find.byKey(const Key('visitedCityCard-2267057'));
+
+    await tester.ensureVisible(cityCard);
+    await tester.pumpAndSettle();
+
+    await tester.tap(cityCard);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CityDetailsPage), findsOneWidget);
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('No visits recorded for this city.'), findsOneWidget);
+
+    expect(find.byTooltip('Visit actions'), findsNothing);
+
+    expect(cityRepository.visits, isEmpty);
+    expect(cubit.state.visits, isEmpty);
+  });
+
+  testWidgets('opens wishlist-only city details without fake visits', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository();
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      wishlistRepository: FakeWishlistRepository(
+        entries: [wishlistCity(id: 'wishlist-madrid', cityId: 3117735)],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    final cityCard = find.byKey(const Key('visitedCityCard-3117735'));
+
+    await tester.ensureVisible(cityCard);
+    await tester.pumpAndSettle();
+
+    await tester.tap(cityCard);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CityDetailsPage), findsOneWidget);
+    expect(find.text('Madrid'), findsOneWidget);
+    expect(find.text('No visits recorded for this city.'), findsOneWidget);
+
+    expect(find.byTooltip('Visit actions'), findsNothing);
+
+    expect(cityRepository.visits, isEmpty);
+  });
+  testWidgets('deleting last visit keeps details open for a lived city', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'lisbon-visit',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    final residenceRepository = FakeResidenceRepository(
+      residences: [
+        residence(id: 'residence-lisbon', countryCode: 'PT', cityId: 2267057),
+      ],
+    );
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    final cityCard = find.byKey(const Key('visitedCityCard-2267057'));
+
+    expect(cityCard, findsOneWidget);
+
+    await tester.ensureVisible(cityCard);
+    await tester.pumpAndSettle();
+
+    await tester.tap(cityCard);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CityDetailsPage), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('cityVisitMenu-lisbon-visit')));
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete visit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteCityVisit')));
+
+    await tester.pumpAndSettle();
+
+    // The explicit visit was deleted.
+    expect(cityRepository.visits, isEmpty);
+    expect(cityRepository.deleteCalls, 1);
+
+    // The catalog-based details page remains open.
+    expect(find.byType(CityDetailsPage), findsOneWidget);
+
+    expect(find.text('No visits recorded for this city.'), findsOneWidget);
+
+    // Return to Explore.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Lisbon remains because it still has Lived status.
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    expect(find.text('Portugal · Lived'), findsOneWidget);
+
+    // Residence history was not modified.
+    expect(residenceRepository.residences, hasLength(1));
+
+    // No country visits were created.
+    expect(cubit.state.visits, isEmpty);
+  });
+  testWidgets('shows a recoverable error when city resolution fails', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    // Initially the catalog cannot resolve Lisbon.
+    final catalogRepository = FakeCityRepository(cities: []);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      cityRepository: cityRepository,
+      catalogRepository: catalogRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    expect(find.text('Unable to load Explore cities.'), findsOneWidget);
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsNothing);
+
+    // The catalog becomes available.
+    catalogRepository.cities = [lisbon];
+
+    final retryButton = find.widgetWithText(TextButton, 'Retry');
+
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unable to load Explore cities.'), findsNothing);
+
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
+
+    expect(catalogRepository.resolveCalls, 2);
   });
 }

@@ -6,10 +6,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../app/widgets/app_empty_state.dart';
 import '../../../../app/widgets/app_loading_state.dart';
 
+import '../../application/explore_cities_cubit.dart';
+import '../../application/explore_cities_filter.dart';
+import '../../application/explore_cities_state.dart';
+import '../../application/explore_destination_filter.dart';
 import '../../application/visited_cities_cubit.dart';
-import '../../application/visited_cities_state.dart';
-import '../../domain/visited_city.dart';
+
+import '../../../residences/application/residences_cubit.dart';
+import '../../../wishlist/application/wishlist_cubit.dart';
+
 import '../pages/city_details_page.dart';
+import 'explore_city_card.dart';
 
 class VisitedCitiesList extends StatefulWidget {
   const VisitedCitiesList({super.key});
@@ -20,39 +27,100 @@ class VisitedCitiesList extends StatefulWidget {
 
 class _VisitedCitiesListState extends State<VisitedCitiesList> {
   String _query = '';
-  bool _multipleVisitsOnly = false;
+
+  ExploreDestinationFilter _filter = ExploreDestinationFilter.all;
+
+  ExploreDestinationSort _sort = ExploreDestinationSort.nameAscending;
+
+  bool get _useCupertinoSearch =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  void _retry(BuildContext context) {
+    context.read<ExploreCitiesCubit>().load(
+      visitedCities: context.read<VisitedCitiesCubit>().state,
+      residences: context.read<ResidencesCubit>().state,
+      wishlist: context.read<WishlistCubit>().state,
+    );
+  }
+
+  void _openCity(BuildContext context, int cityId, bool hasOnlyBeen) {
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+
+    final exploreCities = context.read<ExploreCitiesCubit>().state.cities;
+
+    final entry = exploreCities
+        .where((entry) => entry.city.id == cityId)
+        .firstOrNull;
+
+    if (entry == null) return;
+
+    final visitedCity = visitedCitiesCubit.state.visitedCities
+        .where((city) => city.cityId == cityId)
+        .firstOrNull;
+
+    // Preserve the existing navigation behavior for visit-only cities.
+    //
+    // In particular, deleting the final visit still returns to Explore.
+    if (hasOnlyBeen && visitedCity != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BlocProvider.value(
+            value: visitedCitiesCubit,
+            child: CityDetailsPage(city: visitedCity),
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // Catalog navigation supports cities with no explicit visits.
+    //
+    // It also keeps combined-status destinations accessible after
+    // deleting their final visit.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BlocProvider.value(
+          value: visitedCitiesCubit,
+          child: CityDetailsPage.fromCatalog(city: entry.city),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final useCupertinoSearch =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
-    return BlocBuilder<VisitedCitiesCubit, VisitedCitiesState>(
+    return BlocBuilder<ExploreCitiesCubit, ExploreCitiesState>(
       builder: (context, state) {
-        final query = _query.trim().toLowerCase();
+        final cities = filterExploreCities(
+          state.cities,
+          options: ExploreCitiesFilterOptions(
+            query: _query,
+            filter: _filter,
+            sort: _sort,
+          ),
+        );
 
-        final cities = state.visitedCities.where((city) {
-          final matchesSearch =
-              query.isEmpty ||
-              city.cityName.toLowerCase().contains(query) ||
-              city.countryName.toLowerCase().contains(query) ||
-              city.countryCode.toLowerCase().contains(query);
+        final hasPreviousData = state.cities.isNotEmpty;
 
-          final matchesVisits = !_multipleVisitsOnly || city.visitCount > 1;
-
-          return matchesSearch && matchesVisits;
-        }).toList();
+        final isInitialLoading =
+            (state.phase == ExploreCitiesPhase.initial ||
+                state.phase == ExploreCitiesPhase.loading) &&
+            !hasPreviousData;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (useCupertinoSearch)
+            // ------------------------------------------------------------
+            // Search
+            // ------------------------------------------------------------
+            if (_useCupertinoSearch)
               CupertinoSearchTextField(
                 key: const Key('visitedCitiesSearch'),
-                placeholder: 'Search visited cities...',
+                placeholder: 'Search cities...',
                 onChanged: (value) {
                   setState(() => _query = value);
                 },
@@ -61,7 +129,7 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
               TextField(
                 key: const Key('visitedCitiesSearch'),
                 decoration: InputDecoration(
-                  hintText: 'Search visited cities...',
+                  hintText: 'Search cities...',
                   prefixIcon: const Icon(Icons.search_rounded),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -74,28 +142,98 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
 
             const SizedBox(height: 12),
 
+            // ------------------------------------------------------------
+            // Filters
+            // ------------------------------------------------------------
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
-                ChoiceChip(
-                  label: const Text('Multiple visits'),
-                  selected: _multipleVisitsOnly,
-                  showCheckmark: false,
-                  selectedColor: colors.secondary,
-                  backgroundColor: colors.surfaceContainerLow,
-                  onSelected: (value) {
-                    setState(() => _multipleVisitsOnly = value);
-                  },
-                ),
+                for (final filter in ExploreDestinationFilter.values)
+                  ChoiceChip(
+                    key: Key('cityFilter-${filter.name}'),
+                    label: Text(switch (filter) {
+                      ExploreDestinationFilter.all => 'All',
+                      ExploreDestinationFilter.been => 'Been',
+                      ExploreDestinationFilter.lived => 'Lived',
+                      ExploreDestinationFilter.wish => 'Wish',
+                      ExploreDestinationFilter.multipleVisits =>
+                        'Multiple visits',
+                    }),
+                    selected: _filter == filter,
+                    showCheckmark: false,
+                    selectedColor: colors.secondary,
+                    backgroundColor: colors.surfaceContainerLow,
+                    side: BorderSide(
+                      color: _filter == filter
+                          ? Colors.transparent
+                          : colors.outlineVariant,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    labelStyle: TextStyle(
+                      color: _filter == filter
+                          ? colors.onSecondary
+                          : colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    onSelected: (_) {
+                      setState(() => _filter = filter);
+                    },
+                  ),
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            if (state.phase == VisitedCitiesPhase.loading)
-              const LinearProgressIndicator(),
+            // ------------------------------------------------------------
+            // Sorting
+            // ------------------------------------------------------------
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<ExploreDestinationSort>(
+                key: const Key('visitedCitiesSort'),
+                tooltip: 'Sort cities',
+                initialValue: _sort,
+                icon: const Icon(Icons.tune_rounded),
+                onSelected: (value) {
+                  setState(() => _sort = value);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: ExploreDestinationSort.nameAscending,
+                    child: Text('Name A–Z'),
+                  ),
+                  PopupMenuItem(
+                    value: ExploreDestinationSort.nameDescending,
+                    child: Text('Name Z–A'),
+                  ),
+                  PopupMenuItem(
+                    value: ExploreDestinationSort.mostVisited,
+                    child: Text('Most visited'),
+                  ),
+                ],
+              ),
+            ),
 
-            if (state.phase == VisitedCitiesPhase.failure)
+            // ------------------------------------------------------------
+            // Loading
+            // ------------------------------------------------------------
+            if (state.phase == ExploreCitiesPhase.loading && hasPreviousData)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: LinearProgressIndicator(),
+              ),
+
+            // ------------------------------------------------------------
+            // Error
+            // ------------------------------------------------------------
+            if (state.phase == ExploreCitiesPhase.failure)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Card(
@@ -107,11 +245,12 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
                         Expanded(
                           child: Text(
                             state.errorMessage ??
-                                'Unable to load visited cities.',
+                                'Unable to load Explore cities.',
+                            style: TextStyle(color: colors.onErrorContainer),
                           ),
                         ),
                         TextButton(
-                          onPressed: context.read<VisitedCitiesCubit>().load,
+                          onPressed: () => _retry(context),
                           child: const Text('Retry'),
                         ),
                       ],
@@ -120,118 +259,46 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
                 ),
               ),
 
-            if (state.phase == VisitedCitiesPhase.initial ||
-                (state.phase == VisitedCitiesPhase.loading &&
-                    state.visits.isEmpty))
-              const AppLoadingState(message: 'Loading visited cities...')
-            else if (cities.isEmpty) ...[
-              if (state.phase != VisitedCitiesPhase.failure)
-                state.visitedCityCount == 0
-                    ? const AppEmptyState(
-                        title: 'No cities visited yet',
-                        message:
-                            'Your visited cities will appear here once you '
-                            'start recording your travels.',
-                        icon: Icons.location_city_outlined,
-                      )
-                    : const AppEmptyState(
-                        title: 'No matching cities',
-                        message: 'Try changing your search or filters.',
-                        icon: Icons.search_off_outlined,
-                      ),
-            ] else ...[
-              ...cities.map(
-                (city) => Padding(
+            // ------------------------------------------------------------
+            // Results
+            // ------------------------------------------------------------
+            if (isInitialLoading)
+              const AppLoadingState(message: 'Loading cities...')
+            else if (cities.isEmpty &&
+                state.phase != ExploreCitiesPhase.failure)
+              state.cities.isEmpty
+                  ? const AppEmptyState(
+                      title: 'No cities visited yet',
+                      message:
+                          'Your cities will appear here once you '
+                          'start recording destinations.',
+                      icon: Icons.location_city_outlined,
+                    )
+                  : const AppEmptyState(
+                      title: 'No matching cities',
+                      message: 'Try changing your search or filters.',
+                      icon: Icons.search_off_outlined,
+                    )
+            else
+              ...cities.map((entry) {
+                final summary = entry.summary;
+
+                final hasOnlyBeen =
+                    summary.hasBeen &&
+                    !summary.hasLived &&
+                    !summary.isWishlisted;
+
+                return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _VisitedCityCard(city: city),
-                ),
-              ),
-            ],
+                  child: ExploreCityCard(
+                    entry: entry,
+                    onTap: () => _openCity(context, entry.city.id, hasOnlyBeen),
+                  ),
+                );
+              }),
           ],
         );
       },
-    );
-  }
-}
-
-class _VisitedCityCard extends StatelessWidget {
-  const _VisitedCityCard({required this.city});
-
-  final VisitedCity city;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          final cubit = context.read<VisitedCitiesCubit>();
-
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => BlocProvider.value(
-                value: cubit,
-                child: CityDetailsPage(city: city),
-              ),
-            ),
-          );
-        },
-        child: Container(
-          key: Key('visitedCityCard-${city.cityId}'),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.45),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.location_city_outlined,
-                color: colors.primary,
-                size: 28,
-              ),
-
-              const SizedBox(width: 14),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      city.cityName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    Text(
-                      '${city.countryName} · '
-                      '${city.visitCount} '
-                      '${city.visitCount == 1 ? 'visit' : 'visits'}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
