@@ -7,24 +7,61 @@ import '../../domain/visited_city.dart';
 import '../../../geography/domain/city_visit.dart';
 import '../widgets/show_edit_city_visit.dart';
 import '../widgets/show_delete_city_visit.dart';
+import '../../../geography/domain/city.dart';
 
 class CityDetailsPage extends StatelessWidget {
-  const CityDetailsPage({required this.city, super.key});
+  const CityDetailsPage({required VisitedCity this.city, super.key})
+    : catalogCity = null;
 
-  final VisitedCity city;
+  const CityDetailsPage.fromCatalog({required City city, super.key})
+    : catalogCity = city,
+      city = null;
 
-  Future<void> _editVisit(BuildContext context, CityVisit visit) async {
-    final updated = await showEditCityVisit(context, city: city, visit: visit);
+  final VisitedCity? city;
+  final City? catalogCity;
+
+  int get cityId => catalogCity?.id ?? city!.cityId;
+
+  String get cityName => catalogCity?.name ?? city!.cityName;
+
+  String get countryName => catalogCity?.countryName ?? city!.countryName;
+
+  VisitedCity? _findVisitedCity(VisitedCitiesState state) {
+    if (city != null) return city;
+
+    for (final visitedCity in state.visitedCities) {
+      if (visitedCity.cityId == cityId) {
+        return visitedCity;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _editVisit(
+    BuildContext context,
+    VisitedCity visitedCity,
+    CityVisit visit,
+  ) async {
+    final updated = await showEditCityVisit(
+      context,
+      city: visitedCity,
+      visit: visit,
+    );
 
     if (!updated || !context.mounted) return;
 
     await context.read<VisitedCitiesCubit>().load();
   }
 
-  Future<void> _deleteVisit(BuildContext context, CityVisit visit) async {
+  Future<void> _deleteVisit(
+    BuildContext context,
+    VisitedCity visitedCity,
+    CityVisit visit,
+  ) async {
     final deleted = await showDeleteCityVisit(
       context,
-      city: city,
+      city: visitedCity,
       visit: visit,
     );
 
@@ -36,8 +73,13 @@ class CityDetailsPage extends StatelessWidget {
 
     if (!context.mounted) return;
 
-    // A última visita foi eliminada: regressar à lista de cidades.
-    if (cubit.state.hasData && cubit.state.visitsForCity(city.cityId).isEmpty) {
+    // Preserve existing navigation behavior for legacy visit-only details.
+    //
+    // Catalog-based details remain accessible when the last visit is
+    // deleted, because the destination may still be Lived or Wish.
+    if (catalogCity == null &&
+        cubit.state.hasData &&
+        cubit.state.visitsForCity(cityId).isEmpty) {
       Navigator.of(context).pop();
     }
   }
@@ -51,8 +93,10 @@ class CityDetailsPage extends StatelessWidget {
       appBar: AppBar(title: const Text('City Details')),
       body: BlocBuilder<VisitedCitiesCubit, VisitedCitiesState>(
         builder: (context, state) {
-          final visits = state.visitsForCity(city.cityId).toList()
+          final visits = state.visitsForCity(cityId).toList()
             ..sort(_compareVisits);
+
+          final visitedCity = _findVisitedCity(state);
 
           final lastVisited = _lastVisitedDate(visits);
 
@@ -89,13 +133,13 @@ class CityDetailsPage extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    city.cityName,
+                                    cityName,
                                     style: theme.textTheme.headlineSmall
                                         ?.copyWith(fontWeight: FontWeight.w800),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    city.countryName,
+                                    countryName,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: colors.onSurfaceVariant,
                                     ),
@@ -190,12 +234,20 @@ class CityDetailsPage extends StatelessWidget {
                                       ),
                                       tooltip: 'Visit actions',
                                       onSelected: (action) {
+                                        if (visitedCity == null) return;
+
                                         switch (action) {
                                           case 'edit':
-                                            _editVisit(context, visits[index]);
+                                            _editVisit(
+                                              context,
+                                              visitedCity,
+                                              visits[index],
+                                            );
+
                                           case 'delete':
                                             _deleteVisit(
                                               context,
+                                              visitedCity,
                                               visits[index],
                                             );
                                         }

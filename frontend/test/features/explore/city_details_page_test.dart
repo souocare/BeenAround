@@ -13,6 +13,7 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
   FakeCityVisitsRepository({required this.visits});
@@ -691,5 +692,49 @@ void main() {
     expect(find.text('Open city'), findsOneWidget);
 
     expect(cubit.state.visitedCities, isEmpty);
+  });
+  testWidgets('opens catalog city details without recorded visits', (
+    tester,
+  ) async {
+    final repository = FakeCityVisitsRepository(visits: []);
+
+    final cubit = VisitedCitiesCubit(repository: repository);
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    const catalogCity = City(
+      id: 2267057,
+      name: 'Lisbon',
+      asciiName: 'Lisbon',
+      countryCode: 'PT',
+      countryName: 'Portugal',
+      latitude: 38.72,
+      longitude: -9.13,
+      population: 500000,
+      featureCode: 'PPLC',
+    );
+
+    await tester.pumpWidget(
+      BlocProvider<VisitedCitiesCubit>.value(
+        value: cubit,
+        child: const MaterialApp(
+          home: CityDetailsPage.fromCatalog(city: catalogCity),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('City Details'), findsOneWidget);
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal'), findsOneWidget);
+
+    expect(find.text('No visits recorded for this city.'), findsOneWidget);
+
+    expect(find.byTooltip('Visit actions'), findsNothing);
+
+    expect(cubit.state.visits, isEmpty);
   });
 }
