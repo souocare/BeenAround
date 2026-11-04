@@ -27,6 +27,8 @@ import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 
+import 'package:beenaround/features/explore/presentation/widgets/add_destination_sheet.dart';
+
 // -----------------------------------------------------------------------------
 // Finders
 // -----------------------------------------------------------------------------
@@ -717,6 +719,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder addDestinationOption(String label) {
+    return find.descendant(
+      of: find.byType(AddDestinationSheet),
+      matching: find.text(label),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Opening and navigation
   // ---------------------------------------------------------------------------
@@ -731,9 +740,9 @@ void main() {
     expect(find.text('Where have you been?'), findsOneWidget);
     expect(find.text('Country'), findsOneWidget);
     expect(find.text('City'), findsOneWidget);
-    expect(find.text('Been'), findsOneWidget);
-    expect(find.text('Lived'), findsOneWidget);
-    expect(find.text('Wish'), findsOneWidget);
+    expect(addDestinationOption('Been'), findsOneWidget);
+    expect(addDestinationOption('Lived'), findsOneWidget);
+    expect(addDestinationOption('Wish'), findsOneWidget);
     expect(find.text('Save Visit'), findsOneWidget);
   });
 
@@ -2020,7 +2029,7 @@ void main() {
 
     expect(find.text('Where have you been?'), findsOneWidget);
 
-    await tester.tap(find.text('Wish'));
+    await tester.tap(addDestinationOption('Wish'));
     await tester.pumpAndSettle();
 
     expect(find.text('Where do you want to go?'), findsOneWidget);
@@ -2035,13 +2044,13 @@ void main() {
     expect(wishlistButton.onPressed, isNull);
     expect(repository.createCalls, 0);
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     expect(find.text('Where have you lived?'), findsOneWidget);
     expect(find.text('Add to Wishlist'), findsNothing);
 
-    await tester.tap(find.text('Been'));
+    await tester.tap(addDestinationOption('Been'));
     await tester.pumpAndSettle();
 
     expect(find.text('Where have you been?'), findsOneWidget);
@@ -2066,7 +2075,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Wish'));
+    await tester.tap(addDestinationOption('Wish'));
     await tester.pumpAndSettle();
 
     expect(find.text('YOUR WISHLIST'), findsOneWidget);
@@ -2109,7 +2118,7 @@ void main() {
 
     await selectCity(tester, name: 'Lisbon');
 
-    await tester.tap(find.text('Wish'));
+    await tester.tap(addDestinationOption('Wish'));
     await tester.pumpAndSettle();
 
     expect(find.text('Also add Portugal to my wishlist'), findsOneWidget);
@@ -2165,7 +2174,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Wish'));
+    await tester.tap(addDestinationOption('Wish'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('saveWishlistButton')));
@@ -2194,7 +2203,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('saveResidenceButton')));
@@ -2215,7 +2224,7 @@ void main() {
     await tester.tap(addDestinationButton);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('residenceStartDate')));
@@ -2245,7 +2254,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('saveResidenceButton')));
@@ -2280,7 +2289,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     expect(find.text('WHEN DID YOU LIVE HERE?'), findsOneWidget);
@@ -2350,7 +2359,7 @@ void main() {
 
     await selectCity(tester, name: 'Lisbon');
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     expect(find.text('WHEN DID YOU LIVE HERE?'), findsOneWidget);
@@ -2421,7 +2430,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await selectResidenceMonth(
@@ -2475,7 +2484,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await selectResidenceMonth(
@@ -2530,7 +2539,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await selectResidenceMonth(
@@ -2608,7 +2617,7 @@ void main() {
     await tester.tap(find.text('Portugal'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Lived'));
+    await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
 
     await selectResidenceMonth(

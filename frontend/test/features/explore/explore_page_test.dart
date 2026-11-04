@@ -277,6 +277,37 @@ CountryVisit visit(String id, String countryCode) {
   );
 }
 
+Residence residence({
+  required String id,
+  required String countryCode,
+  int? cityId,
+}) {
+  return Residence(
+    id: id,
+    countryCode: countryCode,
+    cityId: cityId,
+    startedOn: DateTime(2024, 1, 1),
+    startedOnPrecision: VisitDatePrecision.day,
+    endedOn: DateTime(2025, 1, 1),
+    endedOnPrecision: VisitDatePrecision.day,
+    createdAt: DateTime(2026, 10, 21),
+    updatedAt: DateTime(2026, 10, 21),
+  );
+}
+
+WishlistEntry wishlistCountry({
+  required String id,
+  required String countryCode,
+}) {
+  return WishlistEntry(
+    id: id,
+    countryCode: countryCode,
+    cityId: null,
+    createdAt: DateTime(2026, 10, 21),
+    updatedAt: DateTime(2026, 10, 21),
+  );
+}
+
 CityVisit cityVisit({
   required String id,
   required int cityId,
@@ -339,6 +370,24 @@ void main() {
     );
   }
 
+  Future<void> selectCountryFilter(WidgetTester tester, String filter) async {
+    final finder = find.byKey(Key('countryFilter-$filter'));
+
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+
+    final chip = tester.widget<ChoiceChip>(finder);
+
+    expect(
+      chip.selected,
+      isTrue,
+      reason: 'Country filter "$filter" should be selected.',
+    );
+  }
+
   Future<void> openCitiesTab(WidgetTester tester) async {
     final citiesTab = find.text('Cities');
 
@@ -384,7 +433,10 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
-    expect(find.text('No countries visited yet'), findsOneWidget);
+    // Wait for ResidencesCubit and WishlistCubit to finish loading.
+    await tester.pumpAndSettle();
+
+    expect(find.text('No destinations yet'), findsOneWidget);
     expect(find.text('Countries visited'), findsOneWidget);
     expect(find.text('Total visits'), findsOneWidget);
   });
@@ -401,6 +453,9 @@ void main() {
 
     await cubit.load();
     await pumpExplore(tester, cubit);
+
+    // Wait for all country aggregation sources.
+    await tester.pumpAndSettle();
 
     expect(find.text('Portugal'), findsOneWidget);
     expect(find.text('Spain'), findsOneWidget);
@@ -434,7 +489,7 @@ void main() {
     await tester.tap(find.text('Try Again'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No countries visited yet'), findsOneWidget);
+    expect(find.text('No destinations yet'), findsOneWidget);
     expect(repository.loadCount, 2);
   });
 
@@ -482,6 +537,8 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
+    await tester.pumpAndSettle();
+
     expect(find.text('Portugal'), findsOneWidget);
     expect(find.text('Spain'), findsOneWidget);
 
@@ -495,7 +552,7 @@ void main() {
     expect(find.text('Portugal'), findsOneWidget);
     expect(find.text('Spain'), findsNothing);
 
-    // A pesquisa não altera as estatísticas globais.
+    // Search must not change global visit statistics.
     expect(cubit.state.visitedCountryCount, 2);
   });
   testWidgets('searches visited countries by ISO codes', (tester) async {
@@ -572,6 +629,8 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('visitedCountriesSearch')),
       'Japan',
@@ -580,7 +639,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No matching countries'), findsOneWidget);
-    expect(find.text('No countries visited yet'), findsNothing);
+    expect(find.text('No destinations yet'), findsNothing);
   });
 
   testWidgets('sorts visited countries by number of visits', (tester) async {
@@ -1229,5 +1288,190 @@ void main() {
 
     expect(cityVisits.loadCalls, 2);
     expect(catalog.resolveCalls, 2);
+  });
+  testWidgets('Been shows only explicitly visited countries', (tester) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('visit-1', 'PT')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+    await pumpExplore(tester, cubit);
+    await tester.pumpAndSettle();
+
+    await selectCountryFilter(tester, 'been');
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsNothing);
+
+    expect(cubit.state.visitedCountryCount, 1);
+  });
+
+  testWidgets('Lived shows residence-only countries without creating visits', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal, spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      residenceRepository: FakeResidenceRepository(
+        residences: [residence(id: 'residence-1', countryCode: 'PT')],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // A country with only residence history must appear in All.
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'lived');
+
+    expect(find.text('Portugal'), findsOneWidget);
+    expect(find.text('Spain'), findsNothing);
+
+    await selectCountryFilter(tester, 'been');
+
+    expect(find.text('Portugal'), findsNothing);
+
+    // Residence history must not create explicit country visits.
+    expect(cubit.state.visitedCountryCount, 0);
+    expect(cubit.state.visits, isEmpty);
+  });
+
+  testWidgets('Wish shows wishlist-only countries without creating visits', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal, spain]),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      wishlistRepository: FakeWishlistRepository(
+        entries: [wishlistCountry(id: 'wish-1', countryCode: 'ES')],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // A country with only wishlist status must appear in All.
+    expect(find.text('Spain'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'wish');
+
+    expect(find.text('Spain'), findsOneWidget);
+    expect(find.text('Portugal'), findsNothing);
+
+    await selectCountryFilter(tester, 'been');
+
+    expect(find.text('Spain'), findsNothing);
+
+    // Wishlist must not create explicit country visits.
+    expect(cubit.state.visitedCountryCount, 0);
+    expect(cubit.state.visits, isEmpty);
+  });
+
+  testWidgets('All shows a country with multiple statuses only once', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(
+        countries: [portugal, spain],
+        visits: [visit('visit-1', 'PT')],
+      ),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      residenceRepository: FakeResidenceRepository(
+        residences: [
+          residence(id: 'residence-1', countryCode: 'PT', cityId: 2267057),
+        ],
+      ),
+      wishlistRepository: FakeWishlistRepository(
+        entries: [wishlistCountry(id: 'wish-1', countryCode: 'PT')],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // All must contain Portugal once, despite having three statuses.
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'been');
+
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'lived');
+
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'wish');
+
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'all');
+
+    expect(find.text('Portugal'), findsOneWidget);
+
+    // The underlying country history remains unchanged.
+    expect(cubit.state.visits, hasLength(1));
+  });
+
+  testWidgets('city residence contributes to country Lived, not Been', (
+    tester,
+  ) async {
+    final cubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(
+      tester,
+      cubit,
+      residenceRepository: FakeResidenceRepository(
+        residences: [
+          residence(id: 'lisbon-residence', countryCode: 'PT', cityId: 2267057),
+        ],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await selectCountryFilter(tester, 'lived');
+
+    expect(find.text('Portugal'), findsOneWidget);
+
+    await selectCountryFilter(tester, 'been');
+
+    expect(find.text('Portugal'), findsNothing);
+
+    // A city residence must not create a country visit.
+    expect(cubit.state.visits, isEmpty);
+    expect(cubit.state.visitedCountryCount, 0);
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,38 +8,31 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../app/widgets/app_empty_state.dart';
 import '../../../../app/widgets/app_error_state.dart';
 import '../../../../app/widgets/app_loading_state.dart';
-
-import '../../application/country_visit_summary.dart';
-import '../../application/explore_cubit.dart';
-import '../../application/explore_state.dart';
-import '../../application/visited_cities_cubit.dart';
-import '../../application/visited_countries_filter.dart';
-
-import '../../domain/country.dart';
-
+import '../../../geography/domain/city_repository.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../map/presentation/widgets/world_overview_map.dart';
-
+import '../../../residences/application/residences_cubit.dart';
+import '../../../residences/application/residences_state.dart';
+import '../../../residences/domain/residence_repository.dart';
+import '../../../wishlist/application/wishlist_cubit.dart';
+import '../../../wishlist/application/wishlist_state.dart';
+import '../../../wishlist/domain/wishlist_repository.dart';
+import '../../application/country_visit_summary.dart';
+import '../../application/explore_cities_cubit.dart';
+import '../../application/explore_cities_state.dart';
+import '../../application/explore_countries_filter.dart';
+import '../../application/explore_country_aggregation.dart';
+import '../../application/explore_country_summary.dart';
+import '../../application/explore_cubit.dart';
+import '../../application/explore_destination_filter.dart';
+import '../../application/explore_state.dart';
+import '../../application/visited_cities_cubit.dart';
+import '../../application/visited_cities_state.dart';
+import '../../domain/country.dart';
 import '../widgets/country_flag.dart';
 import '../widgets/show_add_destination.dart';
 import '../widgets/visited_cities_list.dart';
-
 import 'country_details_page.dart';
-
-import '../../../residences/application/residences_cubit.dart';
-import '../../../residences/domain/residence_repository.dart';
-
-import '../../../wishlist/application/wishlist_cubit.dart';
-import '../../../wishlist/domain/wishlist_repository.dart';
-import '../../application/explore_cities_cubit.dart';
-import '../../application/explore_cities_state.dart';
-import '../../application/visited_cities_state.dart';
-
-import '../../../geography/domain/city_repository.dart';
-
-import '../../../residences/application/residences_state.dart';
-
-import '../../../wishlist/application/wishlist_state.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -52,19 +46,16 @@ class ExplorePage extends StatelessWidget {
             repository: context.read<CityVisitsRepository>(),
           )..load(),
         ),
-
         BlocProvider<ResidencesCubit>(
           create: (context) =>
               ResidencesCubit(repository: context.read<ResidenceRepository>())
                 ..load(),
         ),
-
         BlocProvider<WishlistCubit>(
           create: (context) =>
               WishlistCubit(repository: context.read<WishlistRepository>())
                 ..load(),
         ),
-
         BlocProvider<ExploreCitiesCubit>(
           create: (context) => ExploreCitiesCubit(
             cityRepository: context.read<CityRepository>(),
@@ -110,8 +101,6 @@ class _ExploreViewState extends State<_ExploreView> {
 
     final scrollOffset = _scrollController.offset;
 
-    // Calcular a posição do botão dentro do conteúdo,
-    // independentemente do deslocamento atual.
     final buttonBottomInContent =
         buttonRenderObject.localToGlobal(Offset.zero).dy +
         buttonRenderObject.size.height +
@@ -134,7 +123,6 @@ class _ExploreViewState extends State<_ExploreView> {
     final visitedCities = context.read<VisitedCitiesCubit>().state;
     final residences = context.read<ResidencesCubit>().state;
     final wishlist = context.read<WishlistCubit>().state;
-
     final exploreCitiesCubit = context.read<ExploreCitiesCubit>();
 
     if (exploreCitiesCubit.isClosed) return;
@@ -158,7 +146,6 @@ class _ExploreViewState extends State<_ExploreView> {
           ),
         );
       }
-
       return;
     }
 
@@ -185,12 +172,10 @@ class _ExploreViewState extends State<_ExploreView> {
   @override
   void initState() {
     super.initState();
-
     _scrollController.addListener(_updateFloatingAddButton);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-
       _synchronizeExploreCities();
     });
   }
@@ -203,20 +188,15 @@ class _ExploreViewState extends State<_ExploreView> {
 
     await Future.wait([
       if (!exploreCubit.isClosed) exploreCubit.refresh(),
-
       if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
-
       if (!residencesCubit.isClosed) residencesCubit.refresh(),
-
       if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
     ]);
   }
 
   Future<void> _addDestination() async {
     final created = await showAddDestination(context);
-
     if (!created || !mounted) return;
-
     await _refreshExploreData();
   }
 
@@ -231,21 +211,13 @@ class _ExploreViewState extends State<_ExploreView> {
     return MultiBlocListener(
       listeners: [
         BlocListener<VisitedCitiesCubit, VisitedCitiesState>(
-          listener: (context, state) {
-            _synchronizeExploreCities();
-          },
+          listener: (context, state) => _synchronizeExploreCities(),
         ),
-
         BlocListener<ResidencesCubit, ResidencesState>(
-          listener: (context, state) {
-            _synchronizeExploreCities();
-          },
+          listener: (context, state) => _synchronizeExploreCities(),
         ),
-
         BlocListener<WishlistCubit, WishlistState>(
-          listener: (context, state) {
-            _synchronizeExploreCities();
-          },
+          listener: (context, state) => _synchronizeExploreCities(),
         ),
       ],
       child: BlocBuilder<ExploreCubit, ExploreState>(
@@ -271,15 +243,15 @@ class _ExploreViewState extends State<_ExploreView> {
               onRetry: context.read<ExploreCubit>().load,
             );
           }
+
           final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
           final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
           final floatingButtonBottom = isIOS ? 60.0 : 20.0;
+
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _updateFloatingAddButton();
-            }
+            if (mounted) _updateFloatingAddButton();
           });
+
           return Stack(
             children: [
               RefreshIndicator(
@@ -306,7 +278,6 @@ class _ExploreViewState extends State<_ExploreView> {
                   ],
                 ),
               ),
-
               if (isMobile)
                 Positioned(
                   right: 20,
@@ -366,37 +337,51 @@ class _ExploreContent extends StatefulWidget {
 
 class _ExploreContentState extends State<_ExploreContent> {
   String _query = '';
-
   int _selectedHistoryTab = 0;
-
-  VisitedCountriesFilter _filter = VisitedCountriesFilter.all;
-
-  VisitedCountriesSort _sort = VisitedCountriesSort.nameAscending;
+  ExploreDestinationFilter _filter = ExploreDestinationFilter.all;
+  ExploreDestinationSort _sort = ExploreDestinationSort.nameAscending;
 
   @override
   Widget build(BuildContext context) {
     final useCupertinoSearch =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
     final state = widget.state;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final visitedCountries = filterVisitedCountries(
-      state,
-      options: VisitedCountriesFilterOptions(
+    final residencesState = context.watch<ResidencesCubit>().state;
+    final wishlistState = context.watch<WishlistCubit>().state;
+
+    final countrySourcesReady =
+        residencesState.phase == ResidencesPhase.ready &&
+        wishlistState.phase == WishlistPhase.ready;
+
+    // Keep the aggregates independent from the UI filters. This also lets us
+    // distinguish an empty history from a search/filter with no matches.
+    final allCountryEntries = countrySourcesReady
+        ? aggregateExploreCountries(
+            explore: state,
+            residences: residencesState,
+            wishlist: wishlistState,
+          )
+        : const <ExploreCountryEntry>[];
+
+    final countries = filterExploreCountries(
+      allCountryEntries,
+      options: ExploreCountriesFilterOptions(
         query: _query,
         filter: _filter,
         sort: _sort,
       ),
     );
 
+    final hasAnyCountryDestination = allCountryEntries.any(
+      (entry) => entry.summary.hasAnyStatus,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ------------------------------------------------------------
-        // Header
-        // ------------------------------------------------------------
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -429,12 +414,7 @@ class _ExploreContentState extends State<_ExploreContent> {
             ),
           ],
         ),
-
         const SizedBox(height: 20),
-
-        // ------------------------------------------------------------
-        // World overview map
-        // ------------------------------------------------------------
         LayoutBuilder(
           builder: (context, constraints) {
             final isCompact = constraints.maxWidth < 600;
@@ -459,12 +439,7 @@ class _ExploreContentState extends State<_ExploreContent> {
             );
           },
         ),
-
         const SizedBox(height: 20),
-
-        // ------------------------------------------------------------
-        // Compact statistics
-        // ------------------------------------------------------------
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -494,12 +469,7 @@ class _ExploreContentState extends State<_ExploreContent> {
             ],
           ),
         ),
-
         const SizedBox(height: 28),
-
-        // ------------------------------------------------------------
-        // Countries / Cities tabs
-        // ------------------------------------------------------------
         Row(
           children: [
             Expanded(
@@ -519,20 +489,13 @@ class _ExploreContentState extends State<_ExploreContent> {
                 ],
                 selected: {_selectedHistoryTab},
                 onSelectionChanged: (selection) {
-                  setState(() {
-                    _selectedHistoryTab = selection.first;
-                  });
+                  setState(() => _selectedHistoryTab = selection.first);
                 },
               ),
             ),
           ],
         ),
-
         const SizedBox(height: 24),
-
-        // ------------------------------------------------------------
-        // Travel history header
-        // ------------------------------------------------------------
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -546,49 +509,37 @@ class _ExploreContentState extends State<_ExploreContent> {
                 ),
               ),
             ),
-
-            // Country sorting is only available in Countries.
             if (_selectedHistoryTab == 0)
-              PopupMenuButton<VisitedCountriesSort>(
+              PopupMenuButton<ExploreDestinationSort>(
                 key: const Key('visitedCountriesSort'),
                 tooltip: 'Sort countries',
                 initialValue: _sort,
                 icon: const Icon(Icons.tune_rounded),
-                onSelected: (value) {
-                  setState(() => _sort = value);
-                },
+                onSelected: (value) => setState(() => _sort = value),
                 itemBuilder: (_) => const [
                   PopupMenuItem(
-                    value: VisitedCountriesSort.nameAscending,
+                    value: ExploreDestinationSort.nameAscending,
                     child: Text('Name A–Z'),
                   ),
                   PopupMenuItem(
-                    value: VisitedCountriesSort.nameDescending,
+                    value: ExploreDestinationSort.nameDescending,
                     child: Text('Name Z–A'),
                   ),
                   PopupMenuItem(
-                    value: VisitedCountriesSort.mostVisited,
+                    value: ExploreDestinationSort.mostVisited,
                     child: Text('Most visited'),
                   ),
                 ],
               ),
           ],
         ),
-
         const SizedBox(height: 16),
-
-        // ------------------------------------------------------------
-        // Countries content
-        // ------------------------------------------------------------
         if (_selectedHistoryTab == 0) ...[
-          // Country search
           if (useCupertinoSearch)
             CupertinoSearchTextField(
               key: const Key('visitedCountriesSearch'),
               placeholder: 'Search visited countries...',
-              onChanged: (value) {
-                setState(() => _query = value);
-              },
+              onChanged: (value) => setState(() => _query = value),
             )
           else
             TextField(
@@ -600,89 +551,56 @@ class _ExploreContentState extends State<_ExploreContent> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onChanged: (value) {
-                setState(() => _query = value);
-              },
+              onChanged: (value) => setState(() => _query = value),
             ),
-
           const SizedBox(height: 12),
-
-          // Country filters
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              ChoiceChip(
-                label: const Text('All'),
-                selected: _filter == VisitedCountriesFilter.all,
-                showCheckmark: false,
-                selectedColor: colors.secondary,
-                backgroundColor: colors.surfaceContainerLow,
-                side: BorderSide(
-                  color: _filter == VisitedCountriesFilter.all
-                      ? Colors.transparent
-                      : colors.outlineVariant,
+              for (final filter in ExploreDestinationFilter.values)
+                ChoiceChip(
+                  key: Key('countryFilter-${filter.name}'),
+                  label: Text(switch (filter) {
+                    ExploreDestinationFilter.all => 'All',
+                    ExploreDestinationFilter.been => 'Been',
+                    ExploreDestinationFilter.lived => 'Lived',
+                    ExploreDestinationFilter.wish => 'Wish',
+                    ExploreDestinationFilter.multipleVisits =>
+                      'Multiple visits',
+                  }),
+                  selected: _filter == filter,
+                  showCheckmark: false,
+                  selectedColor: colors.secondary,
+                  backgroundColor: colors.surfaceContainerLow,
+                  side: BorderSide(
+                    color: _filter == filter
+                        ? Colors.transparent
+                        : colors.outlineVariant,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  labelStyle: TextStyle(
+                    color: _filter == filter
+                        ? colors.onSecondary
+                        : colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  onSelected: (_) => setState(() => _filter = filter),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                labelStyle: TextStyle(
-                  color: _filter == VisitedCountriesFilter.all
-                      ? Colors.white
-                      : colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                onSelected: (_) {
-                  setState(() => _filter = VisitedCountriesFilter.all);
-                },
-              ),
-              ChoiceChip(
-                label: const Text('Multiple visits'),
-                selected: _filter == VisitedCountriesFilter.multipleVisits,
-                showCheckmark: false,
-                selectedColor: colors.secondary,
-                backgroundColor: colors.surfaceContainerLow,
-                side: BorderSide(
-                  color: _filter == VisitedCountriesFilter.multipleVisits
-                      ? Colors.transparent
-                      : colors.outlineVariant,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                labelStyle: TextStyle(
-                  color: _filter == VisitedCountriesFilter.multipleVisits
-                      ? Colors.white
-                      : colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                onSelected: (_) {
-                  setState(
-                    () => _filter = VisitedCountriesFilter.multipleVisits,
-                  );
-                },
-              ),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // Country loading indicator
           if (state.phase == ExplorePhase.loading)
             const Padding(
               padding: EdgeInsets.only(bottom: 16),
               child: LinearProgressIndicator(),
             ),
-
-          // Country refresh error
           if (state.phase == ExplorePhase.failure)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -693,39 +611,53 @@ class _ExploreContentState extends State<_ExploreContent> {
                 onRetry: context.read<ExploreCubit>().refresh,
               ),
             ),
-
-          // Country list / empty state
-          if (visitedCountries.isEmpty)
-            state.visitedCountryCount == 0
-                ? const AppEmptyState(
-                    title: 'No countries visited yet',
-                    message:
-                        'Your visited countries will appear here once you '
-                        'start recording your travels.',
-                    icon: Icons.travel_explore_outlined,
-                  )
-                : const AppEmptyState(
-                    title: 'No matching countries',
-                    message: 'Try changing your search or filters.',
-                    icon: Icons.search_off_outlined,
-                  )
-          else
-            ...visitedCountries.map(
-              (country) => Padding(
+          if (!countrySourcesReady) ...[
+            if (residencesState.phase == ResidencesPhase.failure ||
+                wishlistState.phase == WishlistPhase.failure)
+              AppErrorState(
+                title: 'Unable to load destinations',
+                message: 'Some travel statuses could not be loaded.',
+                onRetry: () {
+                  if (residencesState.phase == ResidencesPhase.failure) {
+                    unawaited(context.read<ResidencesCubit>().refresh());
+                  }
+                  if (wishlistState.phase == WishlistPhase.failure) {
+                    unawaited(context.read<WishlistCubit>().refresh());
+                  }
+                },
+              )
+            else
+              const AppLoadingState(message: 'Loading your destinations...'),
+          ] else if (countries.isEmpty) ...[
+            if (!hasAnyCountryDestination)
+              const AppEmptyState(
+                title: 'No destinations yet',
+                message:
+                    'Countries you have visited, lived in or added '
+                    'to your wishlist will appear here.',
+                icon: Icons.travel_explore_outlined,
+              )
+            else
+              const AppEmptyState(
+                title: 'No matching countries',
+                message: 'Try changing your search or filters.',
+                icon: Icons.search_off_outlined,
+              ),
+          ] else ...[
+            ...countries.map(
+              (entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _CountryCard(
-                  country: country,
+                  country: entry.country,
                   summary: summarizeCountryVisits(
-                    state.visitsForCountry(country.code),
+                    state.visitsForCountry(entry.country.code),
                   ),
+                  travelSummary: entry.summary,
                 ),
               ),
             ),
-        ]
-        // ------------------------------------------------------------
-        // Cities content
-        // ------------------------------------------------------------
-        else ...[
+          ],
+        ] else ...[
           const VisitedCitiesList(),
         ],
       ],
@@ -733,26 +665,30 @@ class _ExploreContentState extends State<_ExploreContent> {
   }
 }
 
-// ============================================================================
-// Country card
-// ============================================================================
-
 class _CountryCard extends StatelessWidget {
-  const _CountryCard({required this.country, required this.summary});
+  const _CountryCard({
+    required this.country,
+    required this.summary,
+    required this.travelSummary,
+  });
 
   final Country country;
   final CountryVisitSummary summary;
+  final ExploreCountrySummary travelSummary;
 
   String get _subtitle {
+    if (summary.visitCount == 0) {
+      return [
+        if (travelSummary.hasLived) 'Lived',
+        if (travelSummary.isWishlisted) 'Wish',
+      ].join(' · ');
+    }
+
     final count = summary.visitCount;
-
     final visitsLabel = '$count ${count == 1 ? 'visit' : 'visits'}';
-
     final lastVisited = summary.lastVisitedOn;
 
-    if (lastVisited == null) {
-      return visitsLabel;
-    }
+    if (lastVisited == null) return visitsLabel;
 
     const months = [
       'Jan',
@@ -768,9 +704,7 @@ class _CountryCard extends StatelessWidget {
       'Nov',
       'Dec',
     ];
-
     final dateLabel = '${months[lastVisited.month - 1]} ${lastVisited.year}';
-
     return '$visitsLabel · Last visited $dateLabel';
   }
 
@@ -786,7 +720,6 @@ class _CountryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           final exploreCubit = context.read<ExploreCubit>();
-
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => BlocProvider.value(
@@ -807,9 +740,7 @@ class _CountryCard extends StatelessWidget {
           child: Row(
             children: [
               CountryFlag(countryCode: country.code),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,9 +753,7 @@ class _CountryCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-
                     const SizedBox(height: 4),
-
                     Text(
                       _subtitle,
                       maxLines: 2,
@@ -836,9 +765,7 @@ class _CountryCard extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Icon(
                 Icons.chevron_right_rounded,
                 color: colors.onSurfaceVariant,
@@ -852,10 +779,6 @@ class _CountryCard extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Refresh error
-// ============================================================================
-
 class _RefreshError extends StatelessWidget {
   const _RefreshError({required this.message, required this.onRetry});
 
@@ -865,7 +788,6 @@ class _RefreshError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return Card(
       color: colors.errorContainer,
       child: Padding(
@@ -888,10 +810,6 @@ class _RefreshError extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Compact statistic
-// ============================================================================
-
 class _CompactStatistic extends StatelessWidget {
   const _CompactStatistic({
     required this.icon,
@@ -907,7 +825,6 @@ class _CompactStatistic extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

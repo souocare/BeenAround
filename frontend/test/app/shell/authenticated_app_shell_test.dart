@@ -655,7 +655,7 @@ void main() {
       expect(find.text('Explore'), findsWidgets);
       expect(find.text('Countries visited'), findsOneWidget);
       expect(find.text('Total visits'), findsOneWidget);
-      expect(find.text('No countries visited yet'), findsOneWidget);
+      expect(find.text('No destinations yet'), findsOneWidget);
     });
     testWidgets('iOS compact layout uses adaptive navigation', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
