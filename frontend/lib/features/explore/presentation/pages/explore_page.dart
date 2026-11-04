@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,15 @@ import '../../../residences/domain/residence_repository.dart';
 
 import '../../../wishlist/application/wishlist_cubit.dart';
 import '../../../wishlist/domain/wishlist_repository.dart';
+import '../../application/explore_cities_cubit.dart';
+import '../../application/explore_cities_state.dart';
+import '../../application/visited_cities_state.dart';
+
+import '../../../geography/domain/city_repository.dart';
+
+import '../../../residences/application/residences_state.dart';
+
+import '../../../wishlist/application/wishlist_state.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -54,6 +64,12 @@ class ExplorePage extends StatelessWidget {
               WishlistCubit(repository: context.read<WishlistRepository>())
                 ..load(),
         ),
+
+        BlocProvider<ExploreCitiesCubit>(
+          create: (context) => ExploreCitiesCubit(
+            cityRepository: context.read<CityRepository>(),
+          ),
+        ),
       ],
       child: const _ExploreView(),
     );
@@ -68,6 +84,9 @@ class _ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<_ExploreView> {
+  VisitedCitiesState? _lastAggregatedVisits;
+  ResidencesState? _lastAggregatedResidences;
+  WishlistState? _lastAggregatedWishlist;
   final ScrollController _scrollController = ScrollController();
 
   bool _showFloatingAddButton = false;
@@ -109,10 +128,71 @@ class _ExploreViewState extends State<_ExploreView> {
     }
   }
 
+  void _synchronizeExploreCities() {
+    if (!mounted) return;
+
+    final visitedCities = context.read<VisitedCitiesCubit>().state;
+    final residences = context.read<ResidencesCubit>().state;
+    final wishlist = context.read<WishlistCubit>().state;
+
+    final exploreCitiesCubit = context.read<ExploreCitiesCubit>();
+
+    if (exploreCitiesCubit.isClosed) return;
+
+    final allReady =
+        visitedCities.phase == VisitedCitiesPhase.ready &&
+        residences.phase == ResidencesPhase.ready &&
+        wishlist.phase == WishlistPhase.ready;
+
+    if (!allReady) {
+      _lastAggregatedVisits = null;
+      _lastAggregatedResidences = null;
+      _lastAggregatedWishlist = null;
+
+      if (exploreCitiesCubit.state.phase != ExploreCitiesPhase.initial) {
+        unawaited(
+          exploreCitiesCubit.load(
+            visitedCities: visitedCities,
+            residences: residences,
+            wishlist: wishlist,
+          ),
+        );
+      }
+
+      return;
+    }
+
+    final unchanged =
+        identical(_lastAggregatedVisits, visitedCities) &&
+        identical(_lastAggregatedResidences, residences) &&
+        identical(_lastAggregatedWishlist, wishlist);
+
+    if (unchanged) return;
+
+    _lastAggregatedVisits = visitedCities;
+    _lastAggregatedResidences = residences;
+    _lastAggregatedWishlist = wishlist;
+
+    unawaited(
+      exploreCitiesCubit.load(
+        visitedCities: visitedCities,
+        residences: residences,
+        wishlist: wishlist,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+
     _scrollController.addListener(_updateFloatingAddButton);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _synchronizeExploreCities();
+    });
   }
 
   Future<void> _refreshExploreData() async {
@@ -148,100 +228,123 @@ class _ExploreViewState extends State<_ExploreView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ExploreCubit, ExploreState>(
-      builder: (context, state) {
-        if (state.phase == ExplorePhase.initial ||
-            (state.phase == ExplorePhase.loading &&
-                !state.hasData &&
-                state.countries.isEmpty &&
-                state.visits.isEmpty)) {
-          return const AppLoadingState(
-            message: 'Loading your travel history...',
-          );
-        }
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<VisitedCitiesCubit, VisitedCitiesState>(
+          listener: (context, state) {
+            _synchronizeExploreCities();
+          },
+        ),
 
-        if (state.phase == ExplorePhase.failure &&
-            state.countries.isEmpty &&
-            state.visits.isEmpty) {
-          return AppErrorState(
-            title: 'Unable to load Explore',
-            message:
-                state.errorMessage ??
-                'Something went wrong while loading your travel history.',
-            onRetry: context.read<ExploreCubit>().load,
-          );
-        }
-        final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
-        final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+        BlocListener<ResidencesCubit, ResidencesState>(
+          listener: (context, state) {
+            _synchronizeExploreCities();
+          },
+        ),
 
-        final floatingButtonBottom = isIOS ? 60.0 : 20.0;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _updateFloatingAddButton();
+        BlocListener<WishlistCubit, WishlistState>(
+          listener: (context, state) {
+            _synchronizeExploreCities();
+          },
+        ),
+      ],
+      child: BlocBuilder<ExploreCubit, ExploreState>(
+        builder: (context, state) {
+          if (state.phase == ExplorePhase.initial ||
+              (state.phase == ExplorePhase.loading &&
+                  !state.hasData &&
+                  state.countries.isEmpty &&
+                  state.visits.isEmpty)) {
+            return const AppLoadingState(
+              message: 'Loading your travel history...',
+            );
           }
-        });
-        return Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: _refreshExploreData,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                    sliver: SliverToBoxAdapter(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 960),
-                          child: _ExploreContent(
-                            state: state,
-                            onAddDestination: _addDestination,
-                            addButtonKey: _headerAddButtonKey,
+
+          if (state.phase == ExplorePhase.failure &&
+              state.countries.isEmpty &&
+              state.visits.isEmpty) {
+            return AppErrorState(
+              title: 'Unable to load Explore',
+              message:
+                  state.errorMessage ??
+                  'Something went wrong while loading your travel history.',
+              onRetry: context.read<ExploreCubit>().load,
+            );
+          }
+          final isMobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+          final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+          final floatingButtonBottom = isIOS ? 60.0 : 20.0;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _updateFloatingAddButton();
+            }
+          });
+          return Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: _refreshExploreData,
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                      sliver: SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 960),
+                            child: _ExploreContent(
+                              state: state,
+                              onAddDestination: _addDestination,
+                              addButtonKey: _headerAddButtonKey,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            if (isMobile)
-              Positioned(
-                right: 20,
-                bottom: floatingButtonBottom,
-                child: AnimatedScale(
-                  scale: _showFloatingAddButton ? 1 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedOpacity(
-                    opacity: _showFloatingAddButton ? 1 : 0,
+              if (isMobile)
+                Positioned(
+                  right: 20,
+                  bottom: floatingButtonBottom,
+                  child: AnimatedScale(
+                    scale: _showFloatingAddButton ? 1 : 0,
                     duration: const Duration(milliseconds: 180),
-                    child: IgnorePointer(
-                      ignoring: !_showFloatingAddButton,
-                      child: FloatingActionButton(
-                        key: const Key('exploreFloatingAddButton'),
-                        tooltip: 'Add Destination',
-                        heroTag: 'exploreFloatingAddButton',
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(
-                          context,
-                        ).colorScheme.onPrimary,
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedOpacity(
+                      opacity: _showFloatingAddButton ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: IgnorePointer(
+                        ignoring: !_showFloatingAddButton,
+                        child: FloatingActionButton(
+                          key: const Key('exploreFloatingAddButton'),
+                          tooltip: 'Add Destination',
+                          heroTag: 'exploreFloatingAddButton',
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          onPressed: _addDestination,
+                          child: const Icon(Icons.add_rounded, size: 28),
                         ),
-                        onPressed: _addDestination,
-                        child: const Icon(Icons.add_rounded, size: 28),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }

@@ -14,6 +14,22 @@ import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/explore/presentation/pages/city_details_page.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
+import 'package:beenaround/features/geography/domain/country_city_count.dart';
+
+import 'package:beenaround/features/residences/domain/residence.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+import 'package:beenaround/features/residences/domain/residence_input.dart';
+import 'package:beenaround/features/residences/domain/residence_changes.dart';
+import 'package:beenaround/features/residences/domain/residence_overlap.dart';
+
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dart';
 
 class FakeExploreRepository implements CountriesRepository {
   FakeExploreRepository({this.countries = const [], this.visits = const []});
@@ -115,6 +131,127 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   }
 }
 
+class FakeCityRepository implements CityRepository {
+  FakeCityRepository({this.cities = const []});
+
+  List<City> cities;
+
+  int resolveCalls = 0;
+
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    resolveCalls++;
+
+    final citiesById = {for (final city in cities) city.id: city};
+
+    return [
+      for (final id in cityIds.toSet())
+        if (citiesById.containsKey(id)) citiesById[id]!,
+    ];
+  }
+
+  @override
+  Future<CitySearchResult> search({
+    String? query,
+    String? countryCode,
+    CitySort sort = CitySort.population,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return CitySearchResult(
+      items: const [],
+      total: 0,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    return const [];
+  }
+}
+
+class FakeResidenceRepository implements ResidenceRepository {
+  FakeResidenceRepository({this.residences = const []});
+
+  List<Residence> residences;
+
+  int loadCalls = 0;
+
+  @override
+  Future<List<Residence>> getResidences() async {
+    loadCalls++;
+    return List.unmodifiable(residences);
+  }
+
+  @override
+  Future<Residence> getResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> createResidence({
+    required ResidenceInput input,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> updateResidence({
+    required String residenceId,
+    required ResidenceChanges changes,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+}
+
+class FakeWishlistRepository implements WishlistRepository {
+  FakeWishlistRepository({this.entries = const []});
+
+  List<WishlistEntry> entries;
+
+  int loadCalls = 0;
+
+  @override
+  Future<List<WishlistEntry>> getWishlistEntries() async {
+    loadCalls++;
+    return List.unmodifiable(entries);
+  }
+
+  @override
+  Future<WishlistEntry> getWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistCreationResult> addWishlistEntry({
+    required WishlistEntryInput input,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistEntry> updateWishlistNote({
+    required String entryId,
+    required String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+}
+
 const portugal = Country(
   code: 'PT',
   name: 'Portugal',
@@ -165,6 +302,9 @@ void main() {
     WidgetTester tester,
     ExploreCubit cubit, {
     FakeCityVisitsRepository? cityRepository,
+    FakeCityRepository? catalogRepository,
+    FakeResidenceRepository? residenceRepository,
+    FakeWishlistRepository? wishlistRepository,
     Size screenSize = const Size(1200, 900),
   }) async {
     tester.view.physicalSize = screenSize;
@@ -175,8 +315,21 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     await tester.pumpWidget(
-      RepositoryProvider<CityVisitsRepository>.value(
-        value: cityRepository ?? FakeCityVisitsRepository(),
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CityVisitsRepository>.value(
+            value: cityRepository ?? FakeCityVisitsRepository(),
+          ),
+          RepositoryProvider<CityRepository>.value(
+            value: catalogRepository ?? FakeCityRepository(),
+          ),
+          RepositoryProvider<ResidenceRepository>.value(
+            value: residenceRepository ?? FakeResidenceRepository(),
+          ),
+          RepositoryProvider<WishlistRepository>.value(
+            value: wishlistRepository ?? FakeWishlistRepository(),
+          ),
+        ],
         child: MaterialApp(
           home: Scaffold(
             body: BlocProvider.value(value: cubit, child: const ExplorePage()),
@@ -895,5 +1048,186 @@ void main() {
     );
 
     expect(animatedOpacity.opacity, 0);
+  });
+  testWidgets(
+    'loads aggregated cities when all source repositories are ready',
+    (tester) async {
+      final countriesRepository = FakeExploreRepository();
+
+      final exploreCubit = ExploreCubit(repository: countriesRepository);
+
+      addTearDown(exploreCubit.close);
+
+      await exploreCubit.load();
+
+      final cityVisitsRepository = FakeCityVisitsRepository(
+        visits: [
+          cityVisit(
+            id: 'visit-1',
+            cityId: 100,
+            cityName: 'Lisbon',
+            countryCode: 'PT',
+            countryName: 'Portugal',
+          ),
+        ],
+      );
+
+      final cityCatalogRepository = FakeCityRepository(
+        cities: const [
+          City(
+            id: 100,
+            name: 'Lisbon',
+            asciiName: 'Lisbon',
+            countryCode: 'PT',
+            countryName: 'Portugal',
+            latitude: 38.72,
+            longitude: -9.13,
+            population: 500000,
+            featureCode: 'PPLC',
+          ),
+        ],
+      );
+
+      await pumpExplore(
+        tester,
+        exploreCubit,
+        cityRepository: cityVisitsRepository,
+        catalogRepository: cityCatalogRepository,
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(cityCatalogRepository.resolveCalls, 1);
+    },
+  );
+  testWidgets('switching tabs does not resolve cities again', (tester) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+    addTearDown(exploreCubit.close);
+
+    await exploreCubit.load();
+
+    final catalog = FakeCityRepository(
+      cities: const [
+        City(
+          id: 100,
+          name: 'Lisbon',
+          asciiName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+          latitude: 38.72,
+          longitude: -9.13,
+          population: 500000,
+          featureCode: 'PPLC',
+        ),
+      ],
+    );
+
+    await pumpExplore(
+      tester,
+      exploreCubit,
+      catalogRepository: catalog,
+      cityRepository: FakeCityVisitsRepository(
+        visits: [
+          cityVisit(
+            id: 'visit-1',
+            cityId: 100,
+            cityName: 'Lisbon',
+            countryCode: 'PT',
+            countryName: 'Portugal',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(catalog.resolveCalls, 1);
+
+    await openCitiesTab(tester);
+
+    await tester.tap(find.text('Countries'));
+    await tester.pumpAndSettle();
+
+    expect(catalog.resolveCalls, 1);
+  });
+  testWidgets('pull-to-refresh resolves updated city history', (tester) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+    addTearDown(exploreCubit.close);
+
+    await exploreCubit.load();
+
+    final catalog = FakeCityRepository(
+      cities: const [
+        City(
+          id: 100,
+          name: 'Lisbon',
+          asciiName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+          latitude: 38.72,
+          longitude: -9.13,
+          population: 500000,
+          featureCode: 'PPLC',
+        ),
+        City(
+          id: 200,
+          name: 'Porto',
+          asciiName: 'Porto',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+          latitude: 41.15,
+          longitude: -8.61,
+          population: 250000,
+          featureCode: 'PPLA',
+        ),
+      ],
+    );
+
+    final cityVisits = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-1',
+          cityId: 100,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    await pumpExplore(
+      tester,
+      exploreCubit,
+      catalogRepository: catalog,
+      cityRepository: cityVisits,
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(catalog.resolveCalls, 1);
+
+    cityVisits.visits = [
+      ...cityVisits.visits,
+      cityVisit(
+        id: 'visit-2',
+        cityId: 200,
+        cityName: 'Porto',
+        countryCode: 'PT',
+        countryName: 'Portugal',
+      ),
+    ];
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 350));
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(cityVisits.loadCalls, 2);
+    expect(catalog.resolveCalls, 2);
   });
 }

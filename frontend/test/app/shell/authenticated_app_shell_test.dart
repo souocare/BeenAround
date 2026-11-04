@@ -16,6 +16,26 @@ import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/city_search_result.dart';
+import 'package:beenaround/features/geography/domain/city_sort.dart';
+import 'package:beenaround/features/geography/domain/country_city_count.dart';
+import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
+import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+
+import 'package:beenaround/features/residences/domain/residence.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+import 'package:beenaround/features/residences/domain/residence_input.dart';
+import 'package:beenaround/features/residences/domain/residence_changes.dart';
+import 'package:beenaround/features/residences/domain/residence_overlap.dart';
+
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   @override
@@ -55,6 +75,128 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 }
 
+class FakeCityVisitsRepository implements CityVisitsRepository {
+  @override
+  Future<List<CityVisit>> getCityVisits() async => const [];
+
+  @override
+  Future<CityVisit> createCityVisit({
+    required int cityId,
+    required DateTime startedOn,
+    required DateTime endedOn,
+    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
+    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
+    String? countryVisitId,
+    NewCountryVisitInput? newCountryVisit,
+    CountryVisitDateExpansion? countryDateExpansion,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CityVisit> updateCityVisit({
+    required String visitId,
+    required Map<String, dynamic> changes,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteCityVisit({required String visitId}) {
+    throw UnimplementedError();
+  }
+}
+
+class FakeCityRepository implements CityRepository {
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    return const [];
+  }
+
+  @override
+  Future<CitySearchResult> search({
+    String? query,
+    String? countryCode,
+    CitySort sort = CitySort.population,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return CitySearchResult(
+      items: const [],
+      total: 0,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<List<CountryCityCount>> listCountryCityCounts() async {
+    return const [];
+  }
+}
+
+class FakeResidenceRepository implements ResidenceRepository {
+  @override
+  Future<List<Residence>> getResidences() async => const [];
+
+  @override
+  Future<Residence> getResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> createResidence({
+    required ResidenceInput input,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Residence> updateResidence({
+    required String residenceId,
+    required ResidenceChanges changes,
+    ResidenceOverlapProposal? overlapConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteResidence({required String residenceId}) {
+    throw UnimplementedError();
+  }
+}
+
+class FakeWishlistRepository implements WishlistRepository {
+  @override
+  Future<List<WishlistEntry>> getWishlistEntries() async => const [];
+
+  @override
+  Future<WishlistEntry> getWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistCreationResult> addWishlistEntry({
+    required WishlistEntryInput input,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<WishlistEntry> updateWishlistNote({
+    required String entryId,
+    required String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteWishlistEntry({required String entryId}) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   late ThemeCubit themeCubit;
   const user = AuthenticatedUser(
@@ -89,23 +231,39 @@ void main() {
 
     addTearDown(themeCubit.close);
     await tester.pumpWidget(
-      MultiBlocProvider(
+      MultiRepositoryProvider(
         providers: [
-          BlocProvider.value(value: themeCubit),
-          BlocProvider.value(value: exploreCubit),
+          RepositoryProvider<CityVisitsRepository>(
+            create: (_) => FakeCityVisitsRepository(),
+          ),
+          RepositoryProvider<CityRepository>(
+            create: (_) => FakeCityRepository(),
+          ),
+          RepositoryProvider<ResidenceRepository>(
+            create: (_) => FakeResidenceRepository(),
+          ),
+          RepositoryProvider<WishlistRepository>(
+            create: (_) => FakeWishlistRepository(),
+          ),
         ],
-        child: BlocBuilder<ThemeCubit, ThemeMode>(
-          builder: (context, mode) {
-            return MaterialApp(
-              theme: AppTheme.light,
-              darkTheme: AppTheme.dark,
-              themeMode: mode,
-              home: AuthenticatedAppShell(
-                user: user,
-                onLogout: onLogout ?? () async {},
-              ),
-            );
-          },
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: themeCubit),
+            BlocProvider.value(value: exploreCubit),
+          ],
+          child: BlocBuilder<ThemeCubit, ThemeMode>(
+            builder: (context, mode) {
+              return MaterialApp(
+                theme: AppTheme.light,
+                darkTheme: AppTheme.dark,
+                themeMode: mode,
+                home: AuthenticatedAppShell(
+                  user: user,
+                  onLogout: onLogout ?? () async {},
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

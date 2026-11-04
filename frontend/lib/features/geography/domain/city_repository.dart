@@ -2,7 +2,6 @@ import 'city.dart';
 import 'city_search_result.dart';
 import 'city_sort.dart';
 import 'country_city_count.dart';
-import 'city.dart';
 
 abstract interface class CityRepository {
   Future<CitySearchResult> search({
