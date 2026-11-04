@@ -1,12 +1,20 @@
 import 'dart:async';
 
 import 'package:beenaround/features/explore/application/explore_cubit.dart';
+import 'package:beenaround/features/explore/application/explore_state.dart';
+import 'package:beenaround/features/explore/application/visited_cities_cubit.dart';
+import 'package:beenaround/features/explore/application/visited_cities_state.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/explore/presentation/pages/explore_page.dart';
+import 'package:beenaround/features/explore/presentation/widgets/visited_cities_list.dart';
 import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+import 'package:beenaround/features/residences/application/residences_cubit.dart';
+import 'package:beenaround/features/residences/application/residences_state.dart';
+import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
+import 'package:beenaround/features/wishlist/application/wishlist_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,13 +102,20 @@ class FakeCityVisitsRepository implements CityVisitsRepository {
   int loadCalls = 0;
   int deleteCalls = 0;
   String? receivedDeletedVisitId;
+  Future<List<CityVisit>> Function()? visitsHandler;
 
   @override
   Future<List<CityVisit>> getCityVisits() async {
     loadCalls++;
+
+    if (visitsHandler != null) {
+      return visitsHandler!();
+    }
+
     return List.unmodifiable(visits);
   }
 
+  @override
   Future<CityVisit> createCityVisit({
     required int cityId,
     required DateTime startedOn,
@@ -178,10 +193,16 @@ class FakeResidenceRepository implements ResidenceRepository {
   List<Residence> residences;
 
   int loadCalls = 0;
+  Future<List<Residence>> Function()? residencesHandler;
 
   @override
   Future<List<Residence>> getResidences() async {
     loadCalls++;
+
+    if (residencesHandler != null) {
+      return residencesHandler!();
+    }
+
     return List.unmodifiable(residences);
   }
 
@@ -219,10 +240,16 @@ class FakeWishlistRepository implements WishlistRepository {
   List<WishlistEntry> entries;
 
   int loadCalls = 0;
+  Future<List<WishlistEntry>> Function()? entriesHandler;
 
   @override
   Future<List<WishlistEntry>> getWishlistEntries() async {
     loadCalls++;
+
+    if (entriesHandler != null) {
+      return entriesHandler!();
+    }
+
     return List.unmodifiable(entries);
   }
 
@@ -560,6 +587,12 @@ void main() {
     await cubit.load();
     await pumpExplore(tester, cubit);
 
+    // Wait for the initial complete snapshot from all sources.
+    await tester.pumpAndSettle();
+
+    // Confirm that Portugal is visible before refreshing.
+    expect(find.text('Portugal'), findsOneWidget);
+
     final pending = Completer<List<Country>>();
 
     repository.countriesHandler = () => pending.future;
@@ -567,14 +600,25 @@ void main() {
     final refresh = cubit.refresh();
 
     await tester.pump();
+    await tester.pump();
+    expect(
+      cubit.state.phase,
+      ExplorePhase.loading,
+      reason: 'ExploreCubit must remain loading while the request is pending.',
+    );
 
+    // The previous complete snapshot must remain visible.
     expect(find.text('Portugal'), findsOneWidget);
+
+    // Refresh progress must be visible.
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
     pending.complete([portugal]);
 
     await refresh;
     await tester.pump();
+
+    expect(find.text('Portugal'), findsOneWidget);
 
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
@@ -1985,5 +2029,337 @@ void main() {
     expect(find.byKey(const Key('visitedCityCard-2267057')), findsOneWidget);
 
     expect(catalogRepository.resolveCalls, 2);
+  });
+  testWidgets('keeps aggregated cities visible during visits refresh', (
+    tester,
+  ) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(exploreCubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    await exploreCubit.load();
+
+    await pumpExplore(tester, exploreCubit, cityRepository: cityRepository);
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    // Initial aggregation is complete.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // Start a refresh that remains pending.
+    final pending = Completer<List<CityVisit>>();
+
+    cityRepository.visitsHandler = () => pending.future;
+
+    final context = tester.element(find.byType(VisitedCitiesList));
+
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+
+    final refresh = visitedCitiesCubit.load();
+
+    // Allow listeners and BlocBuilders to process the loading state.
+    await tester.pump();
+    await tester.pump();
+
+    expect(visitedCitiesCubit.state.phase, VisitedCitiesPhase.loading);
+
+    // The previous complete aggregation must remain visible.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // The refreshed source no longer contains Lisbon.
+    pending.complete([]);
+
+    await refresh;
+    await tester.pumpAndSettle();
+
+    // The new complete aggregation replaces the previous one.
+    expect(find.text('Lisbon'), findsNothing);
+    expect(find.byKey(const Key('visitedCityCard-2267057')), findsNothing);
+
+    expect(find.text('No cities visited yet'), findsOneWidget);
+  });
+  testWidgets('keeps cities visible when visits refresh fails', (tester) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(exploreCubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    await exploreCubit.load();
+
+    await pumpExplore(tester, exploreCubit, cityRepository: cityRepository);
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    // Initial data is available.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    final context = tester.element(find.byType(VisitedCitiesList));
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+
+    // Simulate a temporary failure in the source repository.
+    cityRepository.visitsHandler = () async {
+      throw Exception('Network unavailable');
+    };
+
+    await visitedCitiesCubit.load();
+    await tester.pumpAndSettle();
+
+    expect(visitedCitiesCubit.state.phase, VisitedCitiesPhase.failure);
+
+    // Previously loaded cities must remain visible.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // The failure must be visible.
+    expect(find.text('Unable to load visited cities.'), findsOneWidget);
+
+    // Restore the repository.
+    cityRepository.visitsHandler = null;
+
+    final retryButton = find.widgetWithText(TextButton, 'Retry');
+
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    // The source recovered.
+    expect(visitedCitiesCubit.state.phase, VisitedCitiesPhase.ready);
+
+    expect(find.text('Unable to load visited cities.'), findsNothing);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+  });
+  testWidgets('shows error instead of empty state when city loading fails', (
+    tester,
+  ) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+
+    addTearDown(exploreCubit.close);
+
+    final cityRepository = FakeCityVisitsRepository();
+
+    // The first request fails before any data has been loaded.
+    cityRepository.visitsHandler = () async {
+      throw Exception('Network unavailable');
+    };
+
+    await exploreCubit.load();
+
+    await pumpExplore(tester, exploreCubit, cityRepository: cityRepository);
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    // A failed request must not be interpreted as an empty history.
+    expect(find.text('Unable to load visited cities.'), findsOneWidget);
+
+    expect(find.text('No cities visited yet'), findsNothing);
+    expect(find.text('No matching cities'), findsNothing);
+
+    // Recover the repository.
+    cityRepository.visitsHandler = null;
+
+    final retryButton = find.widgetWithText(TextButton, 'Retry');
+
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    // An empty history is now a confirmed successful result.
+    expect(find.text('No cities visited yet'), findsOneWidget);
+
+    expect(find.text('Unable to load visited cities.'), findsNothing);
+
+    expect(cityRepository.loadCalls, 2);
+  });
+  testWidgets('keeps cities visible when residences refresh fails', (
+    tester,
+  ) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+    addTearDown(exploreCubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    final residenceRepository = FakeResidenceRepository();
+
+    await exploreCubit.load();
+
+    await pumpExplore(
+      tester,
+      exploreCubit,
+      cityRepository: cityRepository,
+      residenceRepository: residenceRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    final context = tester.element(find.byType(VisitedCitiesList));
+    final residencesCubit = context.read<ResidencesCubit>();
+
+    residenceRepository.residencesHandler = () async {
+      throw Exception('Network unavailable');
+    };
+
+    await residencesCubit.refresh();
+    await tester.pumpAndSettle();
+
+    expect(residencesCubit.state.phase, ResidencesPhase.failure);
+
+    // The previous complete aggregation remains visible.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // The source error is presented to the user.
+    expect(find.text('Unable to load your residence history.'), findsOneWidget);
+
+    // Retry the failed source.
+    residenceRepository.residencesHandler = null;
+
+    final retryButton = find.widgetWithText(TextButton, 'Retry');
+
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(residencesCubit.state.phase, ResidencesPhase.ready);
+
+    expect(find.text('Unable to load your residence history.'), findsNothing);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    expect(residenceRepository.loadCalls, 3);
+  });
+  testWidgets('keeps cities visible when wishlist refresh fails', (
+    tester,
+  ) async {
+    final exploreCubit = ExploreCubit(
+      repository: FakeExploreRepository(countries: [portugal]),
+    );
+    addTearDown(exploreCubit.close);
+
+    final cityRepository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(
+          id: 'visit-lisbon',
+          cityId: 2267057,
+          cityName: 'Lisbon',
+          countryCode: 'PT',
+          countryName: 'Portugal',
+        ),
+      ],
+    );
+
+    final wishlistRepository = FakeWishlistRepository();
+
+    await exploreCubit.load();
+
+    await pumpExplore(
+      tester,
+      exploreCubit,
+      cityRepository: cityRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await tester.pumpAndSettle();
+    await openCitiesTab(tester);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    final context = tester.element(find.byType(VisitedCitiesList));
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    wishlistRepository.entriesHandler = () async {
+      throw Exception('Network unavailable');
+    };
+
+    await wishlistCubit.refresh();
+    await tester.pumpAndSettle();
+
+    expect(wishlistCubit.state.phase, WishlistPhase.failure);
+
+    // Preserve the last complete city aggregation.
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    // Display the failure from the source.
+    expect(find.text('Unable to load your wishlist.'), findsOneWidget);
+
+    wishlistRepository.entriesHandler = null;
+
+    final retryButton = find.widgetWithText(TextButton, 'Retry');
+
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(wishlistCubit.state.phase, WishlistPhase.ready);
+
+    expect(find.text('Unable to load your wishlist.'), findsNothing);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Portugal · 1 visit'), findsOneWidget);
+
+    expect(wishlistRepository.loadCalls, 3);
   });
 }

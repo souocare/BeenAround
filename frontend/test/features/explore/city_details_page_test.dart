@@ -14,6 +14,13 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/geography/domain/city.dart';
+import 'package:beenaround/features/residences/application/residences_cubit.dart';
+import 'package:beenaround/features/residences/domain/residence.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+
+import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
   FakeCityVisitsRepository({required this.visits});
@@ -186,6 +193,30 @@ CityVisit cityVisit({
     createdAt: created,
     updatedAt: created,
   );
+}
+
+class EmptyResidenceRepository implements ResidenceRepository {
+  @override
+  Future<List<Residence>> getResidences() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError(
+      'Unexpected residence repository call: ${invocation.memberName}',
+    );
+  }
+}
+
+class EmptyWishlistRepository implements WishlistRepository {
+  @override
+  Future<List<WishlistEntry>> getWishlistEntries() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError(
+      'Unexpected wishlist repository call: ${invocation.memberName}',
+    );
+  }
 }
 
 void main() {
@@ -675,6 +706,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('City Details'), findsOneWidget);
+    final detailsPage = tester.widget<CityDetailsPage>(
+      find.byType(CityDetailsPage),
+    );
+
+    expect(
+      detailsPage.catalogCity,
+      isNull,
+      reason: 'A Been-only city must use legacy visit navigation.',
+    );
+
+    expect(detailsPage.city, isNotNull);
 
     await tester.tap(find.byKey(const Key('cityVisitMenu-visit-1')));
     await tester.pumpAndSettle();
@@ -698,11 +740,23 @@ void main() {
   ) async {
     final repository = FakeCityVisitsRepository(visits: []);
 
-    final cubit = VisitedCitiesCubit(repository: repository);
+    final visitedCitiesCubit = VisitedCitiesCubit(repository: repository);
 
-    addTearDown(cubit.close);
+    final residencesCubit = ResidencesCubit(
+      repository: EmptyResidenceRepository(),
+    );
 
-    await cubit.load();
+    final wishlistCubit = WishlistCubit(repository: EmptyWishlistRepository());
+
+    addTearDown(visitedCitiesCubit.close);
+    addTearDown(residencesCubit.close);
+    addTearDown(wishlistCubit.close);
+
+    await Future.wait([
+      visitedCitiesCubit.load(),
+      residencesCubit.load(),
+      wishlistCubit.load(),
+    ]);
 
     const catalogCity = City(
       id: 2267057,
@@ -717,8 +771,12 @@ void main() {
     );
 
     await tester.pumpWidget(
-      BlocProvider<VisitedCitiesCubit>.value(
-        value: cubit,
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+          BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+          BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+        ],
         child: const MaterialApp(
           home: CityDetailsPage.fromCatalog(city: catalogCity),
         ),
@@ -727,14 +785,27 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    // City identity.
     expect(find.text('City Details'), findsOneWidget);
     expect(find.text('Lisbon'), findsOneWidget);
     expect(find.text('Portugal'), findsOneWidget);
 
+    // No explicit visits.
     expect(find.text('No visits recorded for this city.'), findsOneWidget);
 
+    expect(find.text('0'), findsOneWidget);
+
+    // No artificial travel statuses.
+    expect(find.byKey(const Key('cityStatus-been')), findsNothing);
+    expect(find.byKey(const Key('cityStatus-lived')), findsNothing);
+    expect(find.byKey(const Key('cityStatus-wish')), findsNothing);
+
+    // No visit actions are available.
     expect(find.byTooltip('Visit actions'), findsNothing);
 
-    expect(cubit.state.visits, isEmpty);
+    // Underlying records remain empty.
+    expect(visitedCitiesCubit.state.visits, isEmpty);
+    expect(residencesCubit.state.residences, isEmpty);
+    expect(wishlistCubit.state.entries, isEmpty);
   });
 }

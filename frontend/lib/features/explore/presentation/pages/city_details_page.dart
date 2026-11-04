@@ -8,6 +8,8 @@ import '../../../geography/domain/city_visit.dart';
 import '../widgets/show_edit_city_visit.dart';
 import '../widgets/show_delete_city_visit.dart';
 import '../../../geography/domain/city.dart';
+import '../../../residences/application/residences_cubit.dart';
+import '../../../wishlist/application/wishlist_cubit.dart';
 
 class CityDetailsPage extends StatelessWidget {
   const CityDetailsPage({required VisitedCity this.city, super.key})
@@ -27,8 +29,6 @@ class CityDetailsPage extends StatelessWidget {
   String get countryName => catalogCity?.countryName ?? city!.countryName;
 
   VisitedCity? _findVisitedCity(VisitedCitiesState state) {
-    if (city != null) return city;
-
     for (final visitedCity in state.visitedCities) {
       if (visitedCity.cityId == cityId) {
         return visitedCity;
@@ -93,12 +93,23 @@ class CityDetailsPage extends StatelessWidget {
       appBar: AppBar(title: const Text('City Details')),
       body: BlocBuilder<VisitedCitiesCubit, VisitedCitiesState>(
         builder: (context, state) {
+          final residencesState = catalogCity != null
+              ? context.watch<ResidencesCubit>().state
+              : null;
+
+          final wishlistState = catalogCity != null
+              ? context.watch<WishlistCubit>().state
+              : null;
           final visits = state.visitsForCity(cityId).toList()
             ..sort(_compareVisits);
 
           final visitedCity = _findVisitedCity(state);
 
           final lastVisited = _lastVisitedDate(visits);
+          final hasLived =
+              residencesState?.residencesForCity(cityId).isNotEmpty ?? false;
+
+          final isWishlisted = wishlistState?.containsCity(cityId) ?? false;
 
           return RefreshIndicator(
             onRefresh: context.read<VisitedCitiesCubit>().load,
@@ -144,6 +155,50 @@ class CityDetailsPage extends StatelessWidget {
                                       color: colors.onSurfaceVariant,
                                     ),
                                   ),
+                                  if (visits.isNotEmpty ||
+                                      hasLived ||
+                                      isWishlisted) ...[
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      key: const Key('cityTravelStatuses'),
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        if (visits.isNotEmpty)
+                                          Chip(
+                                            key: const Key('cityStatus-been'),
+                                            avatar: const Icon(
+                                              Icons.check_circle_outline,
+                                              size: 18,
+                                            ),
+                                            label: Text(
+                                              '${visits.length} '
+                                              '${visits.length == 1 ? 'visit' : 'visits'}',
+                                            ),
+                                          ),
+
+                                        if (hasLived)
+                                          const Chip(
+                                            key: Key('cityStatus-lived'),
+                                            avatar: Icon(
+                                              Icons.home_outlined,
+                                              size: 18,
+                                            ),
+                                            label: Text('Lived'),
+                                          ),
+
+                                        if (isWishlisted)
+                                          const Chip(
+                                            key: Key('cityStatus-wish'),
+                                            avatar: Icon(
+                                              Icons.favorite_border_rounded,
+                                              size: 18,
+                                            ),
+                                            label: Text('Wishlist'),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
