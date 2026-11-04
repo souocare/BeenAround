@@ -59,6 +59,11 @@ class FakeCityRepository implements CityRepository {
   }
 
   @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<CitySearchResult> search({
     String? query,
     String? countryCode,

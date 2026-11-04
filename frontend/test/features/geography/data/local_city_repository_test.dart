@@ -219,5 +219,74 @@ void main() {
       expect(city.population, 500000);
       expect(city.featureCode, 'PPLC');
     });
+    test('resolves cities by IDs preserving requested order', () async {
+      final cities = await repository.resolveByIds(cityIds: [4, 1, 3, 2]);
+
+      expect(cities.map((city) => city.id).toList(), [4, 1, 3, 2]);
+
+      expect(cities.map((city) => city.name).toList(), [
+        'Paris',
+        'Lisbon',
+        'São Paulo',
+        'Porto',
+      ]);
+
+      expect(cities[0].countryCode, 'FR');
+      expect(cities[1].countryCode, 'PT');
+      expect(cities[2].countryCode, 'BR');
+    });
+    test('resolves duplicate city IDs only once', () async {
+      final cities = await repository.resolveByIds(cityIds: [1, 4, 1, 2, 4]);
+
+      expect(cities.map((city) => city.id).toList(), [1, 4, 2]);
+    });
+    test('omits unknown city IDs', () async {
+      final cities = await repository.resolveByIds(cityIds: [999, 1, 888, 4]);
+
+      expect(cities.map((city) => city.id).toList(), [1, 4]);
+    });
+    test('returns empty results for empty city IDs', () async {
+      final cities = await repository.resolveByIds(cityIds: []);
+
+      expect(cities, isEmpty);
+    });
+    test('maps all resolved city fields correctly', () async {
+      final cities = await repository.resolveByIds(cityIds: [3]);
+
+      final city = cities.single;
+
+      expect(city.id, 3);
+      expect(city.name, 'São Paulo');
+      expect(city.asciiName, 'Sao Paulo');
+      expect(city.countryCode, 'BR');
+      expect(city.countryName, 'Brazil');
+      expect(city.latitude, -23.55);
+      expect(city.longitude, -46.63);
+      expect(city.population, 12000000);
+      expect(city.featureCode, 'PPLA');
+    });
+    test('returns immutable resolved city lists', () async {
+      final cities = await repository.resolveByIds(cityIds: [1, 2]);
+
+      expect(() => cities.clear(), throwsUnsupportedError);
+    });
+    test('rejects invalid city IDs', () async {
+      await expectLater(
+        repository.resolveByIds(cityIds: [0]),
+        throwsArgumentError,
+      );
+
+      await expectLater(
+        repository.resolveByIds(cityIds: [-1]),
+        throwsArgumentError,
+      );
+
+      await expectLater(
+        repository.resolveByIds(
+          cityIds: List.generate(201, (index) => index + 1),
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 }

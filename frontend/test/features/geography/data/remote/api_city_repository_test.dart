@@ -493,5 +493,102 @@ void main() {
         ),
       );
     });
+    test('resolves cities by IDs using the configured API', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'POST');
+        expect(options.uri.path, '/api/v1/cities/resolve');
+
+        final payload = options.data;
+
+        expect(payload, {
+          'city_ids': [2267057, 1850147],
+        });
+
+        return jsonResponse({
+          'items': [
+            cityJson(),
+            cityJson(
+              id: 1850147,
+              name: 'Tokyo',
+              asciiName: 'Tokyo',
+              countryCode: 'JP',
+              countryName: 'Japan',
+              latitude: 35.6895,
+              longitude: 139.6917,
+              population: 13960000,
+            ),
+          ],
+        });
+      });
+
+      final cities = await repository.resolveByIds(cityIds: [2267057, 1850147]);
+
+      expect(cities, hasLength(2));
+      expect(cities[0].name, 'Lisbon');
+      expect(cities[1].name, 'Tokyo');
+      expect(cities[1].countryCode, 'JP');
+    });
+    test('deduplicates IDs before sending the request', () async {
+      final repository = createRepository((options) {
+        final payload = options.data;
+
+        expect(payload, {
+          'city_ids': [2267057, 1850147],
+        });
+
+        return jsonResponse({
+          'items': [
+            cityJson(),
+            cityJson(
+              id: 1850147,
+              name: 'Tokyo',
+              countryCode: 'JP',
+              countryName: 'Japan',
+            ),
+          ],
+        });
+      });
+
+      final cities = await repository.resolveByIds(
+        cityIds: [2267057, 1850147, 2267057],
+      );
+
+      expect(cities, hasLength(2));
+    });
+    test('does not request the API for empty IDs', () async {
+      var requests = 0;
+
+      final repository = createRepository((options) {
+        requests++;
+
+        return jsonResponse({'items': []});
+      });
+
+      final cities = await repository.resolveByIds(cityIds: []);
+
+      expect(cities, isEmpty);
+      expect(requests, 0);
+    });
+    test('rejects invalid city resolution response', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'unexpected': []}),
+      );
+
+      await expectLater(
+        repository.resolveByIds(cityIds: [2267057]),
+        throwsFormatException,
+      );
+    });
+    test('returns immutable resolved cities', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [cityJson()],
+        }),
+      );
+
+      final cities = await repository.resolveByIds(cityIds: [2267057]);
+
+      expect(() => cities.clear(), throwsUnsupportedError);
+    });
   });
 }

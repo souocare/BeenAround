@@ -7,6 +7,7 @@ import '../../domain/city_repository.dart';
 import '../../domain/city_search_result.dart';
 import '../../domain/city_sort.dart';
 import '../../domain/country_city_count.dart';
+import '../../domain/city_id_resolution.dart';
 
 class ApiCityRepository implements CityRepository {
   const ApiCityRepository({required this.apiClient});
@@ -151,5 +152,43 @@ class ApiCityRepository implements CityRepository {
       population: json['population'] as int?,
       featureCode: json['feature_code'] as String,
     );
+  }
+
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    final normalizedIds = normalizeCityResolutionIds(cityIds);
+
+    if (normalizedIds.isEmpty) {
+      return const [];
+    }
+
+    try {
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
+        'cities/resolve',
+        data: {'city_ids': normalizedIds},
+      );
+
+      final data = response.data;
+
+      if (data == null || data['items'] is! List) {
+        throw const FormatException('Invalid city resolution response.');
+      }
+
+      final items = data['items'] as List;
+
+      final resolvedCities = items
+          .map((item) {
+            if (item is! Map) {
+              throw const FormatException('Invalid resolved city item.');
+            }
+
+            return _cityFromJson(Map<String, dynamic>.from(item));
+          })
+          .toList(growable: false);
+
+      return List.unmodifiable(resolvedCities);
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
   }
 }

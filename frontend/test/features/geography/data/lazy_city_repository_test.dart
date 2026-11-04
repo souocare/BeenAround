@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:beenaround/features/geography/data/city_repository_handle.dart';
 import 'package:beenaround/features/geography/data/lazy_city_repository.dart';
+import 'package:beenaround/features/geography/domain/city.dart';
 import 'package:beenaround/features/geography/domain/city_repository.dart';
 import 'package:beenaround/features/geography/domain/city_search_result.dart';
 import 'package:beenaround/features/geography/domain/city_sort.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeCityRepository implements CityRepository {
   int searchCalls = 0;
   int countryCityCountCalls = 0;
+  int resolveCalls = 0;
+  List<int>? lastResolvedIds;
 
   @override
   Future<CitySearchResult> search({
@@ -28,6 +31,14 @@ class FakeCityRepository implements CityRepository {
       limit: limit,
       offset: offset,
     );
+  }
+
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    resolveCalls++;
+    lastResolvedIds = List.unmodifiable(cityIds);
+
+    return const [];
   }
 
   @override
@@ -462,6 +473,94 @@ void main() {
 
       await repository.close();
     });
+    test('initializes and delegates city ID resolution', () async {
+      var initializationCalls = 0;
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+          return handle;
+        },
+      );
+
+      expect(initializationCalls, 0);
+
+      final cities = await repository.resolveByIds(cityIds: [4, 1, 3]);
+
+      expect(cities, isEmpty);
+      expect(initializationCalls, 1);
+      expect(fakeRepository.resolveCalls, 1);
+      expect(fakeRepository.lastResolvedIds, [4, 1, 3]);
+
+      await repository.close();
+
+      expect(handle.closeCalls, 1);
+    });
+    test('reuses the initialized handle for city resolution', () async {
+      var initializationCalls = 0;
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () async {
+          initializationCalls++;
+          return handle;
+        },
+      );
+
+      await repository.resolveByIds(cityIds: [1]);
+      await repository.resolveByIds(cityIds: [2]);
+
+      expect(initializationCalls, 1);
+      expect(fakeRepository.resolveCalls, 2);
+      expect(fakeRepository.lastResolvedIds, [2]);
+
+      await repository.close();
+
+      expect(handle.closeCalls, 1);
+    });
+    test('rejects city resolution after close', () async {
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(createHandle: () async => handle);
+
+      await repository.close();
+
+      await expectLater(
+        repository.resolveByIds(cityIds: [1]),
+        throwsStateError,
+      );
+
+      expect(fakeRepository.resolveCalls, 0);
+    });
+    test('does not resolve cities if closed during initialization', () async {
+      final completer = Completer<CityRepositoryHandle>();
+
+      final fakeRepository = FakeCityRepository();
+      final handle = FakeCityRepositoryHandle(fakeRepository);
+
+      final repository = LazyCityRepository(
+        createHandle: () => completer.future,
+      );
+
+      final pendingResolution = repository.resolveByIds(cityIds: [1, 2]);
+
+      final closeFuture = repository.close();
+
+      completer.complete(handle);
+
+      await expectLater(pendingResolution, throwsStateError);
+
+      await closeFuture;
+
+      expect(fakeRepository.resolveCalls, 0);
+      expect(handle.closeCalls, 1);
+    });
   });
 }
 
@@ -473,6 +572,8 @@ class _RecordingCityRepository implements CityRepository {
   int? lastOffset;
 
   int countryCityCountCalls = 0;
+  int resolveCalls = 0;
+  List<int>? lastResolvedIds;
 
   @override
   Future<CitySearchResult> search({
@@ -494,6 +595,14 @@ class _RecordingCityRepository implements CityRepository {
       limit: limit,
       offset: offset,
     );
+  }
+
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    resolveCalls++;
+    lastResolvedIds = List.unmodifiable(cityIds);
+
+    return const [];
   }
 
   @override

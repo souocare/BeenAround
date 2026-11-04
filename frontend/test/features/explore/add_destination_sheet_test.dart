@@ -170,6 +170,11 @@ class FakeCityRepository implements CityRepository {
   }
 
   @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<CountryCityCount>> listCountryCityCounts() async {
     return const [
       CountryCityCount(

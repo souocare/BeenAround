@@ -4,6 +4,7 @@ import '../../domain/city_search_result.dart';
 import 'geography_database.dart';
 import '../../domain/city_sort.dart';
 import '../../domain/country_city_count.dart';
+import '../../domain/city_id_resolution.dart';
 
 class LocalCityRepository implements CityRepository {
   const LocalCityRepository({required this.database});
@@ -184,5 +185,42 @@ class LocalCityRepository implements CityRepository {
       population: row['population'] as int?,
       featureCode: row['feature_code'] as String,
     );
+  }
+
+  @override
+  Future<List<City>> resolveByIds({required List<int> cityIds}) async {
+    final normalizedIds = normalizeCityResolutionIds(cityIds);
+
+    if (normalizedIds.isEmpty) {
+      return const [];
+    }
+
+    final placeholders = List.filled(normalizedIds.length, '?').join(', ');
+
+    final rows = await database.select('''
+    SELECT
+      cities.id,
+      cities.name,
+      cities.ascii_name,
+      cities.country_code,
+      countries.name AS country_name,
+      cities.latitude,
+      cities.longitude,
+      cities.population,
+      cities.feature_code
+    FROM cities
+    JOIN countries
+      ON countries.code = cities.country_code
+    WHERE cities.id IN ($placeholders)
+    ''', normalizedIds);
+
+    final citiesById = <int, City>{
+      for (final row in rows) row['id'] as int: _mapCity(row),
+    };
+
+    return List.unmodifiable([
+      for (final cityId in normalizedIds)
+        if (citiesById.containsKey(cityId)) citiesById[cityId]!,
+    ]);
   }
 }
