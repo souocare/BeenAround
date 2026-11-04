@@ -1,6 +1,9 @@
 """City catalog API schemas."""
 
 from pydantic import BaseModel, ConfigDict
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CityResponse(BaseModel):
@@ -40,3 +43,18 @@ class CountryCityCountListResponse(BaseModel):
     """Country city counts response."""
 
     items: list[CountryCityCountResponse]
+
+
+PositiveCityId = Annotated[int, Field(strict=True, gt=0)]
+
+
+class CityResolveRequest(BaseModel):
+    """Resolve a bounded list of city catalog IDs."""
+
+    city_ids: list[PositiveCityId] = Field(max_length=200)
+
+
+class CityResolveResponse(BaseModel):
+    """Resolved city catalog entries in the requested order."""
+
+    items: list[CityResponse]

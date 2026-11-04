@@ -9,6 +9,8 @@ from app.api.dependencies import CurrentApiUser, DatabaseSession
 from app.repositories.cities import CityRepository
 from app.schemas.cities import (
     CityListResponse,
+    CityResolveRequest,
+    CityResolveResponse,
     CityResponse,
     CountryCityCountListResponse,
     CountryCityCountResponse,
@@ -100,4 +102,39 @@ def list_country_city_counts(
             )
             for country_code, country_name, city_count in rows
         ]
+    )
+
+
+@router.post(
+    "/resolve",
+    response_model=CityResolveResponse,
+)
+def resolve_cities(
+    payload: CityResolveRequest,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> CityResolveResponse:
+    """Resolve city catalog entries by their geographic IDs."""
+
+    repository = CityRepository(session)
+
+    rows = repository.resolve_by_ids(
+        city_ids=payload.city_ids,
+    )
+
+    return CityResolveResponse(
+        items=[
+            CityResponse(
+                id=city.id,
+                name=city.name,
+                ascii_name=city.ascii_name,
+                country_code=city.country_code,
+                country_name=country_name,
+                latitude=city.latitude,
+                longitude=city.longitude,
+                population=city.population,
+                feature_code=city.feature_code,
+            )
+            for city, country_name in rows
+        ],
     )

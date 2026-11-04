@@ -2,6 +2,7 @@
 
 from collections.abc import Generator
 from pathlib import Path
+from httpx import Response
 
 import pytest
 from fastapi.testclient import TestClient
@@ -177,6 +178,21 @@ def web_login(client: TestClient) -> None:
     assert response.status_code == 200
 
 
+def resolve_cities_web(
+    client: TestClient,
+    payload: dict[str, object],
+) -> Response:
+    """Resolve cities using an authenticated Web session."""
+
+    web_login(client)
+
+    return client.post(
+        "/api/v1/cities/resolve",
+        json=payload,
+        headers={"Origin": "http://testserver"},
+    )
+
+
 def mobile_headers(client: TestClient) -> dict[str, str]:
     response = client.post(
         "/api/v1/auth/mobile/login",
@@ -190,6 +206,17 @@ def mobile_headers(client: TestClient) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {response.json()['access_token']}",
     }
+
+
+def resolve_cities(
+    client: TestClient,
+    city_ids: list[object],
+) -> Response:
+    return client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": city_ids},
+        headers=mobile_headers(client),
+    )
 
 
 def test_cities_requires_authentication(cities_client: TestClient) -> None:
@@ -601,3 +628,296 @@ def test_invalid_city_sort_is_rejected(
     )
 
     assert response.status_code == 422
+
+
+def test_resolve_cities_requires_authentication(
+    cities_client: TestClient,
+) -> None:
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [100]},
+    )
+
+    assert response.status_code == 401
+
+
+def test_web_user_can_resolve_cities(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [100]},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "items": [
+            {
+                "id": 100,
+                "name": "Lisbon",
+                "ascii_name": "Lisbon",
+                "country_code": "PT",
+                "country_name": "Portugal",
+                "latitude": 38.72,
+                "longitude": -9.14,
+                "population": 517802,
+                "feature_code": "PPLC",
+            }
+        ]
+    }
+
+
+def test_mobile_user_can_resolve_cities(
+    cities_client: TestClient,
+) -> None:
+    headers = mobile_headers(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [104]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+
+    assert len(items) == 1
+    assert items[0]["id"] == 104
+    assert items[0]["name"] == "Paris"
+    assert items[0]["country_code"] == "FR"
+
+
+def test_resolve_multiple_cities_preserves_requested_order(
+    cities_client: TestClient,
+) -> None:
+    headers = mobile_headers(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [104, 100, 105, 102]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+
+    assert [city["id"] for city in items] == [
+        104,
+        100,
+        105,
+        102,
+    ]
+
+    assert [city["name"] for city in items] == [
+        "Paris",
+        "Lisbon",
+        "São Paulo",
+        "Porto",
+    ]
+
+    assert [city["country_code"] for city in items] == [
+        "FR",
+        "PT",
+        "BR",
+        "PT",
+    ]
+
+
+def test_resolve_cities_deduplicates_ids(
+    cities_client: TestClient,
+) -> None:
+    response = resolve_cities_web(
+        cities_client,
+        {
+            "city_ids": [
+                100,
+                104,
+                100,
+                102,
+                104,
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+
+    assert [city["id"] for city in items] == [
+        100,
+        104,
+        102,
+    ]
+
+
+def test_resolve_cities_omits_unknown_ids(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={
+            "city_ids": [
+                999999,
+                100,
+                888888,
+                104,
+            ]
+        },
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+    assert [city["id"] for city in response.json()["items"]] == [100, 104]
+
+
+def test_resolve_cities_returns_empty_for_unknown_ids(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [999999, 888888]},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
+def test_resolve_cities_accepts_empty_list(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": []},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
+@pytest.mark.parametrize(
+    "city_ids",
+    [
+        [-1],
+        [0],
+        ["100"],
+        [100.5],
+        [True],
+        [None],
+        [100, -1],
+        [100, "104"],
+    ],
+)
+def test_resolve_cities_rejects_invalid_ids(
+    cities_client: TestClient,
+    city_ids: list[object],
+) -> None:
+    response = resolve_cities_web(
+        cities_client,
+        {"city_ids": city_ids},
+    )
+
+    assert response.status_code == 422
+
+
+def test_resolve_cities_accepts_200_ids(
+    cities_client: TestClient,
+) -> None:
+    response = resolve_cities_web(
+        cities_client,
+        {"city_ids": list(range(1, 201))},
+    )
+
+    assert response.status_code == 200
+
+    assert [city["id"] for city in response.json()["items"]] == list(range(100, 107))
+
+
+def test_resolve_cities_rejects_more_than_200_ids(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": list(range(1, 202))},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_resolve_cities_limit_applies_before_deduplication(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [100] * 201},
+        headers={"Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"city_ids": None},
+        {"city_ids": "100"},
+        {"city_ids": 100},
+        {"city_ids": {"id": 100}},
+    ],
+)
+def test_resolve_cities_rejects_invalid_payloads(
+    cities_client: TestClient,
+    payload: dict[str, object],
+) -> None:
+    response = resolve_cities_web(
+        cities_client,
+        payload,
+    )
+
+    assert response.status_code == 422
+
+
+def test_web_resolve_cities_requires_csrf(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [100]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_resolve_cities_rejects_untrusted_web_origin(
+    cities_client: TestClient,
+) -> None:
+    web_login(cities_client)
+
+    response = cities_client.post(
+        "/api/v1/cities/resolve",
+        json={"city_ids": [100]},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid request origin."
