@@ -24,15 +24,37 @@ import '../widgets/visited_cities_list.dart';
 
 import 'country_details_page.dart';
 
+import '../../../residences/application/residences_cubit.dart';
+import '../../../residences/domain/residence_repository.dart';
+
+import '../../../wishlist/application/wishlist_cubit.dart';
+import '../../../wishlist/domain/wishlist_repository.dart';
+
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<VisitedCitiesCubit>(
-      create: (context) =>
-          VisitedCitiesCubit(repository: context.read<CityVisitsRepository>())
-            ..load(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<VisitedCitiesCubit>(
+          create: (context) => VisitedCitiesCubit(
+            repository: context.read<CityVisitsRepository>(),
+          )..load(),
+        ),
+
+        BlocProvider<ResidencesCubit>(
+          create: (context) =>
+              ResidencesCubit(repository: context.read<ResidenceRepository>())
+                ..load(),
+        ),
+
+        BlocProvider<WishlistCubit>(
+          create: (context) =>
+              WishlistCubit(repository: context.read<WishlistRepository>())
+                ..load(),
+        ),
+      ],
       child: const _ExploreView(),
     );
   }
@@ -93,18 +115,29 @@ class _ExploreViewState extends State<_ExploreView> {
     _scrollController.addListener(_updateFloatingAddButton);
   }
 
-  Future<void> _addDestination() async {
+  Future<void> _refreshExploreData() async {
     final exploreCubit = context.read<ExploreCubit>();
     final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
 
+    await Future.wait([
+      if (!exploreCubit.isClosed) exploreCubit.refresh(),
+
+      if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
+
+      if (!residencesCubit.isClosed) residencesCubit.refresh(),
+
+      if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
+    ]);
+  }
+
+  Future<void> _addDestination() async {
     final created = await showAddDestination(context);
 
     if (!created || !mounted) return;
 
-    await Future.wait([
-      if (!exploreCubit.isClosed) exploreCubit.refresh(),
-      if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
-    ]);
+    await _refreshExploreData();
   }
 
   @override
@@ -150,15 +183,7 @@ class _ExploreViewState extends State<_ExploreView> {
         return Stack(
           children: [
             RefreshIndicator(
-              onRefresh: () async {
-                final exploreCubit = context.read<ExploreCubit>();
-                final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
-
-                await Future.wait([
-                  exploreCubit.refresh(),
-                  visitedCitiesCubit.load(),
-                ]);
-              },
+              onRefresh: _refreshExploreData,
               child: CustomScrollView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
