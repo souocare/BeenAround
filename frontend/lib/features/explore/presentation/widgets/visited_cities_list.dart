@@ -17,6 +17,11 @@ import '../../../wishlist/application/wishlist_cubit.dart';
 
 import '../pages/city_details_page.dart';
 import 'explore_city_card.dart';
+import 'dart:async';
+
+import '../../application/visited_cities_state.dart';
+import '../../../residences/application/residences_state.dart';
+import '../../../wishlist/application/wishlist_state.dart';
 
 class VisitedCitiesList extends StatefulWidget {
   const VisitedCitiesList({super.key});
@@ -36,15 +41,51 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   void _retry(BuildContext context) {
-    context.read<ExploreCitiesCubit>().load(
-      visitedCities: context.read<VisitedCitiesCubit>().state,
-      residences: context.read<ResidencesCubit>().state,
-      wishlist: context.read<WishlistCubit>().state,
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final visitedCities = visitedCitiesCubit.state;
+    final residences = residencesCubit.state;
+    final wishlist = wishlistCubit.state;
+
+    var retryingSources = false;
+
+    if (visitedCities.phase == VisitedCitiesPhase.failure) {
+      retryingSources = true;
+      unawaited(visitedCitiesCubit.load());
+    }
+
+    if (residences.phase == ResidencesPhase.failure) {
+      retryingSources = true;
+      unawaited(residencesCubit.refresh());
+    }
+
+    if (wishlist.phase == WishlistPhase.failure) {
+      retryingSources = true;
+      unawaited(wishlistCubit.refresh());
+    }
+
+    if (retryingSources) {
+      // ExplorePage already synchronizes ExploreCitiesCubit
+      // when all source Cubits return to ready.
+      return;
+    }
+
+    // All sources are ready: retry catalog resolution/aggregation.
+    unawaited(
+      context.read<ExploreCitiesCubit>().load(
+        visitedCities: visitedCities,
+        residences: residences,
+        wishlist: wishlist,
+      ),
     );
   }
 
   void _openCity(BuildContext context, int cityId, bool hasOnlyBeen) {
     final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
 
     final exploreCities = context.read<ExploreCitiesCubit>().state.cities;
 
@@ -80,8 +121,12 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     // deleting their final visit.
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => BlocProvider.value(
-          value: visitedCitiesCubit,
+        builder: (_) => MultiBlocProvider(
+          providers: [
+            BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+            BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+            BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+          ],
           child: CityDetailsPage.fromCatalog(city: entry.city),
         ),
       ),
@@ -95,6 +140,9 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
 
     return BlocBuilder<ExploreCitiesCubit, ExploreCitiesState>(
       builder: (context, state) {
+        final visitedCitiesState = context.watch<VisitedCitiesCubit>().state;
+        final residencesState = context.watch<ResidencesCubit>().state;
+        final wishlistState = context.watch<WishlistCubit>().state;
         final cities = filterExploreCities(
           state.cities,
           options: ExploreCitiesFilterOptions(
@@ -106,10 +154,27 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
 
         final hasPreviousData = state.cities.isNotEmpty;
 
-        final isInitialLoading =
-            (state.phase == ExploreCitiesPhase.initial ||
-                state.phase == ExploreCitiesPhase.loading) &&
-            !hasPreviousData;
+        final sourcesLoading =
+            visitedCitiesState.phase == VisitedCitiesPhase.loading ||
+            residencesState.phase == ResidencesPhase.loading ||
+            wishlistState.phase == WishlistPhase.loading;
+
+        final sourcesFailed =
+            visitedCitiesState.phase == VisitedCitiesPhase.failure ||
+            residencesState.phase == ResidencesPhase.failure ||
+            wishlistState.phase == WishlistPhase.failure;
+
+        final hasError =
+            sourcesFailed || state.phase == ExploreCitiesPhase.failure;
+
+        final isLoading =
+            sourcesLoading ||
+            state.phase == ExploreCitiesPhase.initial ||
+            state.phase == ExploreCitiesPhase.loading;
+
+        final isInitialLoading = isLoading && !hasPreviousData && !hasError;
+
+        final isRefreshing = isLoading && hasPreviousData && !hasError;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -224,7 +289,7 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
             // ------------------------------------------------------------
             // Loading
             // ------------------------------------------------------------
-            if (state.phase == ExploreCitiesPhase.loading && hasPreviousData)
+            if (isRefreshing)
               const Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: LinearProgressIndicator(),
@@ -233,7 +298,7 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
             // ------------------------------------------------------------
             // Error
             // ------------------------------------------------------------
-            if (state.phase == ExploreCitiesPhase.failure)
+            if (hasError)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Card(
@@ -244,7 +309,10 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
                       children: [
                         Expanded(
                           child: Text(
-                            state.errorMessage ??
+                            visitedCitiesState.errorMessage ??
+                                residencesState.errorMessage ??
+                                wishlistState.errorMessage ??
+                                state.errorMessage ??
                                 'Unable to load Explore cities.',
                             style: TextStyle(color: colors.onErrorContainer),
                           ),
@@ -264,8 +332,7 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
             // ------------------------------------------------------------
             if (isInitialLoading)
               const AppLoadingState(message: 'Loading cities...')
-            else if (cities.isEmpty &&
-                state.phase != ExploreCitiesPhase.failure)
+            else if (cities.isEmpty && !hasError && !isLoading)
               state.cities.isEmpty
                   ? const AppEmptyState(
                       title: 'No cities visited yet',

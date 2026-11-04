@@ -320,6 +320,21 @@ class _ExploreViewState extends State<_ExploreView> {
   }
 }
 
+/// A consistent, fully loaded country presentation snapshot.
+///
+/// Aggregated statuses and visit summaries always originate
+/// from the same set of ready source states.
+class _CountryTravelSnapshot {
+  const _CountryTravelSnapshot({
+    required this.entries,
+    required this.visitSummaries,
+  });
+
+  final List<ExploreCountryEntry> entries;
+
+  final Map<String, CountryVisitSummary> visitSummaries;
+}
+
 class _ExploreContent extends StatefulWidget {
   const _ExploreContent({
     required this.state,
@@ -340,6 +355,7 @@ class _ExploreContentState extends State<_ExploreContent> {
   int _selectedHistoryTab = 0;
   ExploreDestinationFilter _filter = ExploreDestinationFilter.all;
   ExploreDestinationSort _sort = ExploreDestinationSort.nameAscending;
+  _CountryTravelSnapshot? _lastCompleteCountrySnapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -353,18 +369,49 @@ class _ExploreContentState extends State<_ExploreContent> {
     final wishlistState = context.watch<WishlistCubit>().state;
 
     final countrySourcesReady =
+        state.phase == ExplorePhase.ready &&
         residencesState.phase == ResidencesPhase.ready &&
         wishlistState.phase == WishlistPhase.ready;
 
-    // Keep the aggregates independent from the UI filters. This also lets us
-    // distinguish an empty history from a search/filter with no matches.
-    final allCountryEntries = countrySourcesReady
-        ? aggregateExploreCountries(
-            explore: state,
-            residences: residencesState,
-            wishlist: wishlistState,
-          )
-        : const <ExploreCountryEntry>[];
+    // Only publish a new aggregate when all sources are ready.
+    //
+    // During loading or failure, keep the last complete snapshot.
+    // An empty snapshot is still valid data.
+    if (countrySourcesReady) {
+      final entries = aggregateExploreCountries(
+        explore: state,
+        residences: residencesState,
+        wishlist: wishlistState,
+      );
+
+      final visitSummaries = <String, CountryVisitSummary>{
+        for (final entry in entries)
+          entry.country.code: summarizeCountryVisits(
+            state.visitsForCountry(entry.country.code),
+          ),
+      };
+
+      _lastCompleteCountrySnapshot = _CountryTravelSnapshot(
+        entries: entries,
+        visitSummaries: Map.unmodifiable(visitSummaries),
+      );
+    }
+
+    final snapshot = _lastCompleteCountrySnapshot;
+
+    final hasCompleteCountrySnapshot = snapshot != null;
+
+    final allCountryEntries =
+        snapshot?.entries ?? const <ExploreCountryEntry>[];
+
+    final countrySourcesLoading =
+        state.phase == ExplorePhase.loading ||
+        residencesState.phase == ResidencesPhase.loading ||
+        wishlistState.phase == WishlistPhase.loading;
+
+    final countrySourcesFailed =
+        residencesState.phase == ResidencesPhase.failure ||
+        wishlistState.phase == WishlistPhase.failure;
 
     final countries = filterExploreCountries(
       allCountryEntries,
@@ -596,11 +643,18 @@ class _ExploreContentState extends State<_ExploreContent> {
             ],
           ),
           const SizedBox(height: 12),
-          if (state.phase == ExplorePhase.loading)
+          // ------------------------------------------------------------
+          // Country loading
+          // ------------------------------------------------------------
+          if (countrySourcesLoading && hasCompleteCountrySnapshot)
             const Padding(
               padding: EdgeInsets.only(bottom: 16),
               child: LinearProgressIndicator(),
             ),
+
+          // ------------------------------------------------------------
+          // Country visit refresh error
+          // ------------------------------------------------------------
           if (state.phase == ExplorePhase.failure)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -611,9 +665,32 @@ class _ExploreContentState extends State<_ExploreContent> {
                 onRetry: context.read<ExploreCubit>().refresh,
               ),
             ),
-          if (!countrySourcesReady) ...[
-            if (residencesState.phase == ResidencesPhase.failure ||
-                wishlistState.phase == WishlistPhase.failure)
+
+          // ------------------------------------------------------------
+          // Residence / Wishlist refresh error
+          // ------------------------------------------------------------
+          if (countrySourcesFailed && hasCompleteCountrySnapshot)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _RefreshError(
+                message: 'Some travel statuses could not be refreshed.',
+                onRetry: () {
+                  if (residencesState.phase == ResidencesPhase.failure) {
+                    unawaited(context.read<ResidencesCubit>().refresh());
+                  }
+
+                  if (wishlistState.phase == WishlistPhase.failure) {
+                    unawaited(context.read<WishlistCubit>().refresh());
+                  }
+                },
+              ),
+            ),
+
+          // ------------------------------------------------------------
+          // Country results
+          // ------------------------------------------------------------
+          if (!hasCompleteCountrySnapshot) ...[
+            if (countrySourcesFailed)
               AppErrorState(
                 title: 'Unable to load destinations',
                 message: 'Some travel statuses could not be loaded.',
@@ -621,6 +698,7 @@ class _ExploreContentState extends State<_ExploreContent> {
                   if (residencesState.phase == ResidencesPhase.failure) {
                     unawaited(context.read<ResidencesCubit>().refresh());
                   }
+
                   if (wishlistState.phase == WishlistPhase.failure) {
                     unawaited(context.read<WishlistCubit>().refresh());
                   }
@@ -649,9 +727,7 @@ class _ExploreContentState extends State<_ExploreContent> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _CountryCard(
                   country: entry.country,
-                  summary: summarizeCountryVisits(
-                    state.visitsForCountry(entry.country.code),
-                  ),
+                  summary: snapshot!.visitSummaries[entry.country.code]!,
                   travelSummary: entry.summary,
                 ),
               ),
