@@ -10,8 +10,12 @@ class VisitedCitiesCubit extends Cubit<VisitedCitiesState> {
 
   final CityVisitsRepository _repository;
 
+  int _requestGeneration = 0;
+
   Future<void> load() async {
     if (isClosed) return;
+
+    final generation = ++_requestGeneration;
 
     emit(
       VisitedCitiesState(
@@ -23,7 +27,7 @@ class VisitedCitiesCubit extends Cubit<VisitedCitiesState> {
     try {
       final visits = await _repository.getCityVisits();
 
-      if (isClosed) return;
+      if (!_isCurrent(generation)) return;
 
       emit(
         VisitedCitiesState(
@@ -32,7 +36,7 @@ class VisitedCitiesCubit extends Cubit<VisitedCitiesState> {
         ),
       );
     } catch (_) {
-      if (isClosed) return;
+      if (!_isCurrent(generation)) return;
 
       emit(
         VisitedCitiesState(
@@ -42,5 +46,15 @@ class VisitedCitiesCubit extends Cubit<VisitedCitiesState> {
         ),
       );
     }
+  }
+
+  bool _isCurrent(int generation) {
+    return !isClosed && generation == _requestGeneration;
+  }
+
+  @override
+  Future<void> close() {
+    ++_requestGeneration;
+    return super.close();
   }
 }
