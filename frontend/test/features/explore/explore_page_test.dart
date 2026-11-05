@@ -409,6 +409,9 @@ void main() {
     await tester.pumpWidget(
       MultiRepositoryProvider(
         providers: [
+          RepositoryProvider<CountriesRepository>.value(
+            value: cubit.repository,
+          ),
           RepositoryProvider<CityVisitsRepository>.value(
             value: cityRepository ?? FakeCityVisitsRepository(),
           ),

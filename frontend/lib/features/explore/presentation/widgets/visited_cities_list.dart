@@ -23,6 +23,9 @@ import '../../application/visited_cities_state.dart';
 import '../../../residences/application/residences_state.dart';
 import '../../../wishlist/application/wishlist_state.dart';
 
+import '../../../geography/domain/city_visits_repository.dart';
+import '../../data/countries_repository.dart';
+
 class VisitedCitiesList extends StatefulWidget {
   const VisitedCitiesList({super.key});
 
@@ -87,6 +90,9 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     final residencesCubit = context.read<ResidencesCubit>();
     final wishlistCubit = context.read<WishlistCubit>();
 
+    final cityVisitsRepository = context.read<CityVisitsRepository>();
+    final countriesRepository = context.read<CountriesRepository>();
+
     final exploreCities = context.read<ExploreCitiesCubit>().state.cities;
 
     final entry = exploreCities
@@ -105,9 +111,19 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     if (hasOnlyBeen && visitedCity != null) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => BlocProvider.value(
-            value: visitedCitiesCubit,
-            child: CityDetailsPage(city: visitedCity),
+          builder: (_) => MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<CityVisitsRepository>.value(
+                value: cityVisitsRepository,
+              ),
+              RepositoryProvider<CountriesRepository>.value(
+                value: countriesRepository,
+              ),
+            ],
+            child: BlocProvider<VisitedCitiesCubit>.value(
+              value: visitedCitiesCubit,
+              child: CityDetailsPage(city: visitedCity),
+            ),
           ),
         ),
       );
@@ -121,13 +137,23 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     // deleting their final visit.
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MultiBlocProvider(
+        builder: (_) => MultiRepositoryProvider(
           providers: [
-            BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
-            BlocProvider<ResidencesCubit>.value(value: residencesCubit),
-            BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+            RepositoryProvider<CityVisitsRepository>.value(
+              value: cityVisitsRepository,
+            ),
+            RepositoryProvider<CountriesRepository>.value(
+              value: countriesRepository,
+            ),
           ],
-          child: CityDetailsPage.fromCatalog(city: entry.city),
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+              BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+              BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+            ],
+            child: CityDetailsPage.fromCatalog(city: entry.city),
+          ),
         ),
       ),
     );
