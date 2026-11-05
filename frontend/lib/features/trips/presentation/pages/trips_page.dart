@@ -11,6 +11,7 @@ import '../../domain/trip_status.dart';
 
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_dialog.dart';
+import 'trip_details_page.dart';
 
 enum _TripsFilter { all, upcoming, ongoing, completed }
 
@@ -91,6 +92,16 @@ class _TripsViewState extends State<_TripsView> {
     if (!mounted || !saved) {
       return;
     }
+
+    await context.read<TripsCubit>().refresh();
+  }
+
+  Future<void> _openTripDetails(Trip trip) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => TripDetailsPage(tripId: trip.id)),
+    );
+
+    if (!mounted) return;
 
     await context.read<TripsCubit>().refresh();
   }
@@ -317,6 +328,7 @@ class _TripsViewState extends State<_TripsView> {
           for (final trip in trips) ...[
             TripCard(
               trip: trip,
+              onTap: () => _openTripDetails(trip),
               onEdit: () => _openTripForm(trip: trip),
             ),
             const SizedBox(height: AppSpacing.md),
