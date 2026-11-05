@@ -14,6 +14,12 @@ import '../../domain/trip_status.dart';
 import '../widgets/trip_form_dialog.dart';
 import '../widgets/delete_trip_dialog.dart';
 
+import '../../application/trip_associations_cubit.dart';
+
+import '../../domain/trip_association_repository.dart';
+
+import '../widgets/trip_associated_visits_section.dart';
+
 class TripDetailsPage extends StatelessWidget {
   const TripDetailsPage({required this.tripId, super.key});
 
@@ -21,11 +27,22 @@ class TripDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => TripDetailsCubit(
-        repository: context.read<TripRepository>(),
-        tripId: tripId,
-      )..load(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<TripDetailsCubit>(
+          create: (context) => TripDetailsCubit(
+            repository: context.read<TripRepository>(),
+            tripId: tripId,
+          )..load(),
+        ),
+
+        BlocProvider<TripAssociationsCubit>(
+          create: (context) => TripAssociationsCubit(
+            repository: context.read<TripAssociationRepository>(),
+            tripId: tripId,
+          )..load(),
+        ),
+      ],
       child: const _TripDetailsView(),
     );
   }
@@ -203,54 +220,9 @@ class _TripDetailsView extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xxxl),
 
-            Text(
-              'Journey',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            const SizedBox(height: AppSpacing.xxxl),
 
-            const SizedBox(height: AppSpacing.md),
-
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(
-                  color: colors.outlineVariant.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.route_outlined,
-                    size: 38,
-                    color: colors.onSurfaceVariant,
-                  ),
-
-                  const SizedBox(height: AppSpacing.md),
-
-                  Text(
-                    'Your journey, organized',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  Text(
-                    'Countries, cities and flights will appear here '
-                    'when Trip associations become available.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const TripAssociatedVisitsSection(),
           ],
         ),
       ),

@@ -1,6 +1,8 @@
 import 'package:beenaround/core/network/api_exception.dart';
+import 'package:beenaround/features/explore/data/countries_repository.dart';
 
 import 'package:beenaround/features/trips/domain/trip.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_input.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
 
@@ -9,6 +11,9 @@ import 'package:beenaround/features/trips/presentation/pages/trips_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../application/trip_associations_cubit_test.dart';
+import '../fakes/fake_countries_repository.dart';
 
 class InMemoryTripRepository implements TripRepository {
   InMemoryTripRepository({List<Trip> initialTrips = const []})
@@ -137,8 +142,16 @@ Trip sampleTrip({
 }
 
 Widget buildTestApp(TripRepository repository) {
-  return RepositoryProvider<TripRepository>.value(
-    value: repository,
+  return MultiRepositoryProvider(
+    providers: [
+      RepositoryProvider<TripRepository>.value(value: repository),
+      RepositoryProvider<TripAssociationRepository>(
+        create: (_) => FakeTripAssociationRepository(),
+      ),
+      RepositoryProvider<CountriesRepository>(
+        create: (_) => FakeCountriesRepository(),
+      ),
+    ],
     child: const MaterialApp(home: Scaffold(body: TripsPage())),
   );
 }

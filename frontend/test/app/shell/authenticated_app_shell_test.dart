@@ -1,6 +1,7 @@
 import 'package:beenaround/app/shell/authenticated_app_shell.dart';
 import 'package:beenaround/app/theme/app_theme.dart';
 import 'package:beenaround/features/auth/domain/authenticated_user.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,8 @@ import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dar
 
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
+
+import '../../features/trips/application/trip_associations_cubit_test.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   @override
@@ -276,6 +279,9 @@ void main() {
           ),
           RepositoryProvider<TripRepository>(
             create: (_) => FakeTripRepository(),
+          ),
+          RepositoryProvider<TripAssociationRepository>(
+            create: (_) => FakeTripAssociationRepository(),
           ),
         ],
         child: MultiBlocProvider(
