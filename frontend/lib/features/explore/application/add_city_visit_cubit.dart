@@ -5,16 +5,21 @@ import '../../../core/network/api_exception.dart';
 import '../../geography/domain/city_visits_repository.dart';
 import '../../geography/domain/country_visit_date_expansion.dart';
 import '../../geography/domain/new_country_visit_input.dart';
+import '../../trips/domain/trip_association_repository.dart';
 import '../domain/country_visit_date_validator.dart';
 import 'add_city_visit_state.dart';
 import 'pending_city_visit_creation.dart';
 
 class AddCityVisitCubit extends Cubit<AddCityVisitState> {
-  AddCityVisitCubit({required CityVisitsRepository repository})
-    : _repository = repository,
-      super(const AddCityVisitState());
+  AddCityVisitCubit({
+    required CityVisitsRepository repository,
+    TripAssociationRepository? tripAssociationRepository,
+  }) : _repository = repository,
+       _tripAssociationRepository = tripAssociationRepository,
+       super(const AddCityVisitState());
 
   final CityVisitsRepository _repository;
+  final TripAssociationRepository? _tripAssociationRepository;
 
   Future<bool> submit({
     required int cityId,
@@ -25,9 +30,11 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
     String? countryVisitId,
     NewCountryVisitInput? newCountryVisit,
     CountryVisitDateExpansion? countryDateExpansion,
+    String? tripId,
   }) async {
     if (isClosed ||
         state.isSubmitting ||
+        state.hasCreatedVisit ||
         state.phase == AddCityVisitPhase.success) {
       return false;
     }
@@ -39,6 +46,7 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
           errorMessage: 'Please select a city.',
         ),
       );
+
       return false;
     }
 
@@ -56,15 +64,38 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
           errorMessage: dateError,
         ),
       );
+
       return false;
+    }
+
+    final normalizedTripId = tripId?.trim();
+
+    if (normalizedTripId != null && normalizedTripId.isEmpty) {
+      emit(
+        const AddCityVisitState(
+          phase: AddCityVisitPhase.failure,
+          errorMessage: 'Please select a valid Trip.',
+        ),
+      );
+
+      return false;
+    }
+
+    if (normalizedTripId != null && _tripAssociationRepository == null) {
+      throw StateError(
+        'TripAssociationRepository is required when a Trip is selected.',
+      );
     }
 
     final validStartedOn = startedOn!;
     final validEndedOn = endedOn!;
+
     final validStartPrecision = startedOnPrecision ?? VisitDatePrecision.day;
+
     final validEndPrecision = endedOnPrecision ?? VisitDatePrecision.day;
 
-    // A confirmation must match the exact request that generated it.
+    // A country date expansion confirmation must match the exact
+    // creation request that generated it.
     if (countryDateExpansion != null) {
       final pending = state.pendingCreation;
 
@@ -87,6 +118,7 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
             errorMessage: 'The country visit confirmation is no longer valid.',
           ),
         );
+
         return false;
       }
     }
@@ -94,7 +126,7 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
     emit(const AddCityVisitState(phase: AddCityVisitPhase.submitting));
 
     try {
-      await _repository.createCityVisit(
+      final createdVisit = await _repository.createCityVisit(
         cityId: cityId,
         startedOn: validStartedOn,
         endedOn: validEndedOn,
@@ -107,9 +139,20 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
 
       if (isClosed) return false;
 
-      emit(const AddCityVisitState(phase: AddCityVisitPhase.success));
+      final createdVisitId = createdVisit.id;
 
-      return true;
+      if (normalizedTripId == null) {
+        emit(
+          AddCityVisitState(
+            phase: AddCityVisitPhase.success,
+            createdVisitId: createdVisitId,
+          ),
+        );
+
+        return true;
+      }
+
+      return _associateVisit(tripId: normalizedTripId, visitId: createdVisitId);
     } on CountryVisitDateExpansionRequired catch (error) {
       if (isClosed) return false;
 
@@ -120,6 +163,7 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
             errorMessage: 'Invalid country visit expansion proposal.',
           ),
         );
+
         return false;
       }
 
@@ -130,6 +174,7 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
             errorMessage: 'The country visit proposal does not match.',
           ),
         );
+
         return false;
       }
 
@@ -174,8 +219,87 @@ class AddCityVisitCubit extends Cubit<AddCityVisitState> {
     }
   }
 
+  Future<bool> retryAssociation() async {
+    if (isClosed || state.isSubmitting || !state.hasAssociationFailure) {
+      return false;
+    }
+
+    final tripId = state.selectedTripId;
+    final visitId = state.createdVisitId;
+
+    if (tripId == null || visitId == null) {
+      return false;
+    }
+
+    return _associateVisit(tripId: tripId, visitId: visitId);
+  }
+
+  Future<bool> _associateVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    emit(
+      AddCityVisitState(
+        phase: AddCityVisitPhase.associating,
+        createdVisitId: visitId,
+        selectedTripId: tripId,
+      ),
+    );
+
+    try {
+      await _tripAssociationRepository!.addCityVisit(
+        tripId: tripId,
+        visitId: visitId,
+      );
+
+      if (isClosed) return false;
+
+      emit(
+        AddCityVisitState(
+          phase: AddCityVisitPhase.success,
+          createdVisitId: visitId,
+          selectedTripId: tripId,
+        ),
+      );
+
+      return true;
+    } on ApiException catch (error) {
+      if (isClosed) return false;
+
+      emit(
+        AddCityVisitState(
+          phase: AddCityVisitPhase.associationFailure,
+          createdVisitId: visitId,
+          selectedTripId: tripId,
+          errorMessage:
+              'Your visit was saved, but we could not add it '
+              'to the selected Trip. ${error.message}',
+        ),
+      );
+
+      return false;
+    } catch (_) {
+      if (isClosed) return false;
+
+      emit(
+        AddCityVisitState(
+          phase: AddCityVisitPhase.associationFailure,
+          createdVisitId: visitId,
+          selectedTripId: tripId,
+          errorMessage:
+              'Your visit was saved, but we could not add it '
+              'to the selected Trip. Please try again.',
+        ),
+      );
+
+      return false;
+    }
+  }
+
   void clearError() {
-    if (isClosed || state.phase != AddCityVisitPhase.failure) return;
+    if (isClosed || state.phase != AddCityVisitPhase.failure) {
+      return;
+    }
 
     emit(const AddCityVisitState());
   }

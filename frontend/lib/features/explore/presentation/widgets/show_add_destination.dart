@@ -14,6 +14,8 @@ import '../../../residences/application/save_residence_cubit.dart';
 
 import '../../../wishlist/domain/wishlist_repository.dart';
 import '../../../wishlist/application/add_wishlist_entry_cubit.dart';
+import '../../../trips/domain/trip_association_repository.dart';
+import '../../../trips/domain/trip_repository.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -25,6 +27,9 @@ Future<bool> showAddDestination(
   final cityRepository = context.read<CityRepository>();
   final residenceRepository = context.read<ResidenceRepository>();
   final wishlistRepository = context.read<WishlistRepository>();
+  final tripRepository = context.read<TripRepository>();
+
+  final tripAssociationRepository = context.read<TripAssociationRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
 
@@ -33,15 +38,22 @@ Future<bool> showAddDestination(
       providers: [
         RepositoryProvider<CityRepository>.value(value: cityRepository),
         RepositoryProvider<CountriesRepository>.value(value: repository),
+        RepositoryProvider<TripRepository>.value(value: tripRepository),
       ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider<ExploreCubit>.value(value: exploreCubit),
           BlocProvider<AddCountryVisitCubit>(
-            create: (_) => AddCountryVisitCubit(repository: repository),
+            create: (_) => AddCountryVisitCubit(
+              repository: repository,
+              tripAssociationRepository: tripAssociationRepository,
+            ),
           ),
           BlocProvider<AddCityVisitCubit>(
-            create: (_) => AddCityVisitCubit(repository: cityVisitsRepository),
+            create: (_) => AddCityVisitCubit(
+              repository: cityVisitsRepository,
+              tripAssociationRepository: tripAssociationRepository,
+            ),
           ),
           BlocProvider<SaveResidenceCubit>(
             create: (_) => SaveResidenceCubit(repository: residenceRepository),

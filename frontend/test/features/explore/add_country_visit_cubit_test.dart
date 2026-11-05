@@ -8,6 +8,7 @@ import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   int createCalls = 0;
@@ -75,6 +76,31 @@ class FakeCountriesRepository implements CountriesRepository {
         updatedAt: DateTime(2026, 10, 21),
       ),
     );
+  }
+}
+
+class FakeTripAssociationRepository extends Fake
+    implements TripAssociationRepository {
+  int addCountryCalls = 0;
+
+  String? receivedTripId;
+  String? receivedVisitId;
+
+  Future<void> Function()? addHandler;
+
+  @override
+  Future<void> addCountryVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    addCountryCalls++;
+
+    receivedTripId = tripId;
+    receivedVisitId = visitId;
+
+    if (addHandler != null) {
+      await addHandler!();
+    }
   }
 }
 
@@ -404,6 +430,201 @@ void main() {
         cubit.state.errorMessage,
         'A start date precision requires a start date.',
       );
+
+      await cubit.close();
+    });
+    test('creates a visit without associating a Trip', () async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final tripRepository = FakeTripAssociationRepository();
+
+      final cubit = AddCountryVisitCubit(
+        repository: countriesRepository,
+        tripAssociationRepository: tripRepository,
+      );
+
+      final result = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+      );
+
+      expect(result, isTrue);
+
+      expect(countriesRepository.createCalls, 1);
+      expect(tripRepository.addCountryCalls, 0);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.success);
+      expect(cubit.state.createdVisitId, 'visit-1');
+      expect(cubit.state.selectedTripId, isNull);
+
+      await cubit.close();
+    });
+    test('creates a visit and associates it with a selected Trip', () async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final tripRepository = FakeTripAssociationRepository();
+
+      final cubit = AddCountryVisitCubit(
+        repository: countriesRepository,
+        tripAssociationRepository: tripRepository,
+      );
+
+      final result = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: 'trip-1',
+      );
+
+      expect(result, isTrue);
+
+      expect(countriesRepository.createCalls, 1);
+      expect(tripRepository.addCountryCalls, 1);
+
+      expect(tripRepository.receivedTripId, 'trip-1');
+      expect(tripRepository.receivedVisitId, 'visit-1');
+
+      expect(cubit.state.phase, AddCountryVisitPhase.success);
+      expect(cubit.state.createdVisitId, 'visit-1');
+      expect(cubit.state.selectedTripId, 'trip-1');
+
+      await cubit.close();
+    });
+    test('association failure preserves the created visit', () async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final tripRepository = FakeTripAssociationRepository();
+
+      tripRepository.addHandler = () async {
+        throw const ApiException(
+          type: ApiErrorType.server,
+          message: 'Server unavailable.',
+          statusCode: 500,
+        );
+      };
+
+      final cubit = AddCountryVisitCubit(
+        repository: countriesRepository,
+        tripAssociationRepository: tripRepository,
+      );
+
+      final firstResult = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: 'trip-1',
+      );
+
+      expect(firstResult, isFalse);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.associationFailure);
+
+      expect(cubit.state.createdVisitId, 'visit-1');
+      expect(cubit.state.selectedTripId, 'trip-1');
+
+      expect(countriesRepository.createCalls, 1);
+      expect(tripRepository.addCountryCalls, 1);
+
+      // Submitting again must never create another visit.
+      final duplicateResult = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: 'trip-1',
+      );
+
+      expect(duplicateResult, isFalse);
+      expect(countriesRepository.createCalls, 1);
+
+      // Clearing the error must not reset the partial success.
+      cubit.clearError();
+
+      expect(cubit.state.phase, AddCountryVisitPhase.associationFailure);
+
+      // The backend becomes available again.
+      tripRepository.addHandler = null;
+
+      final retryResult = await cubit.retryAssociation();
+
+      expect(retryResult, isTrue);
+
+      expect(countriesRepository.createCalls, 1);
+      expect(tripRepository.addCountryCalls, 2);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.success);
+
+      await cubit.close();
+    });
+    test('prevents duplicate association submissions', () async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final tripRepository = FakeTripAssociationRepository();
+
+      final pending = Completer<void>();
+
+      tripRepository.addHandler = () => pending.future;
+
+      final cubit = AddCountryVisitCubit(
+        repository: countriesRepository,
+        tripAssociationRepository: tripRepository,
+      );
+
+      final first = cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: 'trip-1',
+      );
+
+      // Allow visit creation to complete and association to begin.
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.associating);
+
+      final second = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: 'trip-1',
+      );
+
+      expect(second, isFalse);
+
+      expect(countriesRepository.createCalls, 1);
+      expect(tripRepository.addCountryCalls, 1);
+
+      pending.complete();
+
+      expect(await first, isTrue);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.success);
+
+      await cubit.close();
+    });
+    test('rejects an empty Trip ID before creating the visit', () async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final tripRepository = FakeTripAssociationRepository();
+
+      final cubit = AddCountryVisitCubit(
+        repository: countriesRepository,
+        tripAssociationRepository: tripRepository,
+      );
+
+      final result = await cubit.submit(
+        countryCode: 'JP',
+        startedOn: DateTime(2027, 4, 10),
+        endedOn: DateTime(2027, 4, 25),
+        tripId: '   ',
+      );
+
+      expect(result, isFalse);
+
+      expect(countriesRepository.createCalls, 0);
+      expect(tripRepository.addCountryCalls, 0);
+
+      expect(cubit.state.phase, AddCountryVisitPhase.failure);
 
       await cubit.close();
     });

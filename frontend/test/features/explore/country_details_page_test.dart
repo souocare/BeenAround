@@ -30,6 +30,9 @@ import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import '../residences/application/fake_residence_repository.dart';
 import '../wishlist/application/fake_wishlist_repository.dart';
+import 'package:beenaround/features/trips/domain/trip.dart';
+import 'package:beenaround/features/trips/domain/trip_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -228,6 +231,24 @@ CountryVisit visit({
   );
 }
 
+class FakeCountryDetailsTripRepository extends Fake implements TripRepository {
+  @override
+  Future<List<Trip>> getTrips() async => const [];
+}
+
+class FakeCountryDetailsTripAssociationRepository extends Fake
+    implements TripAssociationRepository {
+  @override
+  Future<void> addCountryVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    throw UnimplementedError(
+      'Trip association is not exercised by these tests.',
+    );
+  }
+}
+
 void main() {
   const portugal = Country(
     code: 'PT',
@@ -301,6 +322,13 @@ void main() {
           ),
           RepositoryProvider<WishlistRepository>.value(
             value: FakeWishlistRepository(),
+          ),
+          RepositoryProvider<TripRepository>(
+            create: (_) => FakeCountryDetailsTripRepository(),
+          ),
+
+          RepositoryProvider<TripAssociationRepository>(
+            create: (_) => FakeCountryDetailsTripAssociationRepository(),
           ),
         ],
         child: MaterialApp(

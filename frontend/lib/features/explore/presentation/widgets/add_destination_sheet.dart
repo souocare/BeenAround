@@ -38,6 +38,9 @@ import 'add_destination_lived_form.dart';
 import '../../domain/destination_status.dart';
 import 'residence_overlap_confirmation_dialog.dart';
 
+import '../../../trips/domain/trip_repository.dart';
+import '../../../trips/presentation/widgets/trip_selection_field.dart';
+
 enum _CityCountryAssociationMode { none, existing, createNew }
 
 class AddDestinationSheet extends StatefulWidget {
@@ -58,6 +61,11 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   VisitDatePrecision? _countryStartedOnPrecision;
   VisitDatePrecision? _countryEndedOnPrecision;
   bool _showDateErrors = false;
+  String? _selectedTripId;
+  bool _isSelectedTripValid = true;
+  String? _selectedCityTripId;
+  bool _isSelectedCityTripValid = true;
+  bool _allowCompletedVisitPop = false;
 
   DateTime? _cityStartedOn;
   DateTime? _cityEndedOn;
@@ -192,8 +200,65 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     context.read<AddWishlistEntryCubit>().clearError();
   }
 
+  Future<void> _retryCountryTripAssociation() async {
+    final cubit = context.read<AddCountryVisitCubit>();
+
+    if (!cubit.state.hasAssociationFailure || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    final success = await cubit.retryAssociation();
+
+    if (!mounted || !success) return;
+
+    _closeAfterSuccessfulVisit();
+  }
+
+  Future<void> _retryCityTripAssociation() async {
+    final cubit = context.read<AddCityVisitCubit>();
+
+    if (!cubit.state.hasAssociationFailure || _isAnySubmissionInProgress) {
+      return;
+    }
+
+    final success = await cubit.retryAssociation();
+
+    if (!mounted || !success) {
+      return;
+    }
+
+    _closeAfterSuccessfulVisit();
+  }
+
+  void _finishCityVisitWithoutTrip() {
+    final state = context.read<AddCityVisitCubit>().state;
+
+    if (!state.hasAssociationFailure || !state.hasCreatedVisit) {
+      return;
+    }
+
+    _closeAfterSuccessfulVisit();
+  }
+
+  void _finishCountryVisitWithoutTrip() {
+    final state = context.read<AddCountryVisitCubit>().state;
+
+    if (!state.hasAssociationFailure || !state.hasCreatedVisit) {
+      return;
+    }
+
+    _closeAfterSuccessfulVisit();
+  }
+
+  bool get _hasPendingTripAssociation {
+    return context.read<AddCountryVisitCubit>().state.hasAssociationFailure ||
+        context.read<AddCityVisitCubit>().state.hasAssociationFailure;
+  }
+
   void _selectStatus(DestinationStatus status) {
-    if (_isAnySubmissionInProgress || _selectedStatus == status) {
+    if (_isAnySubmissionInProgress ||
+        _hasPendingTripAssociation ||
+        _selectedStatus == status) {
       return;
     }
 
@@ -250,7 +315,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Future<void> _pickNewCountryStartDate() async {
-    if (_isAnySubmissionInProgress) return;
+    if (_isAnySubmissionInProgress || _hasPendingTripAssociation) {
+      return;
+    }
 
     final selected = await showPartialVisitDatePicker(
       context: context,
@@ -366,6 +433,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     _invalidateResidenceProposal();
   }
 
+  void _closeAfterSuccessfulVisit() {
+    if (!mounted) return;
+
+    setState(() {
+      _allowCompletedVisitPop = true;
+    });
+
+    Navigator.of(context).pop(true);
+  }
+
   Future<bool> _confirmCountryDateExpansion({
     required int cityId,
     required DateTime? startedOn,
@@ -373,6 +450,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     required VisitDatePrecision? startedOnPrecision,
     required VisitDatePrecision? endedOnPrecision,
     required String countryVisitId,
+    String? tripId,
   }) async {
     final cubit = context.read<AddCityVisitCubit>();
 
@@ -406,6 +484,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       endedOnPrecision: endedOnPrecision,
       countryVisitId: countryVisitId,
       countryDateExpansion: expansion,
+      tripId: tripId,
     );
 
     if (!mounted || cubit.isClosed) return false;
@@ -877,17 +956,22 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
       if (country == null) return;
 
+      if (!_isSelectedTripValid) {
+        return;
+      }
+
       final success = await context.read<AddCountryVisitCubit>().submit(
         countryCode: country.code,
         startedOn: _startedOn,
         endedOn: _endedOn,
         startedOnPrecision: _startedOnPrecision,
         endedOnPrecision: _endedOnPrecision,
+        tripId: _selectedTripId,
       );
 
       if (!mounted || !success) return;
 
-      Navigator.of(context).pop(true);
+      _closeAfterSuccessfulVisit();
       return;
     }
 
@@ -895,6 +979,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     final city = _selectedCity;
 
     if (city == null) return;
+
+    if (!_isSelectedCityTripValid) {
+      return;
+    }
 
     // Validate explicit association with an existing country visit.
     if (_associationMode == _CityCountryAssociationMode.existing) {
@@ -956,6 +1044,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     final startedOnPrecision = _startedOnPrecision;
     final endedOnPrecision = _endedOnPrecision;
 
+    final selectedCityTripId = _selectedCityTripId;
+
     var success = await cityCubit.submit(
       cityId: city.id,
       startedOn: startedOn,
@@ -964,6 +1054,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       endedOnPrecision: endedOnPrecision,
       countryVisitId: countryVisitId,
       newCountryVisit: newCountryVisit,
+      tripId: selectedCityTripId,
     );
 
     if (!mounted) return;
@@ -979,12 +1070,13 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         startedOnPrecision: startedOnPrecision,
         endedOnPrecision: endedOnPrecision,
         countryVisitId: countryVisitId,
+        tripId: selectedCityTripId,
       );
     }
 
     if (!mounted || !success) return;
 
-    Navigator.of(context).pop(true);
+    _closeAfterSuccessfulVisit();
   }
 
   Future<void> _saveResidence() async {
@@ -1229,76 +1321,89 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return SafeArea(
-      top: false,
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colors.onSurfaceVariant.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(2),
+    return PopScope(
+      canPop:
+          _allowCompletedVisitPop ||
+          (!_isAnySubmissionInProgress && !_hasPendingTripAssociation),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.onSurfaceVariant.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                if (!_selectingCountry && !_selectingCity)
-                  BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
-                    builder: (context, countryState) {
-                      return BlocBuilder<AddCityVisitCubit, AddCityVisitState>(
-                        builder: (context, cityState) {
-                          final isSubmitting =
-                              countryState.isSubmitting ||
-                              cityState.isSubmitting;
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  if (!_selectingCountry && !_selectingCity)
+                    BlocBuilder<AddCountryVisitCubit, AddCountryVisitState>(
+                      builder: (context, countryState) {
+                        return BlocBuilder<
+                          AddCityVisitCubit,
+                          AddCityVisitState
+                        >(
+                          builder: (context, cityState) {
+                            final isSubmitting =
+                                countryState.isSubmitting ||
+                                cityState.isSubmitting;
 
-                          return BlocBuilder<
-                            AddWishlistEntryCubit,
-                            AddWishlistEntryState
-                          >(
-                            builder: (context, wishlistState) {
-                              return IconButton(
-                                tooltip: 'Close',
-                                onPressed:
-                                    isSubmitting || wishlistState.isSubmitting
-                                    ? null
-                                    : () => Navigator.of(context).pop(false),
-                                icon: const Icon(Icons.close),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  )
-                else
-                  const SizedBox(width: 48),
-                const Expanded(
-                  child: Text(
-                    'Add Destination',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+                            return BlocBuilder<
+                              AddWishlistEntryCubit,
+                              AddWishlistEntryState
+                            >(
+                              builder: (context, wishlistState) {
+                                return IconButton(
+                                  tooltip: 'Close',
+                                  onPressed:
+                                      isSubmitting ||
+                                          wishlistState.isSubmitting ||
+                                          countryState.hasAssociationFailure
+                                      ? null
+                                      : () => Navigator.of(context).pop(false),
+                                  icon: const Icon(Icons.close),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    )
+                  else
+                    const SizedBox(width: 48),
+                  const Expanded(
+                    child: Text(
+                      'Add Destination',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 48),
-              ],
+                  const SizedBox(width: 48),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: _selectingCountry
-                ? _buildCountryPicker(context)
-                : _selectingCity
-                ? _buildCityPicker(context)
-                : _buildForm(context, theme, colors),
-          ),
-          if (!_selectingCountry && !_selectingCity) _buildFooter(context),
-        ],
+            const Divider(height: 1),
+            Expanded(
+              child: _selectingCountry
+                  ? _buildCountryPicker(context)
+                  : _selectingCity
+                  ? _buildCityPicker(context)
+                  : _buildForm(context, theme, colors),
+            ),
+            if (!_selectingCountry && !_selectingCity) _buildFooter(context),
+          ],
+        ),
       ),
     );
   }
@@ -1418,11 +1523,69 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
             const SizedBox(height: 24),
           ],
 
-          const _ComingLaterCard(
-            title: 'Associated Trip',
-            subtitle: 'Optionally organize this visit into a Trip later.',
-            icon: Icons.luggage_outlined,
-          ),
+          if (_isCountry)
+            TripSelectionField(
+              key: const Key('countryVisitTripSelection'),
+              repository: context.read<TripRepository>(),
+              selectedTripId: _selectedTripId,
+              enabled:
+                  !_isAnySubmissionInProgress &&
+                  !context.read<AddCountryVisitCubit>().state.hasCreatedVisit,
+              onChanged: (tripId) {
+                if (_isAnySubmissionInProgress ||
+                    context
+                        .read<AddCountryVisitCubit>()
+                        .state
+                        .hasCreatedVisit) {
+                  return;
+                }
+
+                setState(() {
+                  _selectedTripId = tripId;
+                });
+
+                context.read<AddCountryVisitCubit>().clearError();
+              },
+              onSelectionValidityChanged: (isValid) {
+                if (!mounted || _isSelectedTripValid == isValid) {
+                  return;
+                }
+
+                setState(() {
+                  _isSelectedTripValid = isValid;
+                });
+              },
+            )
+          else
+            TripSelectionField(
+              key: const Key('cityVisitTripSelection'),
+              repository: context.read<TripRepository>(),
+              selectedTripId: _selectedCityTripId,
+              enabled:
+                  !_isAnySubmissionInProgress &&
+                  !context.read<AddCityVisitCubit>().state.hasCreatedVisit,
+              onChanged: (tripId) {
+                if (_isAnySubmissionInProgress ||
+                    context.read<AddCityVisitCubit>().state.hasCreatedVisit) {
+                  return;
+                }
+
+                setState(() {
+                  _selectedCityTripId = tripId;
+                });
+
+                context.read<AddCityVisitCubit>().clearError();
+              },
+              onSelectionValidityChanged: (isValid) {
+                if (!mounted || _isSelectedCityTripValid == isValid) {
+                  return;
+                }
+
+                setState(() {
+                  _isSelectedCityTripValid = isValid;
+                });
+              },
+            ),
         ],
         if (_isWish)
           AddDestinationWishForm(
@@ -1651,6 +1814,15 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                 ? countryState.phase == AddCountryVisitPhase.success
                 : cityState.phase == AddCityVisitPhase.success;
 
+            final hasCountryAssociationFailure =
+                isCountry && countryState.hasAssociationFailure;
+
+            final hasCityAssociationFailure =
+                !isCountry && cityState.hasAssociationFailure;
+
+            final hasTripAssociationFailure =
+                hasCountryAssociationFailure || hasCityAssociationFailure;
+
             final errorMessage = isCountry
                 ? countryState.errorMessage
                 : cityState.errorMessage;
@@ -1673,6 +1845,48 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                     ),
                     const SizedBox(height: 12),
                   ],
+                  if (hasTripAssociationFailure) ...[
+                    const SizedBox(height: 8),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        key: Key(
+                          isCountry
+                              ? 'retryCountryTripAssociationButton'
+                              : 'retryCityTripAssociationButton',
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : isCountry
+                            ? _retryCountryTripAssociation
+                            : _retryCityTripAssociation,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry Association'),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: Key(
+                          isCountry
+                              ? 'finishCountryVisitWithoutTripButton'
+                              : 'finishCityVisitWithoutTripButton',
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : isCountry
+                            ? _finishCountryVisitWithoutTrip
+                            : _finishCityVisitWithoutTrip,
+                        child: const Text('Finish Without Trip'),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -1691,7 +1905,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                               !hasSelection ||
                               isSubmitting ||
                               isSuccess ||
-                              isAwaitingConfirmation
+                              isAwaitingConfirmation ||
+                              hasTripAssociationFailure ||
+                              (isCountry && !_isSelectedTripValid) ||
+                              (!isCountry && !_isSelectedCityTripValid)
                           ? null
                           : _saveVisit,
                       icon: isSubmitting

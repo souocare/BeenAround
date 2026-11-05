@@ -8,6 +8,7 @@ import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
@@ -100,6 +101,31 @@ CountryVisitDateExpansion sampleExpansion() {
       'ended_on_precision': 'day',
     },
   });
+}
+
+class FakeCityTripAssociationRepository extends Fake
+    implements TripAssociationRepository {
+  int addCityCalls = 0;
+
+  String? receivedTripId;
+  String? receivedVisitId;
+
+  Future<void> Function()? addCityHandler;
+
+  @override
+  Future<void> addCityVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    addCityCalls++;
+
+    receivedTripId = tripId;
+    receivedVisitId = visitId;
+
+    if (addCityHandler != null) {
+      await addCityHandler!();
+    }
+  }
 }
 
 void main() {
@@ -645,6 +671,159 @@ void main() {
       expect(cubit.state.phase, AddCityVisitPhase.idle);
       expect(cubit.state.pendingExpansion, isNull);
       expect(repository.createCalls, 1);
+
+      await cubit.close();
+    });
+    test('creates a city visit without Trip association', () async {
+      final repository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeCityTripAssociationRepository();
+
+      final cubit = AddCityVisitCubit(
+        repository: repository,
+        tripAssociationRepository: associationRepository,
+      );
+
+      final success = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2026, 10, 10),
+        endedOn: DateTime(2026, 10, 15),
+      );
+
+      expect(success, isTrue);
+
+      expect(repository.createCalls, 1);
+      expect(associationRepository.addCityCalls, 0);
+
+      expect(cubit.state.phase, AddCityVisitPhase.success);
+      expect(cubit.state.createdVisitId, 'visit-1');
+      expect(cubit.state.selectedTripId, isNull);
+
+      await cubit.close();
+    });
+    test('creates a city visit and associates it with a Trip', () async {
+      final repository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeCityTripAssociationRepository();
+
+      final cubit = AddCityVisitCubit(
+        repository: repository,
+        tripAssociationRepository: associationRepository,
+      );
+
+      final success = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2026, 10, 10),
+        endedOn: DateTime(2026, 10, 15),
+        tripId: 'trip-portugal',
+      );
+
+      expect(success, isTrue);
+
+      expect(repository.createCalls, 1);
+      expect(associationRepository.addCityCalls, 1);
+
+      expect(associationRepository.receivedTripId, 'trip-portugal');
+
+      expect(associationRepository.receivedVisitId, 'visit-1');
+
+      expect(cubit.state.phase, AddCityVisitPhase.success);
+      expect(cubit.state.createdVisitId, 'visit-1');
+      expect(cubit.state.selectedTripId, 'trip-portugal');
+
+      await cubit.close();
+    });
+    test(
+      'retries Trip association without recreating the city visit',
+      () async {
+        final repository = FakeCityVisitsRepository();
+
+        final associationRepository = FakeCityTripAssociationRepository();
+
+        associationRepository.addCityHandler = () async {
+          throw Exception('Association failed.');
+        };
+
+        final cubit = AddCityVisitCubit(
+          repository: repository,
+          tripAssociationRepository: associationRepository,
+        );
+
+        final firstAttempt = await cubit.submit(
+          cityId: 2267057,
+          startedOn: DateTime(2026, 10, 10),
+          endedOn: DateTime(2026, 10, 15),
+          tripId: 'trip-portugal',
+        );
+
+        expect(firstAttempt, isFalse);
+
+        expect(repository.createCalls, 1);
+        expect(associationRepository.addCityCalls, 1);
+
+        expect(cubit.state.phase, AddCityVisitPhase.associationFailure);
+
+        expect(cubit.state.hasCreatedVisit, isTrue);
+        expect(cubit.state.createdVisitId, 'visit-1');
+
+        // The association service becomes available.
+        associationRepository.addCityHandler = null;
+
+        final retrySucceeded = await cubit.retryAssociation();
+
+        expect(retrySucceeded, isTrue);
+
+        // The original city visit was not recreated.
+        expect(repository.createCalls, 1);
+
+        // Only the association was retried.
+        expect(associationRepository.addCityCalls, 2);
+
+        expect(associationRepository.receivedVisitId, 'visit-1');
+
+        expect(cubit.state.phase, AddCityVisitPhase.success);
+
+        await cubit.close();
+      },
+    );
+    test('does not recreate a city visit after association failure', () async {
+      final repository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeCityTripAssociationRepository();
+
+      associationRepository.addCityHandler = () async {
+        throw Exception('Association failed.');
+      };
+
+      final cubit = AddCityVisitCubit(
+        repository: repository,
+        tripAssociationRepository: associationRepository,
+      );
+
+      final firstAttempt = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2026, 10, 10),
+        endedOn: DateTime(2026, 10, 15),
+        tripId: 'trip-portugal',
+      );
+
+      expect(firstAttempt, isFalse);
+
+      expect(repository.createCalls, 1);
+      expect(cubit.state.hasAssociationFailure, isTrue);
+
+      // An accidental second submission must not create another visit.
+      final secondAttempt = await cubit.submit(
+        cityId: 2267057,
+        startedOn: DateTime(2026, 10, 10),
+        endedOn: DateTime(2026, 10, 15),
+        tripId: 'trip-portugal',
+      );
+
+      expect(secondAttempt, isFalse);
+
+      expect(repository.createCalls, 1);
+      expect(associationRepository.addCityCalls, 1);
 
       await cubit.close();
     });
