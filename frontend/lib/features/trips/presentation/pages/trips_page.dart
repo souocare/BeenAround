@@ -140,9 +140,15 @@ class _TripsViewState extends State<_TripsView> {
 
         IconButton.filled(
           key: const Key('createTripButton'),
-          onPressed: () => _openTripForm(),
           tooltip: 'Create Trip',
-          icon: const Icon(Icons.add),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          onPressed: () => _openTripForm(),
+          icon: const Icon(Icons.add, size: 26),
         ),
       ],
     );

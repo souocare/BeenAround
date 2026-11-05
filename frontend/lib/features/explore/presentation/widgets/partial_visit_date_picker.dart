@@ -26,38 +26,113 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
       : requestedInitial.isAfter(maximum)
       ? maximum
       : requestedInitial;
-  final requestedPrecision = initialValue?.precision ?? VisitDatePrecision.day;
-
-  final initialPrecision = allowedPrecisions.contains(requestedPrecision)
-      ? requestedPrecision
-      : allowedPrecisions.first;
 
   final precision = await showModalBottomSheet<VisitDatePrecision>(
     context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
     builder: (sheetContext) {
+      final theme = Theme.of(sheetContext);
+      final colors = theme.colorScheme;
+
+      String titleFor(VisitDatePrecision precision) {
+        return switch (precision) {
+          VisitDatePrecision.day => 'Exact date',
+          VisitDatePrecision.month => 'Month and year',
+          VisitDatePrecision.year => 'Year only',
+        };
+      }
+
+      String subtitleFor(VisitDatePrecision precision) {
+        return switch (precision) {
+          VisitDatePrecision.day => 'Choose a specific day',
+          VisitDatePrecision.month => 'When you only know the month',
+          VisitDatePrecision.year => 'When you only know the year',
+        };
+      }
+
       return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'How precise is your date?',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              for (final option in allowedPrecisions)
-                ListTile(
-                  title: Text(switch (option) {
-                    VisitDatePrecision.day => 'Exact date',
-                    VisitDatePrecision.month => 'Month and year',
-                    VisitDatePrecision.year => 'Year only',
-                  }),
-                  trailing: option == initialPrecision
-                      ? const Icon(Icons.check)
-                      : null,
-                  onTap: () => Navigator.pop(sheetContext, option),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Choose how much detail you remember.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Material(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (
+                      var index = 0;
+                      index < allowedPrecisions.length;
+                      index++
+                    ) ...[
+                      if (index > 0)
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          indent: 16,
+                          endIndent: 16,
+                          color: colors.outlineVariant,
+                        ),
+
+                      ListTile(
+                        key: Key(
+                          'datePrecision_${allowedPrecisions[index].name}',
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 8,
+                        ),
+
+                        title: Text(
+                          titleFor(allowedPrecisions[index]),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(subtitleFor(allowedPrecisions[index])),
+                        ),
+
+                        onTap: () {
+                          Navigator.of(
+                            sheetContext,
+                          ).pop(allowedPrecisions[index]);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),

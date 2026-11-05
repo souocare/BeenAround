@@ -13,21 +13,82 @@ import '../../domain/trip.dart';
 import '../../domain/trip_input.dart';
 import '../../domain/trip_repository.dart';
 
-/// Opens the Create/Edit Trip dialog.
+/// Opens the Create/Edit Trip form.
 ///
-/// Returns true when the Trip was successfully persisted.
+/// Uses a bottom sheet on compact screens and a dialog on larger screens.
+/// Returns true only when the Trip was successfully persisted.
 Future<bool> showTripFormDialog({
   required BuildContext context,
   Trip? trip,
 }) async {
   final repository = context.read<TripRepository>();
+  final width = MediaQuery.sizeOf(context).width;
 
-  final result = await showDialog<bool>(
+  Widget buildContent() {
+    return BlocProvider(
+      create: (_) => SaveTripCubit(repository: repository),
+      child: TripFormDialog(trip: trip),
+    );
+  }
+
+  if (width >= 800) {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: buildContent(),
+        ),
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  final result = await showModalBottomSheet<bool>(
     context: context,
-    builder: (dialogContext) {
-      return BlocProvider(
-        create: (_) => SaveTripCubit(repository: repository),
-        child: TripFormDialog(trip: trip),
+    isScrollControlled: true,
+    useSafeArea: true,
+    isDismissible: false,
+    enableDrag: false,
+    showDragHandle: false,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      final height = MediaQuery.sizeOf(sheetContext).height * 0.94;
+
+      return AnimatedPadding(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: SizedBox(
+          height: height,
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      sheetContext,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              Expanded(child: buildContent()),
+            ],
+          ),
+        ),
       );
     },
   );
@@ -244,6 +305,31 @@ class _TripFormDialogState extends State<TripFormDialog> {
     );
   }
 
+  InputDecoration _tripInputDecoration({required String hint}) {
+    final colors = Theme.of(context).colorScheme;
+
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide.none,
+    );
+
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: colors.surfaceContainerHigh,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border,
+      disabledBorder: border,
+      errorBorder: border.copyWith(borderSide: BorderSide(color: colors.error)),
+      focusedErrorBorder: border.copyWith(
+        borderSide: BorderSide(color: colors.error),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      counterText: '',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -259,174 +345,169 @@ class _TripFormDialogState extends State<TripFormDialog> {
       builder: (context, state) {
         final isSubmitting = state.isSubmitting;
 
-        return Dialog(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _isEditing ? 'Edit Trip' : 'New Trip',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-
-                        IconButton(
-                          tooltip: 'Close',
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.of(context).pop(false),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: AppSpacing.sm),
-
-                    Text(
-                      _isEditing
-                          ? 'Update your journey details.'
-                          : 'Give your journey a name. You can add destinations later.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xl),
-
-                    TextFormField(
-                      key: const Key('tripNameField'),
-                      controller: _nameController,
-                      enabled: !isSubmitting,
-                      maxLength: 160,
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                      validator: _validateName,
-                      decoration: const InputDecoration(
-                        labelText: 'Trip name',
-                        hintText: 'e.g. Japan 2027',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.md),
-
-                    TextFormField(
-                      key: const Key('tripDescriptionField'),
-                      controller: _descriptionController,
-                      enabled: !isSubmitting,
-                      maxLength: 5000,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (optional)',
-                        hintText: 'A few words about your journey...',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xl),
-
-                    Text(
-                      'When did this trip happen?',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xs),
-
-                    Text(
-                      'Dates are optional. You can record an exact day, a month or just a year.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    _buildDateField(
-                      label: 'Start date',
-                      isStart: true,
-                      isSubmitting: isSubmitting,
-                    ),
-
-                    const SizedBox(height: AppSpacing.lg),
-
-                    _buildDateField(
-                      label: 'End date',
-                      isStart: false,
-                      isSubmitting: isSubmitting,
-                    ),
-
-                    if (state.hasError) ...[
-                      const SizedBox(height: AppSpacing.lg),
-
-                      Container(
-                        key: const Key('tripSaveError'),
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.errorContainer,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Text(
-                          state.errorMessage ?? 'Unable to save your Trip.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colors.onErrorContainer,
-                          ),
+                    Expanded(
+                      child: Text(
+                        _isEditing ? 'Edit Trip' : 'New Trip',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
+                    ),
 
-                    const SizedBox(height: AppSpacing.xl),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.of(context).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-
-                        const SizedBox(width: AppSpacing.sm),
-
-                        FilledButton.icon(
-                          key: const Key('saveTripButton'),
-                          onPressed: isSubmitting ? null : _submit,
-                          icon: isSubmitting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.check),
-                          label: Text(
-                            isSubmitting
-                                ? 'Saving...'
-                                : _isEditing
-                                ? 'Save Changes'
-                                : 'Create Trip',
-                          ),
-                        ),
-                      ],
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close),
                     ),
                   ],
                 ),
-              ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                Text(
+                  _isEditing
+                      ? 'Update your journey details.'
+                      : 'Give your journey a name. You can add destinations later.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                TextFormField(
+                  key: const Key('tripNameField'),
+                  controller: _nameController,
+                  enabled: !isSubmitting,
+                  maxLength: 160,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  validator: _validateName,
+                  style: theme.textTheme.bodyLarge,
+                  decoration: _tripInputDecoration(hint: 'Trip name'),
+                ),
+
+                const SizedBox(height: 12),
+
+                TextFormField(
+                  key: const Key('tripDescriptionField'),
+                  controller: _descriptionController,
+                  enabled: !isSubmitting,
+                  maxLength: 5000,
+                  minLines: 2,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.newline,
+                  style: theme.textTheme.bodyLarge,
+                  decoration: _tripInputDecoration(
+                    hint: 'Description (optional)',
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                Text(
+                  'When did this trip happen?',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.xs),
+
+                Text(
+                  'Dates are optional. You can record an exact day, a month or just a year.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                _buildDateField(
+                  label: 'Start date',
+                  isStart: true,
+                  isSubmitting: isSubmitting,
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                _buildDateField(
+                  label: 'End date',
+                  isStart: false,
+                  isSubmitting: isSubmitting,
+                ),
+
+                if (state.hasError) ...[
+                  const SizedBox(height: AppSpacing.lg),
+
+                  Container(
+                    key: const Key('tripSaveError'),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: colors.errorContainer,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Text(
+                      state.errorMessage ?? 'Unable to save your Trip.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: AppSpacing.xl),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+
+                    const SizedBox(width: AppSpacing.sm),
+
+                    Flexible(
+                      child: FilledButton.icon(
+                        key: const Key('saveTripButton'),
+                        onPressed: isSubmitting ? null : _submit,
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(
+                          isSubmitting
+                              ? 'Saving...'
+                              : _isEditing
+                              ? 'Save Changes'
+                              : 'Create Trip',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         );
