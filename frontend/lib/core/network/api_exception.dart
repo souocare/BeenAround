@@ -7,6 +7,7 @@ enum ApiErrorType {
   server,
   unknown,
   conflict,
+  validation,
 }
 
 class ApiException implements Exception {

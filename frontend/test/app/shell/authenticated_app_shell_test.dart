@@ -1,6 +1,7 @@
 import 'package:beenaround/app/shell/authenticated_app_shell.dart';
 import 'package:beenaround/app/theme/app_theme.dart';
 import 'package:beenaround/features/auth/domain/authenticated_user.dart';
+import 'package:beenaround/features/trips/domain/trip_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/app/theme/theme_cubit.dart';
@@ -36,6 +37,9 @@ import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_entry_input.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_creation_result.dart';
+
+import 'package:beenaround/features/trips/domain/trip.dart';
+import 'package:beenaround/features/trips/domain/trip_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   @override
@@ -197,6 +201,31 @@ class FakeWishlistRepository implements WishlistRepository {
   }
 }
 
+class FakeTripRepository implements TripRepository {
+  @override
+  Future<List<Trip>> getTrips() async => const [];
+
+  @override
+  Future<Trip> getTrip({required String tripId}) {
+    throw UnimplementedError('Trip details are not used by these tests.');
+  }
+
+  @override
+  Future<Trip> createTrip({required TripInput input}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Trip> updateTrip({required String tripId, required TripInput input}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteTrip({required String tripId}) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   late ThemeCubit themeCubit;
   const user = AuthenticatedUser(
@@ -244,6 +273,9 @@ void main() {
           ),
           RepositoryProvider<WishlistRepository>(
             create: (_) => FakeWishlistRepository(),
+          ),
+          RepositoryProvider<TripRepository>(
+            create: (_) => FakeTripRepository(),
           ),
         ],
         child: MultiBlocProvider(
@@ -310,7 +342,7 @@ void main() {
       await pumpShell(tester);
 
       final destinations = <String, String>{
-        'Trips': 'Organize your travel memories.',
+        'Trips': 'Every journey tells a story.',
         'Map': 'Discover your travel history on the map.',
         'Statistics': 'Explore your travel statistics.',
       };
@@ -326,6 +358,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text(entry.value), findsOneWidget);
+
+        if (entry.key == 'Trips') {
+          expect(find.text('Your journeys start here'), findsOneWidget);
+        }
       }
 
       await tester.tap(
@@ -363,7 +399,7 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Trips'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Organize your travel memories.'), findsOneWidget);
+      expect(find.text('Every journey tells a story.'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(TextButton, 'Statistics'));
       await tester.pumpAndSettle();
@@ -385,19 +421,19 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Organize your travel memories.'), findsOneWidget);
+      expect(find.text('Every journey tells a story.'), findsOneWidget);
 
       tester.view.physicalSize = const Size(1200, 800);
       await tester.pumpAndSettle();
 
       expect(find.byType(NavigationBar), findsNothing);
-      expect(find.text('Organize your travel memories.'), findsOneWidget);
+      expect(find.text('Every journey tells a story.'), findsOneWidget);
 
       tester.view.physicalSize = const Size(390, 844);
       await tester.pumpAndSettle();
 
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.text('Organize your travel memories.'), findsOneWidget);
+      expect(find.text('Every journey tells a story.'), findsOneWidget);
 
       final navigationBar = tester.widget<NavigationBar>(
         find.byType(NavigationBar),
@@ -516,7 +552,8 @@ void main() {
 
       await tester.tap(find.text('Trips'));
       await tester.pumpAndSettle();
-      expect(find.text('Organize your travel memories.'), findsOneWidget);
+
+      expect(find.text('Every journey tells a story.'), findsOneWidget);
 
       await tester.tap(find.text('Map'));
       await tester.pumpAndSettle();

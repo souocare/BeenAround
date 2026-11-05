@@ -45,6 +45,13 @@ abstract final class ApiErrorMapper {
             statusCode: 404,
           );
         }
+        if (statusCode == 422) {
+          return const ApiException(
+            type: ApiErrorType.validation,
+            message: 'The provided information is invalid.',
+            statusCode: 422,
+          );
+        }
 
         if (statusCode != null && statusCode >= 500) {
           return ApiException(

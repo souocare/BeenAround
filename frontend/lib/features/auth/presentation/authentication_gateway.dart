@@ -30,6 +30,8 @@ import '../../residences/domain/residence_repository.dart';
 import '../../residences/data/remote/api_residence_repository.dart';
 import '../../wishlist/domain/wishlist_repository.dart';
 import '../../wishlist/data/remote/api_wishlist_repository.dart';
+import '../../trips/domain/trip_repository.dart';
+import '../../trips/data/remote/api_trip_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -253,6 +255,9 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
         ),
         RepositoryProvider<WishlistRepository>(
           create: (_) => ApiWishlistRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<TripRepository>(
+          create: (_) => ApiTripRepository(apiClient: widget.apiClient),
         ),
       ],
       child: BlocProvider<ExploreCubit>(

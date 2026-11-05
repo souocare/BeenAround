@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../theme/theme_cubit.dart';
 import '../../features/explore/presentation/pages/explore_page.dart';
+import '../../features/trips/presentation/pages/trips_page.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/foundation.dart';
 
@@ -155,11 +156,7 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
   Widget _buildDestinationContent(BuildContext context) {
     return switch (_selectedDestination) {
       AppDestination.explore => const ExplorePage(),
-      AppDestination.trips => const _DestinationPlaceholder(
-        title: 'Trips',
-        subtitle: 'Organize your travel memories.',
-        icon: Icons.luggage_outlined,
-      ),
+      AppDestination.trips => const TripsPage(),
       AppDestination.map => const _DestinationPlaceholder(
         title: 'Map',
         subtitle: 'Discover your travel history on the map.',
