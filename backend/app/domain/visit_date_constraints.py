@@ -55,3 +55,35 @@ def range_check() -> str:
                 END
         )
     """
+
+def optional_range_check() -> str:
+    """Validate an optional partial-date interval.
+
+    Either boundary may be unknown. When both dates exist,
+    the interval must be chronologically possible.
+    """
+
+    return """
+        started_on IS NULL
+        OR ended_on IS NULL
+        OR (
+            started_on <=
+                CASE ended_on_precision
+                    WHEN 'day' THEN ended_on
+                    WHEN 'month'
+                        THEN date(
+                            ended_on,
+                            'start of month',
+                            '+1 month',
+                            '-1 day'
+                        )
+                    WHEN 'year'
+                        THEN date(
+                            ended_on,
+                            'start of year',
+                            '+1 year',
+                            '-1 day'
+                        )
+                END
+        )
+    """

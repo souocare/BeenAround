@@ -12,8 +12,9 @@ from app.models import (
     country,  # noqa: F401
     country_visit,  # noqa: F401
     residence,  # noqa: F401
+    trip,  # noqa: F401
     user,  # noqa: F401
-    wishlist_entry  # noqa: F401
+    wishlist_entry,  # noqa: F401
 )
 
 config = context.config
