@@ -76,11 +76,23 @@ void main() {
       }
     });
 
-    test('maps unexpected status codes', () {
+    test('maps HTTP 422 to validation error', () {
       final result = ApiErrorMapper.fromDioException(exceptionForStatus(422));
 
-      expect(result.type, ApiErrorType.unknown);
+      expect(result.type, ApiErrorType.validation);
       expect(result.statusCode, 422);
+      expect(result.message, 'The provided information is invalid.');
+    });
+
+    test('maps unexpected status codes to unknown', () {
+      for (final statusCode in [400, 405, 409, 429]) {
+        final result = ApiErrorMapper.fromDioException(
+          exceptionForStatus(statusCode),
+        );
+
+        expect(result.type, ApiErrorType.unknown);
+        expect(result.statusCode, statusCode);
+      }
     });
 
     test('maps unexpected Dio errors', () {
