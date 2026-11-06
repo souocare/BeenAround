@@ -1,5 +1,6 @@
 import 'dart:async';
-
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -59,6 +60,9 @@ class _CityBrowserState extends State<CityBrowser> {
 
   bool _globalPaginationExhausted = false;
   bool _countryPaginationExhausted = false;
+  final TextEditingController _globalSearchController = TextEditingController();
+
+  bool _globalSearchNeedsReload = false;
 
   @override
   void initState() {
@@ -212,19 +216,18 @@ class _CityBrowserState extends State<CityBrowser> {
 
     final generation = ++_cityRequestGeneration;
 
+    // Preserve the global query and its loaded results.
+    // If a search was interrupted, reload it when returning.
+    _globalSearchNeedsReload =
+        _globalQuery.trim().isNotEmpty &&
+        (_globalSearchLoading || _globalCities.isEmpty);
+
     setState(() {
       _selectedCountry = country;
 
-      _globalQuery = '';
-      _globalCities = const [];
       _globalSearchLoading = false;
-      _globalSearchError = null;
 
-      _globalTotal = 0;
-      _globalLoadingMore = false;
-      _globalLoadMoreError = null;
-      _globalPaginationExhausted = false;
-
+      // Country-specific navigation starts with a fresh search.
       _cityQuery = '';
       _cities = const [];
       _citiesError = null;
@@ -375,19 +378,13 @@ class _CityBrowserState extends State<CityBrowser> {
       _searchDebounce?.cancel();
       ++_cityRequestGeneration;
 
+      final shouldReloadGlobalSearch = _globalSearchNeedsReload;
+      _globalSearchNeedsReload = false;
+
       setState(() {
         _selectedCountry = null;
 
-        _globalQuery = '';
-        _globalCities = const [];
-        _globalSearchLoading = false;
-        _globalSearchError = null;
-
-        _globalTotal = 0;
-        _globalLoadingMore = false;
-        _globalLoadMoreError = null;
-        _globalPaginationExhausted = false;
-
+        // Clear only the country-specific state.
         _cityQuery = '';
         _cities = const [];
         _citiesError = null;
@@ -398,6 +395,12 @@ class _CityBrowserState extends State<CityBrowser> {
         _countryLoadMoreError = null;
         _countryPaginationExhausted = false;
       });
+
+      // A previous global search might have been interrupted.
+      // Restart it only when necessary.
+      if (shouldReloadGlobalSearch && _globalQuery.trim().isNotEmpty) {
+        _onGlobalQueryChanged(_globalQuery);
+      }
 
       return;
     }
@@ -549,12 +552,10 @@ class _CityBrowserState extends State<CityBrowser> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: TextField(
-            key: const Key('destinationCitySearch'),
-            decoration: const InputDecoration(
-              hintText: 'Search countries or cities...',
-              prefixIcon: Icon(Icons.search),
-            ),
+          child: _AdaptiveCitySearchField(
+            fieldKey: const Key('destinationCitySearch'),
+            controller: _globalSearchController,
+            placeholder: 'Search countries or cities...',
             onChanged: _onGlobalQueryChanged,
           ),
         ),
@@ -677,6 +678,121 @@ class _CityBrowserState extends State<CityBrowser> {
     );
   }
 
+  Future<void> _showCupertinoSortSheet() async {
+    final selected = await showCupertinoModalPopup<CitySort>(
+      context: context,
+      builder: (popupContext) {
+        final colors = Theme.of(context).colorScheme;
+
+        Widget sortAction(CitySort sort, String label) {
+          return CupertinoActionSheetAction(
+            key: Key('cityBrowserSortOption_${sort.name}'),
+            onPressed: () => Navigator.of(popupContext).pop(sort),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label),
+                if (_citySort == sort) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    CupertinoIcons.check_mark,
+                    size: 17,
+                    color: colors.primary,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return CupertinoActionSheet(
+          title: const Text('Sort cities by'),
+          actions: [
+            sortAction(CitySort.population, 'Population'),
+            sortAction(CitySort.name, 'Name A–Z'),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            key: const Key('cityBrowserSortCancel'),
+            onPressed: () => Navigator.of(popupContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+
+    _changeSort(selected);
+  }
+
+  Widget _buildCitySortSelector() {
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (isIOS) {
+      return CupertinoButton(
+        key: const Key('cityBrowserSort'),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 36),
+        onPressed: _showCupertinoSortSheet,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_citySort == CitySort.population ? 'Population' : 'Name A–Z'),
+            const SizedBox(width: 5),
+            const Icon(CupertinoIcons.chevron_down, size: 13),
+          ],
+        ),
+      );
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return PopupMenuButton<CitySort>(
+        key: const Key('cityBrowserSort'),
+        initialValue: _citySort,
+        tooltip: 'Sort cities',
+        onSelected: _changeSort,
+        itemBuilder: (_) => [
+          CheckedPopupMenuItem(
+            value: CitySort.population,
+            checked: _citySort == CitySort.population,
+            child: const Text('Population'),
+          ),
+          CheckedPopupMenuItem(
+            value: CitySort.name,
+            checked: _citySort == CitySort.name,
+            child: const Text('Name A–Z'),
+          ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _citySort == CitySort.population ? 'Population' : 'Name A–Z',
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return DropdownButton<CitySort>(
+      key: const Key('cityBrowserSort'),
+      value: _citySort,
+      underline: const SizedBox.shrink(),
+      items: const [
+        DropdownMenuItem(value: CitySort.population, child: Text('Population')),
+        DropdownMenuItem(value: CitySort.name, child: Text('Name A–Z')),
+      ],
+      onChanged: (sort) {
+        if (sort != null) _changeSort(sort);
+      },
+    );
+  }
+
   Widget _buildCountryCitiesView() {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -685,12 +801,9 @@ class _CityBrowserState extends State<CityBrowser> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: TextField(
-            key: const Key('cityBrowserCountrySearch'),
-            decoration: const InputDecoration(
-              hintText: 'Search cities in this country...',
-              prefixIcon: Icon(Icons.search),
-            ),
+          child: _AdaptiveCitySearchField(
+            fieldKey: const Key('cityBrowserCountrySearch'),
+            placeholder: 'Search cities in this country...',
             onChanged: _onCityQueryChanged,
           ),
         ),
@@ -706,24 +819,7 @@ class _CityBrowserState extends State<CityBrowser> {
                 ),
               ),
               const Spacer(),
-              DropdownButton<CitySort>(
-                key: const Key('cityBrowserSort'),
-                value: _citySort,
-                underline: const SizedBox.shrink(),
-                items: const [
-                  DropdownMenuItem(
-                    value: CitySort.population,
-                    child: Text('Population'),
-                  ),
-                  DropdownMenuItem(
-                    value: CitySort.name,
-                    child: Text('Name A–Z'),
-                  ),
-                ],
-                onChanged: (sort) {
-                  if (sort != null) _changeSort(sort);
-                },
-              ),
+              _buildCitySortSelector(),
             ],
           ),
         ),
@@ -899,5 +995,44 @@ class _CityBrowserState extends State<CityBrowser> {
     _searchDebounce?.cancel();
     ++_cityRequestGeneration;
     super.dispose();
+  }
+}
+
+class _AdaptiveCitySearchField extends StatelessWidget {
+  const _AdaptiveCitySearchField({
+    required this.fieldKey,
+    required this.placeholder,
+    required this.onChanged,
+    this.controller,
+  });
+
+  final Key fieldKey;
+  final String placeholder;
+  final ValueChanged<String> onChanged;
+  final TextEditingController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final useCupertino = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (useCupertino) {
+      return CupertinoSearchTextField(
+        key: fieldKey,
+        controller: controller,
+        placeholder: placeholder,
+        onChanged: onChanged,
+      );
+    }
+
+    return TextField(
+      key: fieldKey,
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: placeholder,
+        prefixIcon: const Icon(Icons.search),
+      ),
+      onChanged: onChanged,
+    );
   }
 }

@@ -2311,6 +2311,7 @@ class _DestinationCountryCard extends StatelessWidget {
       color: colors.surfaceContainerLow,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
+        key: const Key('destinationCountrySelector'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
@@ -2332,19 +2333,10 @@ class _DestinationCountryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: country == null
-                    ? Container(
-                        width: 46,
-                        height: 46,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: colors.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.place,
-                          color: colors.primary,
-                          size: 24,
-                        ),
+                    ? Icon(
+                        Icons.place_outlined,
+                        color: colors.primary,
+                        size: 24,
                       )
                     : CountryFlag(countryCode: country!.code, size: 46),
               ),
@@ -2395,6 +2387,7 @@ class _DestinationCityCard extends StatelessWidget {
       color: colors.surfaceContainerLow,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
+        key: const Key('destinationCitySelector'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
