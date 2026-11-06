@@ -1,3 +1,5 @@
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -10,6 +12,8 @@ import '../widgets/show_delete_city_visit.dart';
 import '../../../geography/domain/city.dart';
 import '../../../residences/application/residences_cubit.dart';
 import '../../../wishlist/application/wishlist_cubit.dart';
+import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
+import '../../../wishlist/presentation/widgets/show_edit_wishlist_note.dart';
 
 class CityDetailsPage extends StatelessWidget {
   const CityDetailsPage({required VisitedCity this.city, super.key})
@@ -36,6 +40,36 @@ class CityDetailsPage extends StatelessWidget {
     }
 
     return null;
+  }
+
+  Future<void> _editWishlistNote(
+    BuildContext context,
+    WishlistEntry entry,
+  ) async {
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final updated = await showEditWishlistNote(context: context, entry: entry);
+
+    if (!updated || !context.mounted || wishlistCubit.isClosed) return;
+
+    await wishlistCubit.refresh();
+  }
+
+  Future<void> _removeFromWishlist(
+    BuildContext context,
+    WishlistEntry entry,
+  ) async {
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final removed = await showRemoveWishlistEntry(
+      context: context,
+      entry: entry,
+      destinationName: cityName,
+    );
+
+    if (!removed || !context.mounted || wishlistCubit.isClosed) return;
+
+    await wishlistCubit.refresh();
   }
 
   Future<void> _editVisit(
@@ -110,6 +144,7 @@ class CityDetailsPage extends StatelessWidget {
               residencesState?.residencesForCity(cityId).isNotEmpty ?? false;
 
           final isWishlisted = wishlistState?.containsCity(cityId) ?? false;
+          final wishlistEntry = wishlistState?.entryForCity(cityId);
 
           return RefreshIndicator(
             onRefresh: context.read<VisitedCitiesCubit>().load,
@@ -157,7 +192,7 @@ class CityDetailsPage extends StatelessWidget {
                                   ),
                                   if (visits.isNotEmpty ||
                                       hasLived ||
-                                      isWishlisted) ...[
+                                      wishlistEntry != null) ...[
                                     const SizedBox(height: 12),
                                     Wrap(
                                       key: const Key('cityTravelStatuses'),
@@ -187,14 +222,16 @@ class CityDetailsPage extends StatelessWidget {
                                             label: Text('Lived'),
                                           ),
 
-                                        if (isWishlisted)
-                                          const Chip(
-                                            key: Key('cityStatus-wish'),
-                                            avatar: Icon(
-                                              Icons.favorite_border_rounded,
-                                              size: 18,
+                                        if (wishlistEntry != null)
+                                          WishlistEntryControls(
+                                            onRemove: () => _removeFromWishlist(
+                                              context,
+                                              wishlistEntry,
                                             ),
-                                            label: Text('Wishlist'),
+                                            onEditNote: () => _editWishlistNote(
+                                              context,
+                                              wishlistEntry,
+                                            ),
                                           ),
                                       ],
                                     ),

@@ -1,3 +1,6 @@
+import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
+import 'package:beenaround/features/wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,6 +14,8 @@ import '../widgets/show_add_destination.dart';
 import '../widgets/show_delete_country_visit.dart';
 import '../widgets/show_edit_country_visit.dart';
 import '../../../map/presentation/widgets/country_map.dart';
+import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
+import '../../../wishlist/presentation/widgets/show_edit_wishlist_note.dart';
 
 enum _CountryTab { overview, visits, cities, trips }
 
@@ -41,6 +46,16 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     }
   }
 
+  Future<void> _editWishlistNote(WishlistEntry entry) async {
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final updated = await showEditWishlistNote(context: context, entry: entry);
+
+    if (!updated || !mounted || wishlistCubit.isClosed) return;
+
+    await wishlistCubit.refresh();
+  }
+
   Future<void> _editVisit(CountryVisit visit) async {
     final exploreCubit = context.read<ExploreCubit>();
 
@@ -69,6 +84,20 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     }
   }
 
+  Future<void> _removeFromWishlist(WishlistEntry entry) async {
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final removed = await showRemoveWishlistEntry(
+      context: context,
+      entry: entry,
+      destinationName: widget.country.name,
+    );
+
+    if (!removed || !mounted || wishlistCubit.isClosed) return;
+
+    await wishlistCubit.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -87,6 +116,11 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
         builder: (context, state) {
           final visits = state.visitsForCountry(widget.country.code).toList()
             ..sort(_compareVisits);
+          final wishlistState = context.watch<WishlistCubit>().state;
+
+          final wishlistEntry = wishlistState.entryForCountry(
+            widget.country.code,
+          );
 
           final isVisited = visits.isNotEmpty;
           final lastVisited = _lastVisitedDate(visits);
@@ -108,6 +142,15 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                           isVisited: isVisited,
                           visitCount: visits.length,
                         ),
+
+                        if (wishlistEntry != null) ...[
+                          const SizedBox(height: 12),
+
+                          WishlistEntryControls(
+                            onRemove: () => _removeFromWishlist(wishlistEntry),
+                            onEditNote: () => _editWishlistNote(wishlistEntry),
+                          ),
+                        ],
 
                         const SizedBox(height: 24),
 

@@ -241,6 +241,8 @@ class FakeWishlistRepository implements WishlistRepository {
 
   int loadCalls = 0;
   Future<List<WishlistEntry>> Function()? entriesHandler;
+  int deleteCalls = 0;
+  String? deletedEntryId;
 
   @override
   Future<List<WishlistEntry>> getWishlistEntries() async {
@@ -274,8 +276,14 @@ class FakeWishlistRepository implements WishlistRepository {
   }
 
   @override
-  Future<void> deleteWishlistEntry({required String entryId}) {
-    throw UnimplementedError();
+  Future<void> deleteWishlistEntry({required String entryId}) async {
+    deleteCalls++;
+    deletedEntryId = entryId;
+
+    entries = [
+      for (final entry in entries)
+        if (entry.id != entryId) entry,
+    ];
   }
 }
 
@@ -2364,5 +2372,73 @@ void main() {
     expect(find.text('Portugal · 1 visit'), findsOneWidget);
 
     expect(wishlistRepository.loadCalls, 3);
+  });
+  testWidgets('removing country wishlist preserves existing country visits', (
+    tester,
+  ) async {
+    final countryRepository = FakeExploreRepository(
+      countries: [portugal],
+      visits: [visit('country-visit-1', 'PT')],
+    );
+
+    final wishlistRepository = FakeWishlistRepository(
+      entries: [wishlistCountry(id: 'wishlist-portugal', countryCode: 'PT')],
+    );
+
+    final cubit = ExploreCubit(repository: countryRepository);
+    addTearDown(cubit.close);
+
+    await cubit.load();
+
+    await pumpExplore(tester, cubit, wishlistRepository: wishlistRepository);
+
+    await tester.pumpAndSettle();
+
+    // Portugal is visited and also belongs to the Wishlist.
+    expect(cubit.state.visitedCountryCount, 1);
+    expect(wishlistRepository.entries, hasLength(1));
+
+    // Open Country Details from Explore.
+    final portugalFinder = find.text('Portugal').first;
+
+    await tester.ensureVisible(portugalFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(portugalFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Country Details'), findsOneWidget);
+
+    // Wishlist is represented by an interactive heart.
+    final wishlistButton = find.byKey(const Key('wishlistStatusButton'));
+
+    expect(wishlistButton, findsOneWidget);
+
+    await tester.tap(wishlistButton);
+    await tester.pumpAndSettle();
+
+    // Removal requires explicit confirmation.
+    expect(find.text('Remove from Wishlist?'), findsOneWidget);
+    expect(wishlistRepository.deleteCalls, 0);
+
+    await tester.tap(find.byKey(const Key('confirmRemoveWishlist')));
+
+    await tester.pumpAndSettle();
+
+    // Only the Wishlist entry was deleted.
+    expect(wishlistRepository.deleteCalls, 1);
+    expect(wishlistRepository.deletedEntryId, 'wishlist-portugal');
+    expect(wishlistRepository.entries, isEmpty);
+
+    // The Wishlist control disappears after refreshing.
+    expect(find.byKey(const Key('wishlistStatusButton')), findsNothing);
+
+    // Country visits remain untouched.
+    expect(countryRepository.visits, hasLength(1));
+    expect(countryRepository.visits.single.id, 'country-visit-1');
+    expect(cubit.state.visitedCountryCount, 1);
+
+    // No unexpected Flutter exceptions.
+    expect(tester.takeException(), isNull);
   });
 }

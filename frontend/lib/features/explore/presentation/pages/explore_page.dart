@@ -796,11 +796,20 @@ class _CountryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           final exploreCubit = context.read<ExploreCubit>();
+          final wishlistCubit = context.read<WishlistCubit>();
+          final wishlistRepository = context.read<WishlistRepository>();
+
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => BlocProvider.value(
-                value: exploreCubit,
-                child: CountryDetailsPage(country: country),
+              builder: (_) => RepositoryProvider<WishlistRepository>.value(
+                value: wishlistRepository,
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider<ExploreCubit>.value(value: exploreCubit),
+                    BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+                  ],
+                  child: CountryDetailsPage(country: country),
+                ),
               ),
             ),
           );
