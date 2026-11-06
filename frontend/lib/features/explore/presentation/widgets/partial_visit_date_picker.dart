@@ -1,8 +1,11 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/partial_visit_date.dart';
 import '../../../../core/models/visit_date_precision.dart';
 import 'adaptive_visit_date_picker.dart';
+import 'cupertino_partial_date_wheel_picker.dart';
 
 Future<PartialVisitDate?> showPartialVisitDatePicker({
   required BuildContext context,
@@ -16,6 +19,7 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
   ],
 }) async {
   assert(allowedPrecisions.isNotEmpty);
+  final useCupertino = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   final minimum = firstDate ?? DateTime(1900);
   final maximum = lastDate ?? DateTime(2100, 12, 31);
 
@@ -163,6 +167,53 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
   }
 
   if (precision == VisitDatePrecision.year) {
+    if (precision == VisitDatePrecision.year) {
+      if (useCupertino) {
+        final selected = await showCupertinoPartialDateWheelPicker(
+          context: context,
+          initialDate: initial,
+          firstDate: minimum,
+          lastDate: maximum,
+          mode: CupertinoPeriodPickerMode.yearOnly,
+        );
+
+        if (selected == null) return null;
+
+        return PartialVisitDate(
+          date: DateTime(selected.year),
+          precision: VisitDatePrecision.year,
+        );
+      }
+
+      // Existing Material YearPicker for Android/Web.
+      final selected = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Select year'),
+            content: SizedBox(
+              width: 300,
+              height: 300,
+              child: YearPicker(
+                firstDate: minimum,
+                lastDate: maximum,
+                selectedDate: initial,
+                onChanged: (date) {
+                  Navigator.pop(dialogContext, date.year);
+                },
+              ),
+            ),
+          );
+        },
+      );
+
+      if (selected == null) return null;
+
+      return PartialVisitDate(
+        date: DateTime(selected),
+        precision: VisitDatePrecision.year,
+      );
+    }
     final selected = await showDialog<int>(
       context: context,
       builder: (dialogContext) {
@@ -189,6 +240,23 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
     return PartialVisitDate(
       date: DateTime(selected),
       precision: VisitDatePrecision.year,
+    );
+  }
+
+  if (useCupertino) {
+    final selected = await showCupertinoPartialDateWheelPicker(
+      context: context,
+      initialDate: initial,
+      firstDate: minimum,
+      lastDate: maximum,
+      mode: CupertinoPeriodPickerMode.monthAndYear,
+    );
+
+    if (selected == null) return null;
+
+    return PartialVisitDate(
+      date: DateTime(selected.year, selected.month),
+      precision: VisitDatePrecision.month,
     );
   }
 
