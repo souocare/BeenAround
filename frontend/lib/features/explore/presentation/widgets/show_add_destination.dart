@@ -16,6 +16,9 @@ import '../../../wishlist/domain/wishlist_repository.dart';
 import '../../../wishlist/application/add_wishlist_entry_cubit.dart';
 import '../../../trips/domain/trip_association_repository.dart';
 import '../../../trips/domain/trip_repository.dart';
+import '../../../wishlist/application/wishlist_cubit.dart';
+import '../../../wishlist/application/wishlist_state.dart';
+import '../../../wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -32,6 +35,11 @@ Future<bool> showAddDestination(
   final tripAssociationRepository = context.read<TripAssociationRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
+
+  final wishlistCubit = context.read<WishlistCubit>();
+
+  ({String countryCode, int? cityId, String destinationName, bool isResidence})?
+  recordedDestination;
 
   Widget buildContent(BuildContext context) {
     return MultiRepositoryProvider(
@@ -63,9 +71,81 @@ Future<bool> showAddDestination(
                 AddWishlistEntryCubit(repository: wishlistRepository),
           ),
         ],
-        child: AddDestinationSheet(initialCountry: initialCountry),
+        child: AddDestinationSheet(
+          initialCountry: initialCountry,
+          onTravelRecorded:
+              ({
+                required countryCode,
+                required cityId,
+                required destinationName,
+                required isResidence,
+              }) {
+                recordedDestination = (
+                  countryCode: countryCode,
+                  cityId: cityId,
+                  destinationName: destinationName,
+                  isResidence: isResidence,
+                );
+              },
+        ),
       ),
     );
+  }
+
+  Future<bool> finishRegistration(bool? result) async {
+    final created = result ?? false;
+
+    if (!created || !context.mounted) {
+      return created;
+    }
+
+    final destination = recordedDestination;
+
+    // A successful Wishlist creation is not a travel registration.
+    if (destination == null || wishlistCubit.isClosed) {
+      return created;
+    }
+
+    // Refresh before checking, so we do not rely on stale Wishlist data.
+    await wishlistCubit.refresh();
+
+    if (!context.mounted || wishlistCubit.isClosed) {
+      return created;
+    }
+
+    final wishlistState = wishlistCubit.state;
+
+    if (wishlistState.phase != WishlistPhase.ready) {
+      return created;
+    }
+
+    final entry = destination.cityId == null
+        ? wishlistState.entryForCountry(destination.countryCode)
+        : wishlistState.entryForCity(destination.cityId!);
+
+    // No matching Wishlist entry: nothing else to do.
+    if (entry == null) {
+      return created;
+    }
+
+    final removed = await showRemoveWishlistEntry(
+      context: context,
+      entry: entry,
+      destinationName: destination.destinationName,
+      cancelLabel: 'Keep in Wishlist',
+      confirmationMessage: destination.isResidence
+          ? 'You have recorded living in ${destination.destinationName}. '
+                'Would you like to remove it from your Wishlist?'
+          : 'You have recorded a visit to ${destination.destinationName}. '
+                'Would you like to remove it from your Wishlist?',
+    );
+
+    if (removed && !wishlistCubit.isClosed) {
+      await wishlistCubit.refresh();
+    }
+
+    // The travel record remains saved regardless of the Wishlist decision.
+    return created;
   }
 
   if (width >= 800) {
@@ -78,7 +158,7 @@ Future<bool> showAddDestination(
       ),
     );
 
-    return result ?? false;
+    return finishRegistration(result);
   }
 
   final result = await showModalBottomSheet<bool>(
@@ -99,5 +179,5 @@ Future<bool> showAddDestination(
     },
   );
 
-  return result ?? false;
+  return finishRegistration(result);
 }

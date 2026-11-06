@@ -12,6 +12,8 @@ Future<bool> showRemoveWishlistEntry({
   required BuildContext context,
   required WishlistEntry entry,
   required String destinationName,
+  String? confirmationMessage,
+  String cancelLabel = 'Cancel',
 }) async {
   final repository = context.read<WishlistRepository>();
 
@@ -23,6 +25,8 @@ Future<bool> showRemoveWishlistEntry({
       child: _RemoveWishlistEntryDialog(
         entry: entry,
         destinationName: destinationName,
+        confirmationMessage: confirmationMessage,
+        cancelLabel: cancelLabel,
       ),
     ),
   );
@@ -34,10 +38,14 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
   const _RemoveWishlistEntryDialog({
     required this.entry,
     required this.destinationName,
+    required this.confirmationMessage,
+    required this.cancelLabel,
   });
 
   final WishlistEntry entry;
   final String destinationName;
+  final String? confirmationMessage;
+  final String cancelLabel;
 
   bool get _isCupertino =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -54,15 +62,14 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return BlocBuilder<WishlistEntryActionsCubit, WishlistEntryActionsState>(
       builder: (context, state) {
         final isSubmitting = state.isSubmitting;
 
         final message =
+            confirmationMessage ??
             'Remove $destinationName from your Wishlist? '
-            'Your visits and residences will not be affected.';
+                'Your visits and residences will not be affected.';
 
         if (_isCupertino) {
           return CupertinoAlertDialog(
@@ -70,9 +77,12 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
             content: Column(
               children: [
                 const SizedBox(height: 8),
+
                 Text(message),
+
                 if (state.errorMessage != null) ...[
                   const SizedBox(height: 12),
+
                   Text(
                     state.errorMessage!,
                     key: const Key('removeWishlistError'),
@@ -87,8 +97,9 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
                 onPressed: isSubmitting
                     ? null
                     : () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                child: Text(cancelLabel),
               ),
+
               CupertinoDialogAction(
                 key: const Key('confirmRemoveWishlist'),
                 isDestructiveAction: true,
@@ -106,8 +117,10 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(message),
+
               if (state.errorMessage != null) ...[
                 const SizedBox(height: 12),
+
                 Text(
                   state.errorMessage!,
                   key: const Key('removeWishlistError'),
@@ -122,8 +135,9 @@ class _RemoveWishlistEntryDialog extends StatelessWidget {
               onPressed: isSubmitting
                   ? null
                   : () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(cancelLabel),
             ),
+
             TextButton(
               key: const Key('confirmRemoveWishlist'),
               onPressed: isSubmitting ? null : () => _remove(context),

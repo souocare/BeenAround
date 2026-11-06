@@ -349,19 +349,33 @@ class FakeResidenceRepository implements ResidenceRepository {
 }
 
 class FakeWishlistRepository implements WishlistRepository {
+  FakeWishlistRepository({List<WishlistEntry> initialEntries = const []})
+    : entries = List.of(initialEntries);
+
+  final List<WishlistEntry> entries;
+
   int addCalls = 0;
+  int deleteCalls = 0;
+  int getCalls = 0;
+
+  String? deletedEntryId;
 
   WishlistEntryInput? lastInput;
 
   Object? addError;
+  Object? deleteError;
 
   Future<WishlistCreationResult>? pendingAdd;
-  @override
-  Future<List<WishlistEntry>> getWishlistEntries() async => const [];
 
   @override
-  Future<WishlistEntry> getWishlistEntry({required String entryId}) {
-    throw UnimplementedError();
+  Future<List<WishlistEntry>> getWishlistEntries() async {
+    getCalls++;
+    return List.unmodifiable(entries);
+  }
+
+  @override
+  Future<WishlistEntry> getWishlistEntry({required String entryId}) async {
+    return entries.firstWhere((entry) => entry.id == entryId);
   }
 
   @override
@@ -388,6 +402,8 @@ class FakeWishlistRepository implements WishlistRepository {
       updatedAt: DateTime(2026, 11, 3),
     );
 
+    entries.add(entry);
+
     return WishlistCreationResult(created: [entry], existing: const []);
   }
 
@@ -400,8 +416,15 @@ class FakeWishlistRepository implements WishlistRepository {
   }
 
   @override
-  Future<void> deleteWishlistEntry({required String entryId}) {
-    throw UnimplementedError();
+  Future<void> deleteWishlistEntry({required String entryId}) async {
+    deleteCalls++;
+    deletedEntryId = entryId;
+
+    if (deleteError != null) {
+      throw deleteError!;
+    }
+
+    entries.removeWhere((entry) => entry.id == entryId);
   }
 }
 
@@ -739,6 +762,17 @@ Trip createTestTrip({required String id, required String name}) {
     endedOn: null,
     createdAt: DateTime(2026, 11, 5),
     updatedAt: DateTime(2026, 11, 5),
+  );
+}
+
+WishlistEntry portugalWishlistEntry() {
+  return WishlistEntry(
+    id: 'wishlist-portugal',
+    countryCode: 'PT',
+    cityId: null,
+    note: 'Visit Portugal.',
+    createdAt: DateTime(2026, 11, 3),
+    updatedAt: DateTime(2026, 11, 3),
   );
 }
 
@@ -3510,4 +3544,282 @@ void main() {
       expect(find.text('Add Destination'), findsOneWidget);
     },
   );
+  testWidgets('keeps wishlist entry after recording a country visit', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+
+    final wishlistRepository = FakeWishlistRepository(
+      initialEntries: [portugalWishlistEntry()],
+    );
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal').last);
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    // The visit was successfully created.
+    expect(countriesRepository.createCalls, 1);
+
+    // The registration sheet has closed.
+    expect(find.text('Add Destination'), findsNothing);
+
+    // The Wishlist prompt is now visible.
+    expect(find.text('Remove from Wishlist?'), findsOneWidget);
+
+    expect(find.text('Keep in Wishlist'), findsOneWidget);
+
+    // Explicitly choose to keep the destination.
+    await tester.tap(find.text('Keep in Wishlist'));
+    await tester.pumpAndSettle();
+
+    // No Wishlist deletion occurred.
+    expect(wishlistRepository.deleteCalls, 0);
+
+    expect(wishlistRepository.entries.single.id, 'wishlist-portugal');
+
+    // The country visit remains saved.
+    expect(countriesRepository.createdVisits.length, 1);
+
+    expect(countriesRepository.createdVisits.single.countryCode, 'PT');
+
+    expect(find.text('Remove from Wishlist?'), findsNothing);
+  });
+  testWidgets(
+    'removes only the wishlist entry after recording a country visit',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+
+      final wishlistRepository = FakeWishlistRepository(
+        initialEntries: [portugalWishlistEntry()],
+      );
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        wishlistRepository: wishlistRepository,
+      );
+
+      await tester.tap(addDestinationButton);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select a country'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Portugal').last);
+      await tester.pumpAndSettle();
+
+      await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+      await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Remove from Wishlist?'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('confirmRemoveWishlist')));
+
+      await tester.pumpAndSettle();
+
+      // Exactly one Wishlist deletion.
+      expect(wishlistRepository.deleteCalls, 1);
+
+      expect(wishlistRepository.deletedEntryId, 'wishlist-portugal');
+
+      // The Wishlist entry no longer exists.
+      expect(wishlistRepository.entries, isEmpty);
+
+      // The travel record must remain untouched.
+      expect(countriesRepository.createCalls, 1);
+
+      expect(countriesRepository.createdVisits.length, 1);
+
+      expect(countriesRepository.createdVisits.single.countryCode, 'PT');
+
+      expect(find.text('Remove from Wishlist?'), findsNothing);
+    },
+  );
+  testWidgets(
+    'offers wishlist removal after successfully creating a residence',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+      final residenceRepository = FakeResidenceRepository();
+
+      final wishlistRepository = FakeWishlistRepository(
+        initialEntries: [portugalWishlistEntry()],
+      );
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        residenceRepository: residenceRepository,
+        wishlistRepository: wishlistRepository,
+      );
+
+      await tester.tap(addDestinationButton);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select a country'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Portugal').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(addDestinationOption('Lived'));
+      await tester.pumpAndSettle();
+
+      await selectResidenceMonth(
+        tester,
+        fieldKey: 'residenceStartDate',
+        year: 2020,
+        month: 3,
+      );
+
+      await selectResidenceMonth(
+        tester,
+        fieldKey: 'residenceEndDate',
+        year: 2023,
+        month: 8,
+      );
+
+      await tester.tap(find.byKey(const Key('saveResidenceButton')));
+
+      await tester.pumpAndSettle();
+
+      // The residence exists.
+      expect(residenceRepository.createCalls, 1);
+
+      // Lived must not create a Been record.
+      expect(countriesRepository.createCalls, 0);
+
+      // The Wishlist prompt appears only after success.
+      expect(find.text('Remove from Wishlist?'), findsOneWidget);
+
+      expect(
+        find.textContaining('recorded living in Portugal'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Keep in Wishlist'));
+      await tester.pumpAndSettle();
+
+      expect(wishlistRepository.deleteCalls, 0);
+
+      expect(wishlistRepository.entries.single.countryCode, 'PT');
+
+      expect(residenceRepository.createCalls, 1);
+    },
+  );
+  testWidgets(
+    'does not prompt wishlist removal when destination is not wishlisted',
+    (tester) async {
+      final countriesRepository = FakeCountriesRepository();
+      final wishlistRepository = FakeWishlistRepository();
+
+      await pumpExplore(
+        tester,
+        repository: countriesRepository,
+        wishlistRepository: wishlistRepository,
+      );
+
+      await tester.tap(addDestinationButton);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select a country'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Portugal'));
+      await tester.pumpAndSettle();
+
+      await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+      await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+      await tester.tap(find.text('Save Visit'));
+      await tester.pumpAndSettle();
+
+      expect(countriesRepository.createCalls, 1);
+
+      expect(find.text('Remove from Wishlist?'), findsNothing);
+
+      expect(wishlistRepository.deleteCalls, 0);
+    },
+  );
+  testWidgets('wishlist removal failure preserves the created country visit', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+
+    final wishlistRepository = FakeWishlistRepository(
+      initialEntries: [portugalWishlistEntry()],
+    )..deleteError = StateError('Network unavailable');
+
+    await pumpExplore(
+      tester,
+      repository: countriesRepository,
+      wishlistRepository: wishlistRepository,
+    );
+
+    await tester.tap(addDestinationButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal').last);
+    await tester.pumpAndSettle();
+
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from Wishlist?'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('confirmRemoveWishlist')));
+
+    await tester.pumpAndSettle();
+
+    // The Wishlist operation failed.
+    expect(wishlistRepository.deleteCalls, 1);
+
+    expect(find.byKey(const Key('removeWishlistError')), findsOneWidget);
+
+    // The confirmation remains open, allowing the user to cancel.
+    expect(find.text('Remove from Wishlist?'), findsOneWidget);
+
+    // The successful travel registration is unaffected.
+    expect(countriesRepository.createCalls, 1);
+    expect(countriesRepository.createdVisits.length, 1);
+
+    expect(wishlistRepository.entries.length, 1);
+
+    await tester.tap(find.byKey(const Key('cancelRemoveWishlist')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove from Wishlist?'), findsNothing);
+
+    expect(countriesRepository.createdVisits.length, 1);
+  });
 }

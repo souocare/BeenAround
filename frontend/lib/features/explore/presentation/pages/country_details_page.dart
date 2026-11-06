@@ -37,15 +37,21 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
   Future<void> _addVisit() async {
     final exploreCubit = context.read<ExploreCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
 
     final created = await showAddDestination(
       context,
       initialCountry: widget.country,
     );
 
-    if (created && !exploreCubit.isClosed) {
-      await exploreCubit.refresh();
-    }
+    if (!mounted || !created) return;
+
+    await Future.wait([
+      if (!exploreCubit.isClosed) exploreCubit.refresh(),
+      if (!residencesCubit.isClosed) residencesCubit.refresh(),
+      if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
+    ]);
   }
 
   Future<void> _editWishlistNote(WishlistEntry entry) async {

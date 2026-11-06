@@ -44,9 +44,24 @@ import '../../../trips/presentation/widgets/trip_selection_field.dart';
 enum _CityCountryAssociationMode { none, existing, createNew }
 
 class AddDestinationSheet extends StatefulWidget {
-  const AddDestinationSheet({this.initialCountry, super.key});
+  const AddDestinationSheet({
+    this.initialCountry,
+    this.onTravelRecorded,
+    super.key,
+  });
 
   final Country? initialCountry;
+
+  /// Called only after a visit or residence has been saved successfully.
+  ///
+  /// Wishlist registrations do not trigger this callback.
+  final void Function({
+    required String countryCode,
+    required int? cityId,
+    required String destinationName,
+    required bool isResidence,
+  })?
+  onTravelRecorded;
 
   @override
   State<AddDestinationSheet> createState() => _AddDestinationSheetState();
@@ -180,6 +195,32 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     return _availableCountryVisits
         .where((visit) => visit.countryCode == city.countryCode)
         .toList(growable: false);
+  }
+
+  void _notifyTravelRecorded({required bool isResidence}) {
+    if (_isCountry) {
+      final country = _selectedCountry;
+      if (country == null) return;
+
+      widget.onTravelRecorded?.call(
+        countryCode: country.code,
+        cityId: null,
+        destinationName: country.name,
+        isResidence: isResidence,
+      );
+
+      return;
+    }
+
+    final city = _selectedCity;
+    if (city == null) return;
+
+    widget.onTravelRecorded?.call(
+      countryCode: city.countryCode,
+      cityId: city.id,
+      destinationName: city.name,
+      isResidence: isResidence,
+    );
   }
 
   void _onWishlistNoteChanged(String value) {
@@ -440,6 +481,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       _allowCompletedVisitPop = true;
     });
 
+    _notifyTravelRecorded(isResidence: false);
+
     Navigator.of(context).pop(true);
   }
 
@@ -559,6 +602,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         }
 
         if (success) {
+          _notifyTravelRecorded(isResidence: true);
+
           Navigator.of(context).pop(true);
           return;
         }
@@ -1128,6 +1173,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     }
 
     if (success) {
+      _notifyTravelRecorded(isResidence: true);
+
       Navigator.of(context).pop(true);
       return;
     }
