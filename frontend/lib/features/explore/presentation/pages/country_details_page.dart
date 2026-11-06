@@ -1,3 +1,5 @@
+import 'package:beenaround/features/residences/application/residences_cubit.dart';
+import 'package:beenaround/features/residences/presentation/widgets/show_residences.dart';
 import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
 import 'package:beenaround/features/wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
@@ -98,6 +100,14 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     await wishlistCubit.refresh();
   }
 
+  Future<void> _showResidences() async {
+    await showResidences(
+      context: context,
+      destinationName: widget.country.name,
+      countryCode: widget.country.code,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -122,6 +132,14 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
             widget.country.code,
           );
 
+          final residencesState = context.watch<ResidencesCubit>().state;
+
+          final countryResidences = residencesState.residencesForCountry(
+            widget.country.code,
+          );
+
+          final hasLived = countryResidences.isNotEmpty;
+
           final isVisited = visits.isNotEmpty;
           final lastVisited = _lastVisitedDate(visits);
 
@@ -143,12 +161,35 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                           visitCount: visits.length,
                         ),
 
-                        if (wishlistEntry != null) ...[
+                        if (hasLived || wishlistEntry != null) ...[
                           const SizedBox(height: 12),
 
-                          WishlistEntryControls(
-                            onRemove: () => _removeFromWishlist(wishlistEntry),
-                            onEditNote: () => _editWishlistNote(wishlistEntry),
+                          Wrap(
+                            key: const Key('countryTravelStatuses'),
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (hasLived)
+                                ActionChip(
+                                  key: const Key('countryStatus-lived'),
+                                  tooltip: 'Manage residences',
+                                  avatar: const Icon(
+                                    Icons.home_rounded,
+                                    size: 20,
+                                  ),
+                                  label: const Text('Lived'),
+                                  onPressed: _showResidences,
+                                ),
+
+                              if (wishlistEntry != null)
+                                WishlistEntryControls(
+                                  onRemove: () =>
+                                      _removeFromWishlist(wishlistEntry),
+                                  onEditNote: () =>
+                                      _editWishlistNote(wishlistEntry),
+                                ),
+                            ],
                           ),
                         ],
 

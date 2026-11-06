@@ -1,3 +1,4 @@
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -94,6 +95,7 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     final cityVisitsRepository = context.read<CityVisitsRepository>();
     final countriesRepository = context.read<CountriesRepository>();
     final wishlistRepository = context.read<WishlistRepository>();
+    final residenceRepository = context.read<ResidenceRepository>();
 
     final exploreCities = context.read<ExploreCitiesCubit>().state.cities;
 
@@ -123,6 +125,9 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
               ),
               RepositoryProvider<WishlistRepository>.value(
                 value: wishlistRepository,
+              ),
+              RepositoryProvider<ResidenceRepository>.value(
+                value: residenceRepository,
               ),
             ],
             child: BlocProvider<VisitedCitiesCubit>.value(

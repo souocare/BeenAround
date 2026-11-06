@@ -780,7 +780,9 @@ class _CountryCard extends StatelessWidget {
       'Nov',
       'Dec',
     ];
+
     final dateLabel = '${months[lastVisited.month - 1]} ${lastVisited.year}';
+
     return '$visitsLabel · Last visited $dateLabel';
   }
 
@@ -797,16 +799,27 @@ class _CountryCard extends StatelessWidget {
         onTap: () {
           final exploreCubit = context.read<ExploreCubit>();
           final wishlistCubit = context.read<WishlistCubit>();
+          final residencesCubit = context.read<ResidencesCubit>();
+
           final wishlistRepository = context.read<WishlistRepository>();
+          final residenceRepository = context.read<ResidenceRepository>();
 
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => RepositoryProvider<WishlistRepository>.value(
-                value: wishlistRepository,
+              builder: (_) => MultiRepositoryProvider(
+                providers: [
+                  RepositoryProvider<WishlistRepository>.value(
+                    value: wishlistRepository,
+                  ),
+                  RepositoryProvider<ResidenceRepository>.value(
+                    value: residenceRepository,
+                  ),
+                ],
                 child: MultiBlocProvider(
                   providers: [
                     BlocProvider<ExploreCubit>.value(value: exploreCubit),
                     BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+                    BlocProvider<ResidencesCubit>.value(value: residencesCubit),
                   ],
                   child: CountryDetailsPage(country: country),
                 ),

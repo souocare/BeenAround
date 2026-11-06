@@ -1,19 +1,24 @@
-import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
-import 'package:beenaround/features/wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../application/visited_cities_cubit.dart';
 import '../../application/visited_cities_state.dart';
 import '../../domain/visited_city.dart';
-import '../../../geography/domain/city_visit.dart';
-import '../widgets/show_edit_city_visit.dart';
-import '../widgets/show_delete_city_visit.dart';
+
 import '../../../geography/domain/city.dart';
+import '../../../geography/domain/city_visit.dart';
+
 import '../../../residences/application/residences_cubit.dart';
+import '../../../residences/presentation/widgets/show_residences.dart';
+
 import '../../../wishlist/application/wishlist_cubit.dart';
-import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
+import '../../../wishlist/domain/wishlist_entry.dart';
 import '../../../wishlist/presentation/widgets/show_edit_wishlist_note.dart';
+import '../../../wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
+import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
+
+import '../widgets/show_delete_city_visit.dart';
+import '../widgets/show_edit_city_visit.dart';
 
 class CityDetailsPage extends StatelessWidget {
   const CityDetailsPage({required VisitedCity this.city, super.key})
@@ -31,6 +36,7 @@ class CityDetailsPage extends StatelessWidget {
   String get cityName => catalogCity?.name ?? city!.cityName;
 
   String get countryName => catalogCity?.countryName ?? city!.countryName;
+  String get countryCode => catalogCity?.countryCode ?? city!.countryCode;
 
   VisitedCity? _findVisitedCity(VisitedCitiesState state) {
     for (final visitedCity in state.visitedCities) {
@@ -118,6 +124,15 @@ class CityDetailsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _showResidences(BuildContext context) async {
+    await showResidences(
+      context: context,
+      destinationName: cityName,
+      countryCode: countryCode,
+      cityId: cityId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -143,7 +158,6 @@ class CityDetailsPage extends StatelessWidget {
           final hasLived =
               residencesState?.residencesForCity(cityId).isNotEmpty ?? false;
 
-          final isWishlisted = wishlistState?.containsCity(cityId) ?? false;
           final wishlistEntry = wishlistState?.entryForCity(cityId);
 
           return RefreshIndicator(
@@ -213,13 +227,24 @@ class CityDetailsPage extends StatelessWidget {
                                           ),
 
                                         if (hasLived)
-                                          const Chip(
-                                            key: Key('cityStatus-lived'),
+                                          ActionChip(
+                                            key: const Key('cityStatus-lived'),
+                                            tooltip: 'Manage residences',
                                             avatar: Icon(
-                                              Icons.home_outlined,
+                                              Icons.home_rounded,
+                                              color: colors.primary,
                                               size: 18,
                                             ),
-                                            label: Text('Lived'),
+                                            label: const Text('Lived'),
+                                            backgroundColor:
+                                                colors.primaryContainer,
+                                            side: BorderSide.none,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            onPressed: () =>
+                                                _showResidences(context),
                                           ),
 
                                         if (wishlistEntry != null)
