@@ -120,6 +120,13 @@ class FakeCityRepository implements CityRepository {
   }
 }
 
+Finder citySortMenuItem(CitySort sort) {
+  return find.byWidgetPredicate(
+    (widget) =>
+        widget is CheckedPopupMenuItem<CitySort> && widget.value == sort,
+  );
+}
+
 void main() {
   const portugal = CountryCityCount(
     countryCode: 'PT',
@@ -414,7 +421,11 @@ void main() {
     await tester.tap(find.byKey(const Key('cityBrowserSort')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Name A–Z').last);
+    final nameSortOption = citySortMenuItem(CitySort.name);
+
+    expect(nameSortOption, findsOneWidget);
+
+    await tester.tap(nameSortOption);
     await tester.pumpAndSettle();
 
     expect(repository.lastSort, CitySort.name);
@@ -692,7 +703,11 @@ void main() {
     await tester.tap(find.byKey(const Key('cityBrowserSort')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Name A–Z').last);
+    final nameSortOption = citySortMenuItem(CitySort.name);
+
+    expect(nameSortOption, findsOneWidget);
+
+    await tester.tap(nameSortOption);
     await tester.pumpAndSettle();
 
     expect(repository.lastOffset, 0);
