@@ -13,10 +13,9 @@ class ApiTripRepository implements TripRepository {
 
   final ApiClient apiClient;
 
-  @override
-  Future<List<Trip>> getTrips() async {
+  Future<List<Trip>> _getTripList(String path) async {
     try {
-      final response = await apiClient.dio.get<Map<String, dynamic>>('trips');
+      final response = await apiClient.dio.get<Map<String, dynamic>>(path);
 
       final data = response.data;
 
@@ -38,6 +37,26 @@ class ApiTripRepository implements TripRepository {
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }
+  }
+
+  @override
+  Future<List<Trip>> getTrips() {
+    return _getTripList('trips');
+  }
+
+  @override
+  Future<List<Trip>> getTripsForCountry({required String countryCode}) {
+    final code = countryCode.trim().toUpperCase();
+
+    if (!RegExp(r'^[A-Z]{2}$').hasMatch(code)) {
+      throw ArgumentError.value(
+        countryCode,
+        'countryCode',
+        'Expected a valid ISO alpha-2 country code.',
+      );
+    }
+
+    return _getTripList('countries/$code/trips');
   }
 
   @override

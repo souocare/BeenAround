@@ -17,4 +17,10 @@ abstract interface class TripRepository {
 
   /// Delete a Trip without deleting its independent travel records.
   Future<void> deleteTrip({required String tripId});
+
+  /// Return Trips explicitly associated with visits to a country.
+  ///
+  /// Includes associations through country visits and city visits.
+  /// Does not infer associations from dates or create country visits.
+  Future<List<Trip>> getTripsForCountry({required String countryCode});
 }

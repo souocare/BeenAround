@@ -33,6 +33,9 @@ import '../widgets/country_flag.dart';
 import '../widgets/show_add_destination.dart';
 import '../widgets/visited_cities_list.dart';
 import 'country_details_page.dart';
+import '../../application/country_trips_cubit.dart';
+import '../../../trips/domain/trip_repository.dart';
+import '../../../trips/domain/trip_association_repository.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -804,6 +807,9 @@ class _CountryCard extends StatelessWidget {
           final wishlistRepository = context.read<WishlistRepository>();
           final residenceRepository = context.read<ResidenceRepository>();
           final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+          final tripRepository = context.read<TripRepository>();
+          final tripAssociationRepository = context
+              .read<TripAssociationRepository>();
 
           Navigator.of(context).push(
             MaterialPageRoute<void>(
@@ -815,6 +821,12 @@ class _CountryCard extends StatelessWidget {
                   RepositoryProvider<ResidenceRepository>.value(
                     value: residenceRepository,
                   ),
+                  RepositoryProvider<TripRepository>.value(
+                    value: tripRepository,
+                  ),
+                  RepositoryProvider<TripAssociationRepository>.value(
+                    value: tripAssociationRepository,
+                  ),
                 ],
                 child: MultiBlocProvider(
                   providers: [
@@ -823,6 +835,12 @@ class _CountryCard extends StatelessWidget {
                     BlocProvider<ResidencesCubit>.value(value: residencesCubit),
                     BlocProvider<VisitedCitiesCubit>.value(
                       value: visitedCitiesCubit,
+                    ),
+                    BlocProvider<CountryTripsCubit>(
+                      create: (context) => CountryTripsCubit(
+                        repository: context.read<TripRepository>(),
+                        countryCode: country.code,
+                      )..load(),
                     ),
                   ],
                   child: CountryDetailsPage(country: country),

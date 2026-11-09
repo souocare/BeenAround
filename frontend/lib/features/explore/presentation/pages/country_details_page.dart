@@ -1,3 +1,5 @@
+import 'package:beenaround/core/models/partial_visit_date.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/core/widgets/adaptive_record_actions_menu.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/residences/application/residences_cubit.dart';
@@ -25,6 +27,13 @@ import '../../application/visited_cities_state.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../residences/domain/residence_repository.dart';
 import '../../../wishlist/domain/wishlist_repository.dart';
+import '../../application/country_trips_cubit.dart';
+import '../../application/country_trips_state.dart';
+
+import '../../../trips/domain/trip.dart';
+import '../../../trips/domain/trip_repository.dart';
+import '../../../trips/domain/trip_association_repository.dart';
+import '../../../trips/presentation/pages/trip_details_page.dart';
 
 import 'city_details_page.dart';
 
@@ -120,13 +129,40 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
     final residencesCubit = context.read<ResidencesCubit>();
     final wishlistCubit = context.read<WishlistCubit>();
+    final countryTripsCubit = context.read<CountryTripsCubit>();
 
     await Future.wait([
       if (!exploreCubit.isClosed) exploreCubit.refresh(),
       if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
       if (!residencesCubit.isClosed) residencesCubit.refresh(),
       if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
+      if (!countryTripsCubit.isClosed) countryTripsCubit.refresh(),
     ]);
+  }
+
+  Future<void> _openTripDetails(Trip trip) async {
+    final countryTripsCubit = context.read<CountryTripsCubit>();
+
+    final tripRepository = context.read<TripRepository>();
+    final tripAssociationRepository = context.read<TripAssociationRepository>();
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<TripRepository>.value(value: tripRepository),
+            RepositoryProvider<TripAssociationRepository>.value(
+              value: tripAssociationRepository,
+            ),
+          ],
+          child: TripDetailsPage(tripId: trip.id),
+        ),
+      ),
+    );
+
+    if (!mounted || countryTripsCubit.isClosed) return;
+
+    await countryTripsCubit.refresh();
   }
 
   @override
@@ -154,6 +190,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
           final visits = state.visitsForCountry(widget.country.code).toList()
             ..sort(_compareVisits);
           final visitedCitiesState = context.watch<VisitedCitiesCubit>().state;
+          final countryTripsState = context.watch<CountryTripsCubit>().state;
 
           final countryCities = visitedCitiesState.visitedCities
               .where((city) => city.countryCode == widget.country.code)
@@ -238,6 +275,9 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                         _CountryStatistics(
                           visitCount: visits.length,
                           cityCount: countryCities.length,
+                          tripCount: countryTripsState.isReady
+                              ? '${countryTripsState.tripCount}'
+                              : '—',
                           lastVisited: lastVisited,
                         ),
 
@@ -278,11 +318,12 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                             onCitySelected: _openCityDetails,
                           ),
 
-                          _CountryTab.trips => const _EmptySection(
-                            icon: Icons.luggage_outlined,
-                            title: 'Associated trips',
-                            message:
-                                'Trips associated with this country will appear here.',
+                          _CountryTab.trips => _CountryAssociatedTrips(
+                            state: countryTripsState,
+                            onRetry: () {
+                              context.read<CountryTripsCubit>().refresh();
+                            },
+                            onTripSelected: _openTripDetails,
                           ),
                         },
                       ],
@@ -504,11 +545,13 @@ class _CountryStatistics extends StatelessWidget {
   const _CountryStatistics({
     required this.visitCount,
     required this.cityCount,
+    required this.tripCount,
     required this.lastVisited,
   });
 
   final int visitCount;
   final int cityCount;
+  final String tripCount;
   final DateTime? lastVisited;
 
   @override
@@ -543,8 +586,11 @@ class _CountryStatistics extends StatelessWidget {
 
                 _StatDivider(color: colors.outlineVariant),
 
-                const Expanded(
-                  child: _CountryStatItem(value: '—', label: 'TRIPS'),
+                Expanded(
+                  child: KeyedSubtree(
+                    key: const Key('countryTripsStatistic'),
+                    child: _CountryStatItem(value: tripCount, label: 'TRIPS'),
+                  ),
                 ),
               ],
             ),
@@ -1034,6 +1080,114 @@ class _CountryVisitedCities extends StatelessWidget {
   }
 }
 
+class _CountryAssociatedTrips extends StatelessWidget {
+  const _CountryAssociatedTrips({
+    required this.state,
+    required this.onRetry,
+    required this.onTripSelected,
+  });
+
+  final CountryTripsState state;
+  final VoidCallback onRetry;
+  final ValueChanged<Trip> onTripSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (state.isInitial || state.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: CircularProgressIndicator(key: Key('countryTripsLoading')),
+        ),
+      );
+    }
+
+    if (state.isFailure) {
+      return Card(
+        key: const Key('countryTripsError'),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(Icons.error_outline_rounded, size: 32, color: colors.error),
+              const SizedBox(height: 12),
+              Text(
+                state.errorMessage ?? 'Unable to load associated trips.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                key: const Key('countryTripsRetry'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (state.trips.isEmpty) {
+      return const _EmptySection(
+        icon: Icons.luggage_outlined,
+        title: 'No associated trips yet',
+        message: 'Trips containing visits to this country will appear here.',
+      );
+    }
+
+    return Column(
+      key: const Key('countryAssociatedTrips'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'ASSOCIATED TRIPS',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        for (final trip in state.trips)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              key: Key('countryTrip-${trip.id}'),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              leading: Icon(Icons.luggage_rounded, color: colors.primary),
+              title: Text(
+                trip.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                _formatCountryTripDates(context, trip),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onTripSelected(trip),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Date formatting
 // -----------------------------------------------------------------------------
@@ -1087,4 +1241,33 @@ String _formatStatisticsDate(DateTime date) {
   ];
 
   return '${date.day} ${months[date.month - 1]} ${date.year}';
+}
+
+String _formatCountryTripDates(BuildContext context, Trip trip) {
+  String formatDate(PartialVisitDate value) {
+    final localization = MaterialLocalizations.of(context);
+
+    return switch (value.precision) {
+      VisitDatePrecision.day => localization.formatMediumDate(value.date),
+      VisitDatePrecision.month => localization.formatMonthYear(value.date),
+      VisitDatePrecision.year => '${value.date.year}',
+    };
+  }
+
+  final start = trip.startedOn;
+  final end = trip.endedOn;
+
+  if (start == null && end == null) {
+    return 'Dates not specified';
+  }
+
+  if (start != null && end == null) {
+    return 'From ${formatDate(start)}';
+  }
+
+  if (start == null && end != null) {
+    return 'Until ${formatDate(end)}';
+  }
+
+  return '${formatDate(start!)} – ${formatDate(end!)}';
 }

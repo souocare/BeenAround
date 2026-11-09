@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/application/country_trips_cubit.dart';
 import 'package:beenaround/features/explore/application/explore_cubit.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
@@ -5,6 +6,7 @@ import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/explore/presentation/pages/explore_page.dart';
 import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+import 'package:beenaround/features/trips/presentation/pages/trip_details_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -242,8 +244,36 @@ CountryVisit visit({
 }
 
 class FakeCountryDetailsTripRepository extends Fake implements TripRepository {
+  FakeCountryDetailsTripRepository({
+    List<Trip> countryTrips = const [],
+    this.shouldFail = false,
+  }) : countryTrips = List.of(countryTrips);
+
+  List<Trip> countryTrips;
+  bool shouldFail;
+
+  int countryTripsCalls = 0;
+  String? requestedCountryCode;
+
   @override
   Future<List<Trip>> getTrips() async => const [];
+
+  @override
+  Future<List<Trip>> getTripsForCountry({required String countryCode}) async {
+    countryTripsCalls++;
+    requestedCountryCode = countryCode;
+
+    if (shouldFail) {
+      throw StateError('Server unavailable.');
+    }
+
+    return List.unmodifiable(countryTrips);
+  }
+
+  @override
+  Future<Trip> getTrip({required String tripId}) async {
+    return countryTrips.singleWhere((trip) => trip.id == tripId);
+  }
 }
 
 class FakeCountryDetailsTripAssociationRepository extends Fake
@@ -256,6 +286,16 @@ class FakeCountryDetailsTripAssociationRepository extends Fake
     throw UnimplementedError(
       'Trip association is not exercised by these tests.',
     );
+  }
+
+  @override
+  Future<List<CountryVisit>> getCountryVisits({required String tripId}) async {
+    return const [];
+  }
+
+  @override
+  Future<List<CityVisit>> getCityVisits({required String tripId}) async {
+    return const [];
   }
 }
 
@@ -276,6 +316,22 @@ CityVisit cityVisit({
     endedOn: DateTime(2026, 5, 5),
     createdAt: DateTime(2026, 5, 1),
     updatedAt: DateTime(2026, 5, 1),
+  );
+}
+
+Trip makeCountryTrip({
+  required String id,
+  required String name,
+  String? description,
+}) {
+  return Trip(
+    id: id,
+    name: name,
+    description: description,
+    startedOn: null,
+    endedOn: null,
+    createdAt: DateTime(2026, 11, 1),
+    updatedAt: DateTime(2026, 11, 1),
   );
 }
 
@@ -378,6 +434,7 @@ void main() {
     WidgetTester tester, {
     required List<CountryVisit> visits,
     List<CityVisit> cityVisits = const [],
+    FakeCountryDetailsTripRepository? tripRepository,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -407,6 +464,18 @@ void main() {
 
     final wishlistCubit = WishlistCubit(repository: wishlistRepository);
 
+    final effectiveTripRepository =
+        tripRepository ?? FakeCountryDetailsTripRepository();
+
+    final countryTripsCubit = CountryTripsCubit(
+      repository: effectiveTripRepository,
+      countryCode: portugal.code,
+    );
+
+    addTearDown(countryTripsCubit.close);
+
+    await countryTripsCubit.load();
+
     addTearDown(exploreCubit.close);
     addTearDown(visitedCitiesCubit.close);
     addTearDown(residencesCubit.close);
@@ -434,6 +503,12 @@ void main() {
           RepositoryProvider<WishlistRepository>.value(
             value: wishlistRepository,
           ),
+          RepositoryProvider<TripRepository>.value(
+            value: effectiveTripRepository,
+          ),
+          RepositoryProvider<TripAssociationRepository>.value(
+            value: FakeCountryDetailsTripAssociationRepository(),
+          ),
         ],
         child: MultiBlocProvider(
           providers: [
@@ -441,6 +516,7 @@ void main() {
             BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
             BlocProvider<ResidencesCubit>.value(value: residencesCubit),
             BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+            BlocProvider<CountryTripsCubit>.value(value: countryTripsCubit),
           ],
           child: MaterialApp(home: CountryDetailsPage(country: portugal)),
         ),
@@ -980,7 +1056,7 @@ void main() {
     await tester.tap(find.text('Trips'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Associated trips'), findsOneWidget);
+    expect(find.text('No associated trips yet'), findsOneWidget);
 
     await tester.tap(find.text('Visits'));
     await tester.pumpAndSettle();
@@ -1058,5 +1134,192 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No visited cities yet'), findsOneWidget);
+  });
+  testWidgets('shows real associated trips count', (tester) async {
+    final repository = FakeCountryDetailsTripRepository(
+      countryTrips: [
+        makeCountryTrip(id: 'trip-1', name: 'Portugal 2025'),
+        makeCountryTrip(id: 'trip-2', name: 'Portugal Road Trip'),
+      ],
+    );
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    expect(repository.requestedCountryCode, 'PT');
+    expect(repository.countryTripsCalls, 1);
+
+    expect(find.text('TRIPS'), findsOneWidget);
+
+    final tripsLabel = find.text('TRIPS');
+
+    final statisticsRow = find
+        .ancestor(of: tripsLabel, matching: find.byType(Row))
+        .first;
+
+    expect(
+      find.descendant(of: statisticsRow, matching: find.text('2')),
+      findsOneWidget,
+    );
+  });
+  testWidgets('shows associated trips in country details', (tester) async {
+    final repository = FakeCountryDetailsTripRepository(
+      countryTrips: [
+        makeCountryTrip(id: 'trip-1', name: 'Portugal 2025'),
+        makeCountryTrip(id: 'trip-2', name: 'Portugal Road Trip'),
+      ],
+    );
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    final tripsTab = find.text('Trips');
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('countryAssociatedTrips')), findsOneWidget);
+
+    expect(find.text('Portugal 2025'), findsOneWidget);
+    expect(find.text('Portugal Road Trip'), findsOneWidget);
+
+    expect(find.byKey(const Key('countryTrip-trip-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('countryTrip-trip-2')), findsOneWidget);
+  });
+  testWidgets('shows empty state when no trips are associated', (tester) async {
+    await pumpCountryDetails(tester, visits: const []);
+
+    final tripsTab = find.text('Trips');
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No associated trips yet'), findsOneWidget);
+
+    expect(find.byKey(const Key('countryAssociatedTrips')), findsNothing);
+  });
+  testWidgets('shows retry when associated trips loading fails', (
+    tester,
+  ) async {
+    final repository = FakeCountryDetailsTripRepository(shouldFail: true);
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    final tripsTab = find.text('Trips');
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('countryTripsError')), findsOneWidget);
+
+    expect(find.text('Unable to load associated trips.'), findsOneWidget);
+
+    expect(find.byKey(const Key('countryTripsRetry')), findsOneWidget);
+  });
+  testWidgets('retry loads associated trips after failure', (tester) async {
+    final repository = FakeCountryDetailsTripRepository(shouldFail: true);
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    final tripsTab = find.text('Trips');
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('countryTripsError')), findsOneWidget);
+
+    repository.shouldFail = false;
+
+    repository.countryTrips = [
+      makeCountryTrip(id: 'trip-1', name: 'Portugal 2025'),
+    ];
+
+    await tester.tap(find.byKey(const Key('countryTripsRetry')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.countryTripsCalls, 2);
+
+    expect(find.byKey(const Key('countryTripsError')), findsNothing);
+
+    expect(find.text('Portugal 2025'), findsOneWidget);
+  });
+  testWidgets('opens Trip Details from country associated trips', (
+    tester,
+  ) async {
+    final repository = FakeCountryDetailsTripRepository(
+      countryTrips: [makeCountryTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    final tripsTab = find.text('Trips');
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    final tripCard = find.byKey(const Key('countryTrip-trip-1'));
+
+    await tester.ensureVisible(tripCard);
+    await tester.tap(tripCard);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripDetailsPage), findsOneWidget);
+  });
+  testWidgets('refreshes associated trips after returning', (tester) async {
+    final repository = FakeCountryDetailsTripRepository(
+      countryTrips: [makeCountryTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      tripRepository: repository,
+    );
+
+    await tester.tap(find.text('Trips'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('countryTrip-trip-1')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripDetailsPage), findsOneWidget);
+
+    // Simulate an association being removed while Trip Details is open.
+    repository.countryTrips = [];
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(repository.countryTripsCalls, 2);
+
+    expect(find.byType(TripDetailsPage), findsNothing);
+
+    expect(find.text('No associated trips yet'), findsOneWidget);
   });
 }

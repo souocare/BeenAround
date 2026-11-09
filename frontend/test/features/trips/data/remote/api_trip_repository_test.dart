@@ -305,6 +305,214 @@ void main() {
     });
   });
 
+  group('ApiTripRepository - country listing', () {
+    test('loads Trips explicitly associated with a country', () async {
+      var requestCount = 0;
+
+      final repository = createRepository((options) {
+        requestCount++;
+
+        expect(options.method, 'GET');
+        expect(options.uri.path, '/api/v1/countries/PT/trips');
+
+        return jsonResponse({
+          'items': [
+            tripResponse(
+              id: japanTripId,
+              name: 'Portugal 2025',
+              description: 'Lisbon and Porto',
+              startedOn: '2025-07-01',
+              startedOnPrecision: 'month',
+              endedOn: '2025-08-01',
+              endedOnPrecision: 'month',
+            ),
+            tripResponse(
+              id: italyTripId,
+              name: 'Portugal Road Trip',
+              description: null,
+              startedOn: null,
+              startedOnPrecision: null,
+              endedOn: null,
+              endedOnPrecision: null,
+            ),
+          ],
+          'total': 2,
+        });
+      });
+
+      final trips = await repository.getTripsForCountry(countryCode: 'PT');
+
+      expect(requestCount, 1);
+      expect(trips, hasLength(2));
+
+      expect(trips.first.id, japanTripId);
+      expect(trips.first.name, 'Portugal 2025');
+      expect(trips.first.description, 'Lisbon and Porto');
+
+      expect(trips.first.startedOn?.date, DateTime(2025, 7, 1));
+      expect(trips.first.startedOn?.precision, VisitDatePrecision.month);
+
+      expect(trips.first.endedOn?.date, DateTime(2025, 8, 1));
+      expect(trips.first.endedOn?.precision, VisitDatePrecision.month);
+
+      expect(trips.last.id, italyTripId);
+      expect(trips.last.name, 'Portugal Road Trip');
+      expect(trips.last.startedOn, isNull);
+      expect(trips.last.endedOn, isNull);
+    });
+
+    test('normalizes lowercase country codes', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.path, '/api/v1/countries/PT/trips');
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      final trips = await repository.getTripsForCountry(countryCode: 'pt');
+
+      expect(trips, isEmpty);
+    });
+
+    test('trims country codes before requesting', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.path, '/api/v1/countries/PT/trips');
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      final trips = await repository.getTripsForCountry(countryCode: ' pt ');
+
+      expect(trips, isEmpty);
+    });
+
+    test('returns an empty list when no Trips are associated', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.path, '/api/v1/countries/PT/trips');
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      final trips = await repository.getTripsForCountry(countryCode: 'PT');
+
+      expect(trips, isEmpty);
+    });
+
+    test('returns an immutable list', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [tripResponse()],
+          'total': 1,
+        }),
+      );
+
+      final trips = await repository.getTripsForCountry(countryCode: 'PT');
+
+      expect(trips, hasLength(1));
+      expect(() => trips.clear(), throwsUnsupportedError);
+    });
+
+    test('rejects invalid country codes before making a request', () {
+      var requestCount = 0;
+
+      final repository = createRepository((_) {
+        requestCount++;
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      for (final code in ['', 'P', 'PRT', 'P1', 'PT/ES']) {
+        expect(
+          () => repository.getTripsForCountry(countryCode: code),
+          throwsArgumentError,
+        );
+      }
+
+      expect(requestCount, 0);
+    });
+
+    test('rejects a response without items', () async {
+      final repository = createRepository((_) => jsonResponse({'total': 0}));
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'PT'),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects malformed items', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'items': 'invalid', 'total': 0}),
+      );
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'PT'),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects invalid Trip date precision', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [tripResponse(startedOnPrecision: 'week')],
+          'total': 1,
+        }),
+      );
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'PT'),
+        throwsFormatException,
+      );
+    });
+
+    test('maps HTTP 401 to unauthorized', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': 'Authentication required.',
+        }, statusCode: 401),
+      );
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'PT'),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.type,
+            'type',
+            ApiErrorType.unauthorized,
+          ),
+        ),
+      );
+    });
+
+    test('maps HTTP 404 to not found', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'detail': 'Country not found.'}, statusCode: 404),
+      );
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'ZZ'),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('maps HTTP 500 to server error', () async {
+      final repository = createRepository(
+        (_) =>
+            jsonResponse({'detail': 'Internal server error.'}, statusCode: 500),
+      );
+
+      await expectLater(
+        repository.getTripsForCountry(countryCode: 'PT'),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.type,
+            'type',
+            ApiErrorType.server,
+          ),
+        ),
+      );
+    });
+  });
+
   group('ApiTripRepository - details', () {
     test('retrieves a single Trip', () async {
       final repository = createRepository((options) {

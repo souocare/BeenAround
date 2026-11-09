@@ -51,6 +51,11 @@ class FakeTripFormRepository implements TripRepository {
   Future<List<Trip>> getTrips() async => const [];
 
   @override
+  Future<List<Trip>> getTripsForCountry({required String countryCode}) {
+    throw UnimplementedError('Country Trips are not exercised by this test.');
+  }
+
+  @override
   Future<Trip> getTrip({required String tripId}) {
     throw UnimplementedError();
   }
