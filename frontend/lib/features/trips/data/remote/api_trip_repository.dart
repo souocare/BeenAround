@@ -60,6 +60,19 @@ class ApiTripRepository implements TripRepository {
   }
 
   @override
+  Future<List<Trip>> getTripsForCity({required int cityId}) {
+    if (cityId <= 0) {
+      throw ArgumentError.value(
+        cityId,
+        'cityId',
+        'Expected a positive city ID.',
+      );
+    }
+
+    return _getTripList('cities/$cityId/trips');
+  }
+
+  @override
   Future<Trip> getTrip({required String tripId}) async {
     final id = _validatedTripId(tripId);
 

@@ -513,6 +513,196 @@ void main() {
     });
   });
 
+  group('ApiTripRepository - city listing', () {
+    const lisbonId = 2267057;
+
+    test('loads Trips explicitly associated with a city', () async {
+      var requestCount = 0;
+
+      final repository = createRepository((options) {
+        requestCount++;
+
+        expect(options.method, 'GET');
+        expect(options.uri.path, '/api/v1/cities/$lisbonId/trips');
+
+        return jsonResponse({
+          'items': [
+            tripResponse(
+              id: japanTripId,
+              name: 'Lisbon 2025',
+              description: 'Summer trip',
+              startedOn: '2025-07-01',
+              startedOnPrecision: 'month',
+              endedOn: '2025-08-01',
+              endedOnPrecision: 'month',
+            ),
+            tripResponse(
+              id: italyTripId,
+              name: 'Portugal Road Trip',
+              description: null,
+              startedOn: null,
+              startedOnPrecision: null,
+              endedOn: null,
+              endedOnPrecision: null,
+            ),
+          ],
+          'total': 2,
+        });
+      });
+
+      final trips = await repository.getTripsForCity(cityId: lisbonId);
+
+      expect(requestCount, 1);
+      expect(trips, hasLength(2));
+
+      expect(trips.first.id, japanTripId);
+      expect(trips.first.name, 'Lisbon 2025');
+      expect(trips.first.description, 'Summer trip');
+
+      expect(trips.first.startedOn?.date, DateTime(2025, 7, 1));
+      expect(trips.first.startedOn?.precision, VisitDatePrecision.month);
+
+      expect(trips.first.endedOn?.date, DateTime(2025, 8, 1));
+      expect(trips.first.endedOn?.precision, VisitDatePrecision.month);
+
+      expect(trips.last.id, italyTripId);
+      expect(trips.last.name, 'Portugal Road Trip');
+      expect(trips.last.startedOn, isNull);
+      expect(trips.last.endedOn, isNull);
+    });
+
+    test('returns an empty list when no Trips are associated', () async {
+      final repository = createRepository((options) {
+        expect(options.uri.path, '/api/v1/cities/$lisbonId/trips');
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      final trips = await repository.getTripsForCity(cityId: lisbonId);
+
+      expect(trips, isEmpty);
+    });
+
+    test('preserves API ordering and returns immutable list', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [
+            tripResponse(id: italyTripId, name: 'Trip B'),
+            tripResponse(id: japanTripId, name: 'Trip A'),
+          ],
+          'total': 2,
+        }),
+      );
+
+      final trips = await repository.getTripsForCity(cityId: lisbonId);
+
+      expect(trips.map((trip) => trip.name).toList(), ['Trip B', 'Trip A']);
+
+      expect(() => trips.clear(), throwsUnsupportedError);
+    });
+
+    test('rejects invalid city IDs before making a request', () {
+      var requestCount = 0;
+
+      final repository = createRepository((_) {
+        requestCount++;
+
+        return jsonResponse({'items': [], 'total': 0});
+      });
+
+      for (final cityId in [0, -1, -100]) {
+        expect(
+          () => repository.getTripsForCity(cityId: cityId),
+          throwsArgumentError,
+        );
+      }
+
+      expect(requestCount, 0);
+    });
+
+    test('rejects response without items', () async {
+      final repository = createRepository((_) => jsonResponse({'total': 0}));
+
+      await expectLater(
+        repository.getTripsForCity(cityId: lisbonId),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects malformed items', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'items': 'invalid', 'total': 0}),
+      );
+
+      await expectLater(
+        repository.getTripsForCity(cityId: lisbonId),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects invalid Trip date precision', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'items': [tripResponse(startedOnPrecision: 'week')],
+          'total': 1,
+        }),
+      );
+
+      await expectLater(
+        repository.getTripsForCity(cityId: lisbonId),
+        throwsFormatException,
+      );
+    });
+
+    test('maps HTTP 401 to unauthorized', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({
+          'detail': 'Authentication required.',
+        }, statusCode: 401),
+      );
+
+      await expectLater(
+        repository.getTripsForCity(cityId: lisbonId),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.type,
+            'type',
+            ApiErrorType.unauthorized,
+          ),
+        ),
+      );
+    });
+
+    test('maps HTTP 404 to an API exception', () async {
+      final repository = createRepository(
+        (_) => jsonResponse({'detail': 'City not found.'}, statusCode: 404),
+      );
+
+      await expectLater(
+        repository.getTripsForCity(cityId: 999999999),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('maps HTTP 500 to server error', () async {
+      final repository = createRepository(
+        (_) =>
+            jsonResponse({'detail': 'Internal server error.'}, statusCode: 500),
+      );
+
+      await expectLater(
+        repository.getTripsForCity(cityId: lisbonId),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.type,
+            'type',
+            ApiErrorType.server,
+          ),
+        ),
+      );
+    });
+  });
+
   group('ApiTripRepository - details', () {
     test('retrieves a single Trip', () async {
       final repository = createRepository((options) {

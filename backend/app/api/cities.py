@@ -15,6 +15,9 @@ from app.schemas.cities import (
     CountryCityCountListResponse,
     CountryCityCountResponse,
 )
+from app.models.city import City
+from app.repositories.trips import TripRepository
+from app.schemas.trips import TripListResponse, TripResponse
 
 
 router = APIRouter(
@@ -137,4 +140,36 @@ def resolve_cities(
             )
             for city, country_name in rows
         ],
+    )
+
+
+@router.get(
+    "/{city_id}/trips",
+    response_model=TripListResponse,
+)
+def list_city_trips(
+    city_id: int,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> TripListResponse:
+    """List Trips explicitly associated with visits to a city."""
+
+    city = session.get(City, city_id)
+
+    if city is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="City not found.",
+        )
+
+    repository = TripRepository(session)
+
+    trips = repository.list_for_city(
+        user_id=user.id,
+        city_id=city.id,
+    )
+
+    return TripListResponse(
+        items=[TripResponse.model_validate(trip) for trip in trips],
+        total=len(trips),
     )

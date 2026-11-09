@@ -6,10 +6,13 @@ import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
+import 'package:beenaround/features/trips/domain/trip.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_repository.dart';
+import 'package:beenaround/features/trips/presentation/pages/trip_details_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
@@ -170,6 +173,63 @@ class FakeCountriesRepository implements CountriesRepository {
   }
 }
 
+class FakeCityDetailsTripRepository extends Fake implements TripRepository {
+  FakeCityDetailsTripRepository({
+    List<Trip> trips = const [],
+    this.shouldFail = false,
+  }) : trips = List.of(trips);
+
+  List<Trip> trips;
+  bool shouldFail;
+
+  int loadCalls = 0;
+  int detailsCalls = 0;
+
+  int? receivedCityId;
+  String? receivedTripId;
+
+  @override
+  Future<List<Trip>> getTripsForCity({required int cityId}) async {
+    loadCalls++;
+    receivedCityId = cityId;
+
+    if (shouldFail) {
+      throw StateError('Unable to load city trips.');
+    }
+
+    return List.unmodifiable(trips);
+  }
+
+  @override
+  Future<Trip> getTrip({required String tripId}) async {
+    detailsCalls++;
+    receivedTripId = tripId;
+
+    return trips.firstWhere(
+      (trip) => trip.id == tripId,
+      orElse: () => throw StateError('Trip not found.'),
+    );
+  }
+}
+
+class FakeCityDetailsTripAssociationRepository extends Fake
+    implements TripAssociationRepository {
+  int countryLoadCalls = 0;
+  int cityLoadCalls = 0;
+
+  @override
+  Future<List<CountryVisit>> getCountryVisits({required String tripId}) async {
+    countryLoadCalls++;
+    return const [];
+  }
+
+  @override
+  Future<List<CityVisit>> getCityVisits({required String tripId}) async {
+    cityLoadCalls++;
+    return const [];
+  }
+}
+
 CityVisit cityVisit({
   required String id,
   int cityId = 2267057,
@@ -192,6 +252,18 @@ CityVisit cityVisit({
     endedOn: endedOn,
     createdAt: created,
     updatedAt: created,
+  );
+}
+
+Trip cityTrip({required String id, required String name, String? description}) {
+  return Trip(
+    id: id,
+    name: name,
+    description: description,
+    startedOn: null,
+    endedOn: null,
+    createdAt: DateTime(2026, 11, 1),
+    updatedAt: DateTime(2026, 11, 1),
   );
 }
 
@@ -224,8 +296,10 @@ void main() {
 
   Future<VisitedCitiesCubit> pumpCityDetails(
     WidgetTester tester,
-    FakeCityVisitsRepository repository,
-  ) async {
+    FakeCityVisitsRepository repository, {
+    FakeCityDetailsTripRepository? tripRepository,
+    FakeCityDetailsTripAssociationRepository? tripAssociationRepository,
+  }) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
 
@@ -253,6 +327,14 @@ void main() {
           RepositoryProvider<CountriesRepository>.value(
             value: countriesRepository,
           ),
+          RepositoryProvider<TripRepository>.value(
+            value: tripRepository ?? FakeCityDetailsTripRepository(),
+          ),
+          RepositoryProvider<TripAssociationRepository>.value(
+            value:
+                tripAssociationRepository ??
+                FakeCityDetailsTripAssociationRepository(),
+          ),
         ],
         child: BlocProvider<VisitedCitiesCubit>.value(
           value: cubit,
@@ -278,8 +360,11 @@ void main() {
 
     await pumpCityDetails(tester, repository);
 
-    expect(find.text('City Details'), findsOneWidget);
-    expect(find.text('Lisbon'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('cityDetailsName')), findsOneWidget);
     expect(find.text('Portugal'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('VISITS'), findsOneWidget);
@@ -336,6 +421,13 @@ void main() {
     );
 
     await pumpCityDetails(tester, repository);
+    // The Overview tab shows only the three most recent visits.
+    // Select Visits to verify the complete visit history.
+    final visitsTab = find.byKey(const Key('cityTab-visits'));
+
+    await tester.ensureVisible(visitsTab);
+    await tester.tap(visitsTab);
+    await tester.pumpAndSettle();
 
     expect(find.text('5 Oct 2026 – 10 Oct 2026'), findsOneWidget);
     expect(find.text('From 12 Jun 2025'), findsOneWidget);
@@ -351,8 +443,24 @@ void main() {
 
     expect(find.text('No visits recorded for this city.'), findsOneWidget);
 
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('—'), findsOneWidget);
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cityLastVisited'))).data,
+      '—',
+    );
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('updates displayed visits after cubit reload', (tester) async {
@@ -675,9 +783,14 @@ void main() {
       visits: [visit],
     );
 
+    final tripRepository = FakeCityDetailsTripRepository();
+
     await tester.pumpWidget(
-      RepositoryProvider<CityVisitsRepository>.value(
-        value: repository,
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CityVisitsRepository>.value(value: repository),
+          RepositoryProvider<TripRepository>.value(value: tripRepository),
+        ],
         child: BlocProvider<VisitedCitiesCubit>.value(
           value: cubit,
           child: MaterialApp(
@@ -688,7 +801,20 @@ void main() {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => CityDetailsPage(city: city),
+                          builder: (_) => MultiRepositoryProvider(
+                            providers: [
+                              RepositoryProvider<CityVisitsRepository>.value(
+                                value: repository,
+                              ),
+                              RepositoryProvider<TripRepository>.value(
+                                value: tripRepository,
+                              ),
+                            ],
+                            child: BlocProvider<VisitedCitiesCubit>.value(
+                              value: cubit,
+                              child: CityDetailsPage(city: city),
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -705,7 +831,11 @@ void main() {
     await tester.tap(find.text('Open city'));
     await tester.pumpAndSettle();
 
-    expect(find.text('City Details'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
+
     final detailsPage = tester.widget<CityDetailsPage>(
       find.byType(CityDetailsPage),
     );
@@ -730,7 +860,7 @@ void main() {
     expect(repository.deleteCalls, 1);
     expect(repository.visits, isEmpty);
 
-    expect(find.text('City Details'), findsNothing);
+    expect(find.byType(CityDetailsPage), findsNothing);
     expect(find.text('Open city'), findsOneWidget);
 
     expect(cubit.state.visitedCities, isEmpty);
@@ -771,14 +901,21 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MultiBlocProvider(
+      MultiRepositoryProvider(
         providers: [
-          BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
-          BlocProvider<ResidencesCubit>.value(value: residencesCubit),
-          BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+          RepositoryProvider<TripRepository>(
+            create: (_) => FakeCityDetailsTripRepository(),
+          ),
         ],
-        child: const MaterialApp(
-          home: CityDetailsPage.fromCatalog(city: catalogCity),
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+            BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+            BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+          ],
+          child: const MaterialApp(
+            home: CityDetailsPage.fromCatalog(city: catalogCity),
+          ),
         ),
       ),
     );
@@ -786,18 +923,38 @@ void main() {
     await tester.pumpAndSettle();
 
     // City identity.
-    expect(find.text('City Details'), findsOneWidget);
-    expect(find.text('Lisbon'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const Key('cityDetailsName')), findsOneWidget);
+
     expect(find.text('Portugal'), findsOneWidget);
 
     // No explicit visits.
     expect(find.text('No visits recorded for this city.'), findsOneWidget);
 
-    expect(find.text('0'), findsOneWidget);
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
+
+    // No associated trips.
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
 
     // No artificial travel statuses.
     expect(find.byKey(const Key('cityStatus-been')), findsNothing);
+
     expect(find.byKey(const Key('cityStatus-lived')), findsNothing);
+
     expect(find.byKey(const Key('cityStatus-wish')), findsNothing);
 
     // No visit actions are available.
@@ -807,5 +964,476 @@ void main() {
     expect(visitedCitiesCubit.state.visits, isEmpty);
     expect(residencesCubit.state.residences, isEmpty);
     expect(wishlistCubit.state.entries, isEmpty);
+  });
+  testWidgets('shows Overview tab by default', (tester) async {
+    final repository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    await pumpCityDetails(tester, repository);
+
+    expect(find.byKey(const Key('cityDetailsTabs')), findsOneWidget);
+
+    final overview = tester.widget<ChoiceChip>(
+      find.byKey(const Key('cityTab-overview')),
+    );
+
+    expect(overview.selected, isTrue);
+
+    expect(find.byKey(const Key('cityVisit-visit-1')), findsOneWidget);
+  });
+  testWidgets('Overview shows only three recent visits', (tester) async {
+    final repository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(id: 'visit-1', startedOn: DateTime(2026, 1, 1)),
+        cityVisit(id: 'visit-2', startedOn: DateTime(2026, 2, 1)),
+        cityVisit(id: 'visit-3', startedOn: DateTime(2026, 3, 1)),
+        cityVisit(id: 'visit-4', startedOn: DateTime(2026, 4, 1)),
+      ],
+    );
+
+    await pumpCityDetails(tester, repository);
+
+    expect(find.byKey(const Key('cityVisit-visit-4')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisit-visit-3')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisit-visit-2')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisit-visit-1')), findsNothing);
+
+    expect(find.byKey(const Key('cityVisitsViewAll')), findsOneWidget);
+  });
+  testWidgets('View all opens complete Visits history', (tester) async {
+    final repository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(id: 'visit-1'),
+        cityVisit(id: 'visit-2'),
+        cityVisit(id: 'visit-3'),
+        cityVisit(id: 'visit-4'),
+      ],
+    );
+
+    await pumpCityDetails(tester, repository);
+
+    final viewAll = find.byKey(const Key('cityVisitsViewAll'));
+
+    await tester.ensureVisible(viewAll);
+    await tester.tap(viewAll);
+    await tester.pumpAndSettle();
+
+    final visitsTab = tester.widget<ChoiceChip>(
+      find.byKey(const Key('cityTab-visits')),
+    );
+
+    expect(visitsTab.selected, isTrue);
+
+    for (final id in ['visit-1', 'visit-2', 'visit-3', 'visit-4']) {
+      expect(find.byKey(Key('cityVisit-$id')), findsOneWidget);
+    }
+  });
+  testWidgets('city statistics show real visit count', (tester) async {
+    final repository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(id: 'visit-1'),
+        cityVisit(id: 'visit-2'),
+        cityVisit(id: 'visit-3'),
+      ],
+    );
+
+    await pumpCityDetails(tester, repository);
+
+    expect(find.byKey(const Key('cityStatistics')), findsOneWidget);
+
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('3')),
+      findsOneWidget,
+    );
+  });
+  testWidgets('city statistics show zero visits and zero associated trips', (
+    tester,
+  ) async {
+    final repository = FakeCityVisitsRepository(visits: []);
+
+    await pumpCityDetails(tester, repository);
+
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cityLastVisited'))).data,
+      '—',
+    );
+  });
+  testWidgets('city statistics show latest visit date', (tester) async {
+    final repository = FakeCityVisitsRepository(
+      visits: [
+        cityVisit(id: 'visit-1', startedOn: DateTime(2024, 6, 10)),
+        cityVisit(id: 'visit-2', startedOn: DateTime(2026, 10, 5)),
+      ],
+    );
+
+    await pumpCityDetails(tester, repository);
+
+    final lastVisited = tester.widget<Text>(
+      find.byKey(const Key('cityLastVisited')),
+    );
+
+    expect(lastVisited.data, '5 Oct 2026');
+  });
+  testWidgets('city details show real associated trip count', (tester) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [
+        cityTrip(id: 'trip-1', name: 'Portugal 2025'),
+        cityTrip(id: 'trip-2', name: 'European Road Trip'),
+      ],
+    );
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    expect(tripsRepository.loadCalls, 1);
+    expect(tripsRepository.receivedCityId, 2267057);
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('2')),
+      findsOneWidget,
+    );
+
+    // Trips must not change the number of recorded visits.
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('1')),
+      findsOneWidget,
+    );
+  });
+  testWidgets('Trips tab displays associated trips', (tester) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [
+        cityTrip(
+          id: 'trip-1',
+          name: 'Portugal 2025',
+          description: 'Summer holidays',
+        ),
+        cityTrip(id: 'trip-2', name: 'European Road Trip'),
+      ],
+    );
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    final tripsTab = find.byKey(const Key('cityTab-trips'));
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cityAssociatedTrips')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityTrip-trip-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityTrip-trip-2')), findsOneWidget);
+
+    expect(find.text('Portugal 2025'), findsOneWidget);
+    expect(find.text('European Road Trip'), findsOneWidget);
+    expect(find.text('Summer holidays'), findsOneWidget);
+  });
+  testWidgets('Trips tab shows empty state without associations', (
+    tester,
+  ) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository();
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    final tripsTab = find.byKey(const Key('cityTab-trips'));
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cityTripsEmpty')), findsOneWidget);
+
+    expect(find.text('No associated trips yet'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityTripsError')), findsNothing);
+
+    // Existing visit history is unaffected.
+    final visitsTab = find.byKey(const Key('cityTab-visits'));
+
+    await tester.tap(visitsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cityVisit-visit-1')), findsOneWidget);
+  });
+  testWidgets('Trips tab retries after loading failure', (tester) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(shouldFail: true);
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    final tripsTab = find.byKey(const Key('cityTab-trips'));
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('cityTripsError')), findsOneWidget);
+
+    expect(find.text('Unable to load associated trips.'), findsOneWidget);
+
+    // An unsuccessful request must not be presented as zero trips.
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('—')),
+      findsOneWidget,
+    );
+
+    // Simulate API recovery.
+    tripsRepository.shouldFail = false;
+    tripsRepository.trips = [cityTrip(id: 'trip-1', name: 'Portugal 2025')];
+
+    final retryButton = find.byKey(const Key('cityTripsRetry'));
+
+    await tester.ensureVisible(retryButton);
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(tripsRepository.loadCalls, 2);
+
+    expect(find.byKey(const Key('cityTripsError')), findsNothing);
+
+    expect(find.byKey(const Key('cityTrip-trip-1')), findsOneWidget);
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('1')),
+      findsOneWidget,
+    );
+  });
+  testWidgets('associated trips do not automatically mark a city visited', (
+    tester,
+  ) async {
+    final visitsRepository = FakeCityVisitsRepository(visits: []);
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [cityTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    expect(find.byKey(const Key('cityStatus-been')), findsNothing);
+
+    expect(find.byKey(const Key('cityStatus-notVisited')), findsOneWidget);
+
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('1')),
+      findsOneWidget,
+    );
+  });
+  testWidgets('pull-to-refresh updates visits and associated trips', (
+    tester,
+  ) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [cityTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+    );
+
+    expect(visitsRepository.loadCalls, 1);
+    expect(tripsRepository.loadCalls, 1);
+
+    visitsRepository.visits = [
+      cityVisit(id: 'visit-1'),
+      cityVisit(id: 'visit-2'),
+    ];
+
+    tripsRepository.trips = [
+      cityTrip(id: 'trip-1', name: 'Portugal 2025'),
+      cityTrip(id: 'trip-2', name: 'Portugal 2026'),
+    ];
+
+    final refreshIndicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+
+    refreshIndicator.onRefresh();
+
+    await tester.pumpAndSettle();
+
+    expect(visitsRepository.loadCalls, 2);
+    expect(tripsRepository.loadCalls, 2);
+
+    final visitsStatistic = find.byKey(const Key('cityVisitsStatistic'));
+
+    expect(
+      find.descendant(of: visitsStatistic, matching: find.text('2')),
+      findsOneWidget,
+    );
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('2')),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const Key('cityVisit-visit-2')), findsOneWidget);
+  });
+  testWidgets('opens Trip Details from associated city trips', (tester) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [cityTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    final associationsRepository = FakeCityDetailsTripAssociationRepository();
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+      tripAssociationRepository: associationsRepository,
+    );
+
+    final tripsTab = find.byKey(const Key('cityTab-trips'));
+
+    await tester.ensureVisible(tripsTab);
+    await tester.tap(tripsTab);
+    await tester.pumpAndSettle();
+
+    final tripTile = find.byKey(const Key('cityTrip-trip-1'));
+
+    expect(tripTile, findsOneWidget);
+
+    await tester.ensureVisible(tripTile);
+    await tester.tap(tripTile);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripDetailsPage), findsOneWidget);
+
+    expect(tripsRepository.detailsCalls, 1);
+    expect(tripsRepository.receivedTripId, 'trip-1');
+
+    expect(associationsRepository.countryLoadCalls, 1);
+    expect(associationsRepository.cityLoadCalls, 1);
+
+    expect(find.text('Portugal 2025'), findsWidgets);
+  });
+  testWidgets('refreshes city trips after returning from Trip Details', (
+    tester,
+  ) async {
+    final visitsRepository = FakeCityVisitsRepository(
+      visits: [cityVisit(id: 'visit-1')],
+    );
+
+    final tripsRepository = FakeCityDetailsTripRepository(
+      trips: [cityTrip(id: 'trip-1', name: 'Portugal 2025')],
+    );
+
+    await pumpCityDetails(
+      tester,
+      visitsRepository,
+      tripRepository: tripsRepository,
+      tripAssociationRepository: FakeCityDetailsTripAssociationRepository(),
+    );
+
+    await tester.tap(find.byKey(const Key('cityTab-trips')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('cityTrip-trip-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripDetailsPage), findsOneWidget);
+
+    expect(tripsRepository.loadCalls, 1);
+
+    // Simulate an association being removed while Trip Details is open.
+    tripsRepository.trips = [];
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripDetailsPage), findsNothing);
+
+    expect(tripsRepository.loadCalls, 2);
+
+    expect(find.byKey(const Key('cityTripsEmpty')), findsOneWidget);
+
+    expect(find.byKey(const Key('cityTrip-trip-1')), findsNothing);
+
+    final tripsStatistic = find.byKey(const Key('cityTripsStatistic'));
+
+    expect(
+      find.descendant(of: tripsStatistic, matching: find.text('0')),
+      findsOneWidget,
+    );
   });
 }

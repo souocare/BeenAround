@@ -226,6 +226,10 @@ def city_url(trip_id: str) -> str:
     return f"{BASE_URL}/{trip_id}/city-visits"
 
 
+def city_trips_url(city_id: int = LISBON_ID) -> str:
+    return f"/api/v1/cities/{city_id}/trips"
+
+
 # ---------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------
@@ -979,11 +983,13 @@ def test_cannot_remove_associations_from_another_users_trip(
 
     assert response.status_code == 404
 
+
 # ---------------------------------------------------------
 # Country-associated Trips
 # ---------------------------------------------------------
 
 COUNTRY_TRIPS_URL = "/api/v1/countries/PT/trips"
+
 
 def test_country_trips_empty_without_explicit_associations(
     associations_client,
@@ -999,6 +1005,7 @@ def test_country_trips_empty_without_explicit_associations(
         "items": [],
         "total": 0,
     }
+
 
 def test_country_trips_include_explicit_country_visit_associations(
     associations_client,
@@ -1030,6 +1037,7 @@ def test_country_trips_include_explicit_country_visit_associations(
 
     assert trip["id"] == ids["own_trip"]
     assert trip["name"] == "Portugal 2025"
+
 
 def test_country_trips_include_explicit_city_visit_associations(
     associations_client,
@@ -1064,6 +1072,7 @@ def test_country_trips_include_explicit_city_visit_associations(
 
     assert country_associations.status_code == 200
     assert country_associations.json()["total"] == 0
+
 
 def test_country_trips_deduplicate_country_and_city_associations(
     associations_client,
@@ -1102,6 +1111,7 @@ def test_country_trips_deduplicate_country_and_city_associations(
     assert len(body["items"]) == 1
     assert body["items"][0]["id"] == ids["own_trip"]
 
+
 def test_country_trips_exclude_other_users_trips(
     associations_client,
 ) -> None:
@@ -1139,6 +1149,7 @@ def test_country_trips_exclude_other_users_trips(
     assert body["total"] == 1
     assert body["items"][0]["id"] == ids["other_trip"]
 
+
 def test_country_trips_require_authentication(
     associations_client,
 ) -> None:
@@ -1147,6 +1158,7 @@ def test_country_trips_require_authentication(
     response = client.get(COUNTRY_TRIPS_URL)
 
     assert response.status_code == 401
+
 
 def test_mobile_user_can_list_country_trips(
     associations_client,
@@ -1195,6 +1207,7 @@ def test_country_trips_normalize_country_code(
         "total": 0,
     }
 
+
 def test_country_trips_return_404_for_unknown_country(
     associations_client,
 ) -> None:
@@ -1206,6 +1219,7 @@ def test_country_trips_return_404_for_unknown_country(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Country not found."
+
 
 def test_country_trips_ignore_cross_user_associations(
     associations_client,
@@ -1232,6 +1246,369 @@ def test_country_trips_ignore_cross_user_associations(
     response = client.get(COUNTRY_TRIPS_URL)
 
     assert response.status_code == 200, response.text
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+
+# ---------------------------------------------------------
+# Trips associated with a city
+# ---------------------------------------------------------
+
+
+def test_city_trips_empty_without_explicit_associations(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+
+def test_city_trips_include_explicit_city_visit_associations(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    association_response = client.post(
+        city_url(ids["own_trip"]),
+        json={
+            "city_visit_id": ids["own_city_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert association_response.status_code in (200, 201)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+    trip = body["items"][0]
+
+    assert trip["id"] == ids["own_trip"]
+    assert trip["name"] == "Portugal 2025"
+
+    assert "started_on" in trip
+    assert "started_on_precision" in trip
+    assert "ended_on" in trip
+    assert "ended_on_precision" in trip
+
+
+def test_city_trips_exclude_country_only_associations(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    association_response = client.post(
+        country_url(ids["own_trip"]),
+        json={
+            "country_visit_id": ids["own_country_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert association_response.status_code in (200, 201)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+
+def test_city_trips_deduplicate_multiple_visits_to_same_city(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Add a second independent visit to Lisbon.
+    with Session(engine) as session:
+        existing_visit = session.get(
+            CityVisit,
+            UUID(ids["own_city_visit"]),
+        )
+
+        assert existing_visit is not None
+
+        second_visit = CityVisit(
+            user_id=existing_visit.user_id,
+            city_id=LISBON_ID,
+            started_on=date(2026, 6, 10),
+            started_on_precision="day",
+            ended_on=date(2026, 6, 15),
+            ended_on_precision="day",
+        )
+
+        session.add(second_visit)
+        session.flush()
+
+        second_visit_id = str(second_visit.id)
+
+        session.commit()
+
+    login_web(client)
+
+    for visit_id in (
+        ids["own_city_visit"],
+        second_visit_id,
+    ):
+        association_response = client.post(
+            city_url(ids["own_trip"]),
+            json={"city_visit_id": visit_id},
+            headers=ORIGIN,
+        )
+
+        assert association_response.status_code in (200, 201)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == ids["own_trip"]
+
+
+def test_city_trips_exclude_associations_to_other_cities(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Porto exists independently of Lisbon.
+    porto_id = 2735943
+
+    with Session(engine) as session:
+        trip = session.get(
+            Trip,
+            UUID(ids["own_trip"]),
+        )
+
+        assert trip is not None
+
+        session.add(
+            City(
+                id=porto_id,
+                country_code="PT",
+                name="Porto",
+                ascii_name="Porto",
+                latitude=41.14961,
+                longitude=-8.61099,
+                population=249633,
+                feature_code="PPLA",
+            )
+        )
+
+        session.flush()
+
+        porto_visit = CityVisit(
+            user_id=trip.user_id,
+            city_id=porto_id,
+            started_on=date(2025, 9, 10),
+            started_on_precision="day",
+            ended_on=date(2025, 9, 12),
+            ended_on_precision="day",
+        )
+
+        session.add(porto_visit)
+        session.flush()
+
+        session.add(
+            TripCityVisit(
+                trip_id=trip.id,
+                city_visit_id=porto_visit.id,
+            )
+        )
+
+        session.commit()
+
+    login_web(client)
+
+    lisbon_response = client.get(city_trips_url())
+
+    assert lisbon_response.status_code == 200
+    assert lisbon_response.json()["total"] == 0
+
+    porto_response = client.get(city_trips_url(porto_id))
+
+    assert porto_response.status_code == 200
+    assert porto_response.json()["total"] == 1
+    assert porto_response.json()["items"][0]["id"] == ids["own_trip"]
+
+
+def test_city_trips_exclude_other_users_trips(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Explicit association owned entirely by another user.
+    with Session(engine) as session:
+        session.add(
+            TripCityVisit(
+                trip_id=UUID(ids["other_trip"]),
+                city_visit_id=UUID(ids["other_city_visit"]),
+            )
+        )
+
+        session.commit()
+
+    login_web(client)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+
+def test_city_trips_ignore_cross_user_associations(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Deliberately inconsistent association:
+    # first user's Trip linked to second user's CityVisit.
+    #
+    # Such a relationship should normally be rejected by the
+    # association API. The listing query must still be defensive.
+    with Session(engine) as session:
+        session.add(
+            TripCityVisit(
+                trip_id=UUID(ids["own_trip"]),
+                city_visit_id=UUID(ids["other_city_visit"]),
+            )
+        )
+
+        session.commit()
+
+    login_web(client)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+
+def test_city_trips_require_authentication(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 401
+
+
+def test_city_trips_return_404_for_unknown_city(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get(city_trips_url(999999999))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "City not found."
+
+
+def test_city_trips_reject_invalid_city_id(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get("/api/v1/cities/not-a-number/trips")
+
+    assert response.status_code == 422
+
+
+def test_mobile_user_can_list_city_trips(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Insert the association directly before mobile authentication.
+    # Avoid mixing web cookies and mobile bearer authentication
+    # in the same client flow.
+    with Session(engine) as session:
+        session.add(
+            TripCityVisit(
+                trip_id=UUID(ids["own_trip"]),
+                city_visit_id=UUID(ids["own_city_visit"]),
+            )
+        )
+
+        session.commit()
+
+    headers = login_mobile(client)
+
+    response = client.get(
+        city_trips_url(),
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == ids["own_trip"]
+
+
+def test_city_trips_do_not_infer_associations_from_dates(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    with Session(engine) as session:
+        trip = session.get(
+            Trip,
+            UUID(ids["own_trip"]),
+        )
+
+        assert trip is not None
+
+        # These dates overlap with the existing Lisbon visit.
+        trip.started_on = date(2025, 7, 10)
+        trip.started_on_precision = "day"
+        trip.ended_on = date(2025, 7, 15)
+        trip.ended_on_precision = "day"
+
+        session.commit()
+
+    login_web(client)
+
+    response = client.get(city_trips_url())
+
+    assert response.status_code == 200
     assert response.json() == {
         "items": [],
         "total": 0,

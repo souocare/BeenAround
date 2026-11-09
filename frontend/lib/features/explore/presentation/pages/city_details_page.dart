@@ -20,6 +20,15 @@ import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
 
 import '../widgets/show_delete_city_visit.dart';
 import '../widgets/show_edit_city_visit.dart';
+import '../../application/city_trips_cubit.dart';
+import '../../application/city_trips_state.dart';
+
+import '../../../trips/domain/trip_repository.dart';
+import '../../../trips/domain/trip_association_repository.dart';
+import '../../../trips/domain/trip.dart';
+import '../../../trips/presentation/pages/trip_details_page.dart';
+
+enum _CityTab { overview, visits, trips }
 
 class CityDetailsPage extends StatelessWidget {
   const CityDetailsPage({required VisitedCity this.city, super.key})
@@ -60,6 +69,42 @@ class CityDetailsPage extends StatelessWidget {
     if (!updated || !context.mounted || wishlistCubit.isClosed) return;
 
     await wishlistCubit.refresh();
+  }
+
+  Future<void> _refreshDetails(BuildContext context) async {
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final cityTripsCubit = context.read<CityTripsCubit>();
+
+    await Future.wait([
+      if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
+      if (!cityTripsCubit.isClosed) cityTripsCubit.refresh(),
+    ]);
+  }
+
+  Future<void> _openTripDetails(BuildContext context, Trip trip) async {
+    final cityTripsCubit = context.read<CityTripsCubit>();
+
+    final tripRepository = context.read<TripRepository>();
+
+    final tripAssociationRepository = context.read<TripAssociationRepository>();
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<TripRepository>.value(value: tripRepository),
+            RepositoryProvider<TripAssociationRepository>.value(
+              value: tripAssociationRepository,
+            ),
+          ],
+          child: TripDetailsPage(tripId: trip.id),
+        ),
+      ),
+    );
+
+    if (!context.mounted || cityTripsCubit.isClosed) return;
+
+    await cityTripsCubit.refresh();
   }
 
   Future<void> _removeFromWishlist(
@@ -139,254 +184,279 @@ class CityDetailsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('City Details')),
-      body: BlocBuilder<VisitedCitiesCubit, VisitedCitiesState>(
-        builder: (context, state) {
-          final residencesState = catalogCity != null
-              ? context.watch<ResidencesCubit>().state
-              : null;
+    return BlocProvider<CityTripsCubit>(
+      create: (context) => CityTripsCubit(
+        repository: context.read<TripRepository>(),
 
-          final wishlistState = catalogCity != null
-              ? context.watch<WishlistCubit>().state
-              : null;
-          final visits = state.visitsForCity(cityId).toList()
-            ..sort(_compareVisits);
+        cityId: cityId,
+      )..load(),
 
-          final visitedCity = _findVisitedCity(state);
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(cityName, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        body: BlocBuilder<VisitedCitiesCubit, VisitedCitiesState>(
+          builder: (context, state) {
+            final residencesState = catalogCity != null
+                ? context.watch<ResidencesCubit>().state
+                : null;
 
-          final lastVisited = _lastVisitedDate(visits);
-          final hasLived =
-              residencesState?.residencesForCity(cityId).isNotEmpty ?? false;
+            final wishlistState = catalogCity != null
+                ? context.watch<WishlistCubit>().state
+                : null;
 
-          final wishlistEntry = wishlistState?.entryForCity(cityId);
+            final visits = state.visitsForCity(cityId).toList()
+              ..sort(_compareVisits);
 
-          return RefreshIndicator(
-            onRefresh: context.read<VisitedCitiesCubit>().load,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 800),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                color: colors.primaryContainer,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Icon(
-                                Icons.location_city_rounded,
-                                color: colors.primary,
-                                size: 32,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    cityName,
-                                    style: theme.textTheme.headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w800),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    countryName,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colors.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  if (visits.isNotEmpty ||
-                                      hasLived ||
-                                      wishlistEntry != null) ...[
-                                    const SizedBox(height: 12),
-                                    Wrap(
-                                      key: const Key('cityTravelStatuses'),
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        if (visits.isNotEmpty)
-                                          Chip(
-                                            key: const Key('cityStatus-been'),
-                                            avatar: const Icon(
-                                              Icons.check_circle_outline,
-                                              size: 18,
-                                            ),
-                                            label: Text(
-                                              '${visits.length} '
-                                              '${visits.length == 1 ? 'visit' : 'visits'}',
-                                            ),
-                                          ),
+            final visitedCity = _findVisitedCity(state);
 
-                                        if (hasLived)
-                                          ActionChip(
-                                            key: const Key('cityStatus-lived'),
-                                            tooltip: 'Manage residences',
-                                            avatar: Icon(
-                                              Icons.home_rounded,
-                                              color: colors.primary,
-                                              size: 18,
-                                            ),
-                                            label: const Text('Lived'),
-                                            backgroundColor:
-                                                colors.primaryContainer,
-                                            side: BorderSide.none,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            onPressed: () =>
-                                                _showResidences(context),
-                                          ),
+            final lastVisited = _lastVisitedDate(visits);
 
-                                        if (wishlistEntry != null)
-                                          WishlistEntryControls(
-                                            onRemove: () => _removeFromWishlist(
-                                              context,
-                                              wishlistEntry,
-                                            ),
-                                            onEditNote: () => _editWishlistNote(
-                                              context,
-                                              wishlistEntry,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+            final hasLived =
+                residencesState?.residencesForCity(cityId).isNotEmpty ?? false;
 
-                        const SizedBox(height: 24),
+            final wishlistEntry = wishlistState?.entryForCity(cityId);
 
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              children: [
-                                Text(
-                                  '${visits.length}',
-                                  style: theme.textTheme.headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800),
+            final cityTripsState = context.watch<CityTripsCubit>().state;
+
+            return RefreshIndicator(
+              onRefresh: () => _refreshDetails(context),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ---------------------------------------------------
+                          // City identity
+                          // ---------------------------------------------------
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: colors.primaryContainer,
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'VISITS',
-                                  style: theme.textTheme.labelMedium?.copyWith(
-                                    color: colors.onSurfaceVariant,
-                                  ),
+                                child: Icon(
+                                  Icons.location_city_rounded,
+                                  color: colors.primary,
+                                  size: 32,
                                 ),
-                                const Divider(height: 32),
-                                Row(
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'LAST VISITED',
-                                      style: theme.textTheme.labelMedium,
+                                      cityName,
+                                      key: const Key('cityDetailsName'),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                     ),
-                                    const Spacer(),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      lastVisited == null
-                                          ? '—'
-                                          : _formatDate(lastVisited),
+                                      countryName,
+                                      key: const Key('cityDetailsCountry'),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colors.onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 28),
-
-                        Text(
-                          'Visit History',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        if (visits.isEmpty)
-                          const Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Text(
-                                'No visits recorded for this city.',
-                                textAlign: TextAlign.center,
                               ),
-                            ),
-                          )
-                        else
-                          Card(
-                            child: Column(
-                              children: [
-                                for (
-                                  var index = 0;
-                                  index < visits.length;
-                                  index++
-                                ) ...[
-                                  ListTile(
-                                    key: Key('cityVisit-${visits[index].id}'),
-                                    leading: const Icon(
-                                      Icons.calendar_today_outlined,
-                                    ),
-                                    title: Text('Visit ${index + 1}'),
-                                    subtitle: Text(
-                                      _formatVisitDates(visits[index]),
-                                    ),
-                                    trailing: AdaptiveRecordActionsMenu(
-                                      key: Key(
-                                        'cityVisitMenu-${visits[index].id}',
-                                      ),
-                                      tooltip: 'Visit actions',
-                                      editLabel: 'Edit visit',
-                                      deleteLabel: 'Delete visit',
-                                      onEdit: () {
-                                        if (visitedCity == null) return;
-
-                                        _editVisit(
-                                          context,
-                                          visitedCity,
-                                          visits[index],
-                                        );
-                                      },
-                                      onDelete: () {
-                                        if (visitedCity == null) return;
-
-                                        _deleteVisit(
-                                          context,
-                                          visitedCity,
-                                          visits[index],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  if (index < visits.length - 1)
-                                    const Divider(height: 1),
-                                ],
-                              ],
-                            ),
+                            ],
                           ),
-                      ],
+
+                          const SizedBox(height: 16),
+
+                          // ---------------------------------------------------
+                          // Travel statuses
+                          // ---------------------------------------------------
+                          Wrap(
+                            key: const Key('cityTravelStatuses'),
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (visits.isNotEmpty)
+                                Chip(
+                                  key: const Key('cityStatus-been'),
+                                  avatar: Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 18,
+                                    color: colors.primary,
+                                  ),
+                                  label: Text(
+                                    '${visits.length} '
+                                    '${visits.length == 1 ? 'visit' : 'visits'}',
+                                  ),
+                                )
+                              else
+                                Chip(
+                                  key: const Key('cityStatus-notVisited'),
+                                  avatar: Icon(
+                                    Icons.radio_button_unchecked_rounded,
+                                    size: 18,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                  label: const Text('Not visited'),
+                                ),
+
+                              if (hasLived)
+                                ActionChip(
+                                  key: const Key('cityStatus-lived'),
+                                  tooltip: 'Manage residences',
+                                  avatar: Icon(
+                                    Icons.home_rounded,
+                                    color: colors.primary,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Lived'),
+                                  backgroundColor: colors.primaryContainer,
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  onPressed: () => _showResidences(context),
+                                ),
+
+                              if (wishlistEntry != null)
+                                WishlistEntryControls(
+                                  onRemove: () => _removeFromWishlist(
+                                    context,
+                                    wishlistEntry,
+                                  ),
+                                  onEditNote: () =>
+                                      _editWishlistNote(context, wishlistEntry),
+                                ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // ---------------------------------------------------
+                          // Statistics
+                          // ---------------------------------------------------
+                          _CityStatistics(
+                            visitCount: visits.length,
+                            tripCount: cityTripsState.isReady
+                                ? '${cityTripsState.tripCount}'
+                                : '—',
+                            lastVisited: lastVisited,
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // ---------------------------------------------------
+                          // Visit history
+                          // ---------------------------------------------------
+                          _CityTabsAndHistory(
+                            visits: visits,
+                            visitedCity: visitedCity,
+                            tripsState: cityTripsState,
+                            onRetryTrips: () {
+                              context.read<CityTripsCubit>().refresh();
+                            },
+                            onTripSelected: (trip) {
+                              _openTripDetails(context, trip);
+                            },
+                            onEdit: (city, visit) =>
+                                _editVisit(context, city, visit),
+                            onDelete: (city, visit) =>
+                                _deleteVisit(context, city, visit),
+                          ),
+                          // Text(
+                          //   'Visit History',
+                          //   style: theme.textTheme.titleLarge?.copyWith(
+                          //     fontWeight: FontWeight.w700,
+                          //   ),
+                          // ),
+
+                          // const SizedBox(height: 16),
+
+                          // if (visits.isEmpty)
+                          //   const Card(
+                          //     child: Padding(
+                          //       padding: EdgeInsets.all(24),
+                          //       child: Text(
+                          //         'No visits recorded for this city.',
+                          //         textAlign: TextAlign.center,
+                          //       ),
+                          //     ),
+                          //   )
+                          // else
+                          //   Card(
+                          //     child: Column(
+                          //       children: [
+                          //         for (
+                          //           var index = 0;
+                          //           index < visits.length;
+                          //           index++
+                          //         ) ...[
+                          //           ListTile(
+                          //             key: Key('cityVisit-${visits[index].id}'),
+                          //             leading: const Icon(
+                          //               Icons.calendar_today_outlined,
+                          //             ),
+                          //             title: Text('Visit ${index + 1}'),
+                          //             subtitle: Text(
+                          //               _formatVisitDates(visits[index]),
+                          //             ),
+                          //             trailing: AdaptiveRecordActionsMenu(
+                          //               key: Key(
+                          //                 'cityVisitMenu-${visits[index].id}',
+                          //               ),
+                          //               tooltip: 'Visit actions',
+                          //               editLabel: 'Edit visit',
+                          //               deleteLabel: 'Delete visit',
+                          //               onEdit: () {
+                          //                 if (visitedCity == null) return;
+
+                          //                 _editVisit(
+                          //                   context,
+                          //                   visitedCity,
+                          //                   visits[index],
+                          //                 );
+                          //               },
+                          //               onDelete: () {
+                          //                 if (visitedCity == null) return;
+
+                          //                 _deleteVisit(
+                          //                   context,
+                          //                   visitedCity,
+                          //                   visits[index],
+                          //                 );
+                          //               },
+                          //             ),
+                          //           ),
+                          //           if (index < visits.length - 1)
+                          //             const Divider(height: 1),
+                          //         ],
+                          //       ],
+                          //     ),
+                          //   ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -423,6 +493,433 @@ class CityDetailsPage extends StatelessWidget {
     }
 
     return latest;
+  }
+}
+
+class _CityTabsAndHistory extends StatefulWidget {
+  const _CityTabsAndHistory({
+    required this.visits,
+    required this.visitedCity,
+    required this.onEdit,
+    required this.onDelete,
+    required this.tripsState,
+    required this.onRetryTrips,
+    required this.onTripSelected,
+  });
+
+  final List<CityVisit> visits;
+  final VisitedCity? visitedCity;
+  final CityTripsState tripsState;
+  final VoidCallback onRetryTrips;
+  final ValueChanged<Trip> onTripSelected;
+
+  final void Function(VisitedCity city, CityVisit visit) onEdit;
+  final void Function(VisitedCity city, CityVisit visit) onDelete;
+
+  @override
+  State<_CityTabsAndHistory> createState() => _CityTabsAndHistoryState();
+}
+
+class _CityTabsAndHistoryState extends State<_CityTabsAndHistory> {
+  _CityTab _selectedTab = _CityTab.overview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTabs(context),
+
+        const SizedBox(height: 24),
+
+        switch (_selectedTab) {
+          _CityTab.overview => _CityVisitHistory(
+            visits: widget.visits.take(3).toList(),
+            visitedCity: widget.visitedCity,
+            onEdit: widget.onEdit,
+            onDelete: widget.onDelete,
+            showViewAll: widget.visits.length > 3,
+            onViewAll: () {
+              setState(() {
+                _selectedTab = _CityTab.visits;
+              });
+            },
+          ),
+
+          _CityTab.visits => _CityVisitHistory(
+            visits: widget.visits,
+            visitedCity: widget.visitedCity,
+            onEdit: widget.onEdit,
+            onDelete: widget.onDelete,
+          ),
+
+          _CityTab.trips => _CityAssociatedTrips(
+            state: widget.tripsState,
+            onRetry: widget.onRetryTrips,
+            onTripSelected: widget.onTripSelected,
+          ),
+        },
+      ],
+    );
+  }
+
+  Widget _buildTabs(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Wrap(
+      key: const Key('cityDetailsTabs'),
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final tab in _CityTab.values)
+          ChoiceChip(
+            key: Key('cityTab-${tab.name}'),
+            label: Text(switch (tab) {
+              _CityTab.overview => 'Overview',
+              _CityTab.visits => 'Visits',
+              _CityTab.trips => 'Trips',
+            }),
+            selected: _selectedTab == tab,
+            selectedColor: colors.primaryContainer,
+            onSelected: (_) {
+              setState(() {
+                _selectedTab = tab;
+              });
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _CityVisitHistory extends StatelessWidget {
+  const _CityVisitHistory({
+    required this.visits,
+    required this.visitedCity,
+    required this.onEdit,
+    required this.onDelete,
+    this.showViewAll = false,
+    this.onViewAll,
+  });
+
+  final List<CityVisit> visits;
+  final VisitedCity? visitedCity;
+
+  final void Function(VisitedCity city, CityVisit visit) onEdit;
+  final void Function(VisitedCity city, CityVisit visit) onDelete;
+
+  final bool showViewAll;
+  final VoidCallback? onViewAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      key: const Key('cityVisitHistory'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Visit History',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+
+            if (showViewAll)
+              TextButton(
+                key: const Key('cityVisitsViewAll'),
+                onPressed: onViewAll,
+                child: const Text('View all'),
+              ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        if (visits.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'No visits recorded for this city.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          Card(
+            child: Column(
+              children: [
+                for (var index = 0; index < visits.length; index++) ...[
+                  ListTile(
+                    key: Key('cityVisit-${visits[index].id}'),
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: Text('Visit ${index + 1}'),
+                    subtitle: Text(_formatVisitDates(visits[index])),
+                    trailing: AdaptiveRecordActionsMenu(
+                      key: Key('cityVisitMenu-${visits[index].id}'),
+                      tooltip: 'Visit actions',
+                      editLabel: 'Edit visit',
+                      deleteLabel: 'Delete visit',
+                      onEdit: () {
+                        final city = visitedCity;
+                        if (city == null) return;
+
+                        onEdit(city, visits[index]);
+                      },
+                      onDelete: () {
+                        final city = visitedCity;
+                        if (city == null) return;
+
+                        onDelete(city, visits[index]);
+                      },
+                    ),
+                  ),
+
+                  if (index < visits.length - 1) const Divider(height: 1),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CityStatistics extends StatelessWidget {
+  const _CityStatistics({
+    required this.visitCount,
+    required this.tripCount,
+    required this.lastVisited,
+  });
+
+  final int visitCount;
+  final String tripCount;
+  final DateTime? lastVisited;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      key: const Key('cityStatistics'),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _CityStatItem(
+                    value: '$visitCount',
+                    label: 'VISITS',
+                    key: const Key('cityVisitsStatistic'),
+                  ),
+                ),
+
+                Container(width: 1, height: 40, color: colors.outlineVariant),
+
+                Expanded(
+                  child: _CityStatItem(
+                    value: tripCount,
+                    label: 'TRIPS',
+                    key: const Key('cityTripsStatistic'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.outline.withValues(alpha: 0.18),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  'LAST VISITED',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Text(
+                    lastVisited == null ? '—' : _formatDate(lastVisited!),
+                    key: const Key('cityLastVisited'),
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CityStatItem extends StatelessWidget {
+  const _CityStatItem({required this.value, required this.label, super.key});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CityAssociatedTrips extends StatelessWidget {
+  const _CityAssociatedTrips({
+    required this.state,
+    required this.onRetry,
+    required this.onTripSelected,
+  });
+
+  final CityTripsState state;
+  final VoidCallback onRetry;
+  final ValueChanged<Trip> onTripSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (state.isInitial || state.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: CircularProgressIndicator(key: Key('cityTripsLoading')),
+        ),
+      );
+    }
+
+    if (state.isFailure) {
+      return Card(
+        key: const Key('cityTripsError'),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(Icons.error_outline_rounded, color: colors.error, size: 32),
+              const SizedBox(height: 12),
+              Text(
+                state.errorMessage ?? 'Unable to load associated trips.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                key: const Key('cityTripsRetry'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (state.trips.isEmpty) {
+      return Card(
+        key: const Key('cityTripsEmpty'),
+        margin: EdgeInsets.zero,
+        child: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('No associated trips yet', textAlign: TextAlign.center),
+        ),
+      );
+    }
+
+    return Column(
+      key: const Key('cityAssociatedTrips'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'ASSOCIATED TRIPS',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final trip in state.trips)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              key: Key('cityTrip-${trip.id}'),
+              leading: Icon(Icons.luggage_rounded, color: colors.primary),
+              title: Text(
+                trip.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                trip.description?.trim().isNotEmpty == true
+                    ? trip.description!
+                    : 'Trip details',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onTripSelected(trip),
+            ),
+          ),
+      ],
+    );
   }
 }
 

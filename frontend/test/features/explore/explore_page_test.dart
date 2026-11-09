@@ -1003,8 +1003,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CityDetailsPage), findsOneWidget);
-    expect(find.text('City Details'), findsOneWidget);
-    expect(find.text('Lisbon'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('cityDetailsName')), findsOneWidget);
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cityDetailsName'))).data,
+      'Lisbon',
+    );
 
     expect(find.byKey(const Key('cityVisit-lisbon-visit')), findsOneWidget);
   });
@@ -1043,7 +1051,10 @@ void main() {
     await tester.tap(find.byKey(const Key('visitedCityCard-2267057')));
     await tester.pumpAndSettle();
 
-    expect(find.text('City Details'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
 
     // Abrir menu da visita.
     await tester.tap(find.byKey(const Key('cityVisitMenu-lisbon-1')));
@@ -1131,7 +1142,10 @@ void main() {
     expect(cityRepository.visits.single.id, 'lisbon-2');
 
     // Continuamos no City Details.
-    expect(find.text('City Details'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Lisbon')),
+      findsOneWidget,
+    );
 
     expect(find.byKey(const Key('cityVisit-lisbon-1')), findsNothing);
 
@@ -1871,7 +1885,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CityDetailsPage), findsOneWidget);
-    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.byKey(const Key('cityDetailsName')), findsOneWidget);
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cityDetailsName'))).data,
+      'Lisbon',
+    );
     expect(find.text('No visits recorded for this city.'), findsOneWidget);
 
     expect(find.byTooltip('Visit actions'), findsNothing);
@@ -1914,7 +1933,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CityDetailsPage), findsOneWidget);
-    expect(find.text('Madrid'), findsOneWidget);
+    expect(find.byKey(const Key('cityDetailsName')), findsOneWidget);
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cityDetailsName'))).data,
+      'Madrid',
+    );
     expect(find.text('No visits recorded for this city.'), findsOneWidget);
 
     expect(find.byTooltip('Visit actions'), findsNothing);

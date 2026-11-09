@@ -1,4 +1,6 @@
 import 'package:beenaround/features/residences/domain/residence_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_repository.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -96,6 +98,9 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
     final countriesRepository = context.read<CountriesRepository>();
     final wishlistRepository = context.read<WishlistRepository>();
     final residenceRepository = context.read<ResidenceRepository>();
+    final tripRepository = context.read<TripRepository>();
+
+    final tripAssociationRepository = context.read<TripAssociationRepository>();
 
     final exploreCities = context.read<ExploreCitiesCubit>().state.cities;
 
@@ -129,6 +134,11 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
               RepositoryProvider<ResidenceRepository>.value(
                 value: residenceRepository,
               ),
+              RepositoryProvider<TripRepository>.value(value: tripRepository),
+
+              RepositoryProvider<TripAssociationRepository>.value(
+                value: tripAssociationRepository,
+              ),
             ],
             child: BlocProvider<VisitedCitiesCubit>.value(
               value: visitedCitiesCubit,
@@ -157,6 +167,14 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
             ),
             RepositoryProvider<WishlistRepository>.value(
               value: wishlistRepository,
+            ),
+            RepositoryProvider<TripRepository>.value(value: tripRepository),
+
+            RepositoryProvider<TripAssociationRepository>.value(
+              value: tripAssociationRepository,
+            ),
+            RepositoryProvider<ResidenceRepository>.value(
+              value: residenceRepository,
             ),
           ],
           child: MultiBlocProvider(

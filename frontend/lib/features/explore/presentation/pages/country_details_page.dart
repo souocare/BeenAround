@@ -381,6 +381,9 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     final countriesRepository = context.read<CountriesRepository>();
     final wishlistRepository = context.read<WishlistRepository>();
     final residenceRepository = context.read<ResidenceRepository>();
+    final tripRepository = context.read<TripRepository>();
+
+    final tripAssociationRepository = context.read<TripAssociationRepository>();
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -397,6 +400,11 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
             ),
             RepositoryProvider<ResidenceRepository>.value(
               value: residenceRepository,
+            ),
+            RepositoryProvider<TripRepository>.value(value: tripRepository),
+
+            RepositoryProvider<TripAssociationRepository>.value(
+              value: tripAssociationRepository,
             ),
           ],
           child: MultiBlocProvider(

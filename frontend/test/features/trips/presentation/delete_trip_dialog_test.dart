@@ -41,6 +41,13 @@ class FakeDeleteTripRepository implements TripRepository {
   }
 
   @override
+  Future<List<Trip>> getTripsForCity({required int cityId}) {
+    throw UnimplementedError(
+      'getTripsForCity is not used by delete trip dialog tests.',
+    );
+  }
+
+  @override
   Future<Trip> getTrip({required String tripId}) {
     throw UnimplementedError();
   }

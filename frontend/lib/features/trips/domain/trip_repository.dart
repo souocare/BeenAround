@@ -23,4 +23,10 @@ abstract interface class TripRepository {
   /// Includes associations through country visits and city visits.
   /// Does not infer associations from dates or create country visits.
   Future<List<Trip>> getTripsForCountry({required String countryCode});
+
+  /// Return Trips explicitly associated with visits to a city.
+  ///
+  /// Only TripCityVisit associations are considered.
+  /// Country-level associations do not imply city associations.
+  Future<List<Trip>> getTripsForCity({required int cityId});
 }

@@ -95,6 +95,48 @@ class TripRepository:
 
         return list(self._session.scalars(statement).all())
 
+    def list_for_city(
+        self,
+        *,
+        user_id: UUID,
+        city_id: int,
+    ) -> list[Trip]:
+        """Return distinct user-owned Trips linked to visits to a city.
+
+        Only explicit TripCityVisit associations are considered.
+
+        CountryVisit associations do not imply city associations.
+        This operation never creates or modifies visits or Trips.
+        """
+
+        city_visit_association = (
+            select(TripCityVisit.trip_id)
+            .join(
+                CityVisit,
+                TripCityVisit.city_visit_id == CityVisit.id,
+            )
+            .where(
+                TripCityVisit.trip_id == Trip.id,
+                CityVisit.user_id == user_id,
+                CityVisit.city_id == city_id,
+            )
+            .exists()
+        )
+
+        statement = (
+            select(Trip)
+            .where(
+                Trip.user_id == user_id,
+                city_visit_association,
+            )
+            .order_by(
+                Trip.created_at.desc(),
+                Trip.id.desc(),
+            )
+        )
+
+        return list(self._session.scalars(statement).all())
+
     def get_for_user(
         self,
         *,

@@ -41,6 +41,11 @@ class InMemoryTripRepository implements TripRepository {
   }
 
   @override
+  Future<List<Trip>> getTripsForCity({required int cityId}) {
+    throw UnimplementedError('City Trips are not exercised by this test.');
+  }
+
+  @override
   Future<Trip> getTrip({required String tripId}) async {
     detailCalls++;
 
