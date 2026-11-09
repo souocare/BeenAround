@@ -978,3 +978,261 @@ def test_cannot_remove_associations_from_another_users_trip(
     )
 
     assert response.status_code == 404
+
+# ---------------------------------------------------------
+# Country-associated Trips
+# ---------------------------------------------------------
+
+COUNTRY_TRIPS_URL = "/api/v1/countries/PT/trips"
+
+def test_country_trips_empty_without_explicit_associations(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+def test_country_trips_include_explicit_country_visit_associations(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    created = client.post(
+        country_url(ids["own_trip"]),
+        json={
+            "country_visit_id": ids["own_country_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert created.status_code == 201, created.text
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+    trip = body["items"][0]
+
+    assert trip["id"] == ids["own_trip"]
+    assert trip["name"] == "Portugal 2025"
+
+def test_country_trips_include_explicit_city_visit_associations(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    created = client.post(
+        city_url(ids["own_trip"]),
+        json={
+            "city_visit_id": ids["own_city_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert created.status_code == 201, created.text
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == ids["own_trip"]
+
+    # Associating a city visit does not associate a country visit.
+    country_associations = client.get(
+        country_url(ids["own_trip"]),
+    )
+
+    assert country_associations.status_code == 200
+    assert country_associations.json()["total"] == 0
+
+def test_country_trips_deduplicate_country_and_city_associations(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    country_response = client.post(
+        country_url(ids["own_trip"]),
+        json={
+            "country_visit_id": ids["own_country_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert country_response.status_code == 201
+
+    city_response = client.post(
+        city_url(ids["own_trip"]),
+        json={
+            "city_visit_id": ids["own_city_visit"],
+        },
+        headers=ORIGIN,
+    )
+
+    assert city_response.status_code == 201
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == ids["own_trip"]
+
+def test_country_trips_exclude_other_users_trips(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    with Session(engine) as session:
+        session.add(
+            TripCountryVisit(
+                trip_id=UUID(ids["other_trip"]),
+                country_visit_id=UUID(ids["other_country_visit"]),
+            )
+        )
+
+        session.commit()
+
+    login_web(client)
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+    # The second user can see their own associated Trip.
+    login_web(client, username="anotheruser")
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == ids["other_trip"]
+
+def test_country_trips_require_authentication(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 401
+
+def test_mobile_user_can_list_country_trips(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    # Prepare an existing association without creating a Web session.
+    with Session(engine) as session:
+        session.add(
+            TripCountryVisit(
+                trip_id=UUID(ids["own_trip"]),
+                country_visit_id=UUID(ids["own_country_visit"]),
+            )
+        )
+        session.commit()
+
+    # Authenticate using the Mobile flow only.
+    headers = login_mobile(client)
+
+    response = client.get(
+        COUNTRY_TRIPS_URL,
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == ids["own_trip"]
+
+
+def test_country_trips_normalize_country_code(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get("/api/v1/countries/pt/trips")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }
+
+def test_country_trips_return_404_for_unknown_country(
+    associations_client,
+) -> None:
+    client, _, _ = associations_client
+
+    login_web(client)
+
+    response = client.get("/api/v1/countries/ZZ/trips")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Country not found."
+
+def test_country_trips_ignore_cross_user_associations(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    with Session(engine) as session:
+        session.add(
+            TripCountryVisit(
+                trip_id=UUID(ids["own_trip"]),
+                country_visit_id=UUID(ids["other_country_visit"]),
+            )
+        )
+        session.add(
+            TripCityVisit(
+                trip_id=UUID(ids["own_trip"]),
+                city_visit_id=UUID(ids["other_city_visit"]),
+            )
+        )
+        session.commit()
+
+    login_web(client)
+
+    response = client.get(COUNTRY_TRIPS_URL)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+    }

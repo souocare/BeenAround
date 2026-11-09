@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.domain.visit_dates import DatePrecision
 from app.models.trip import Trip
+from app.models.city import City
+from app.models.city_visit import CityVisit
+from app.models.country_visit import CountryVisit
+from app.models.trip_city_visit import TripCityVisit
+from app.models.trip_country_visit import TripCountryVisit
 
 
 class TripRepository:
@@ -22,6 +27,66 @@ class TripRepository:
         statement = (
             select(Trip)
             .where(Trip.user_id == user_id)
+            .order_by(
+                Trip.created_at.desc(),
+                Trip.id.desc(),
+            )
+        )
+
+        return list(self._session.scalars(statement).all())
+
+    def list_for_country(
+        self,
+        *,
+        user_id: UUID,
+        country_code: str,
+    ) -> list[Trip]:
+        """Return distinct user-owned Trips explicitly linked to a country.
+
+        Country visits and city visits are independent records.
+        A Trip is included when it contains either association type.
+
+        This is a read-only operation and never creates associations.
+        """
+
+        country_visit_association = (
+            select(TripCountryVisit.trip_id)
+            .join(
+                CountryVisit,
+                TripCountryVisit.country_visit_id == CountryVisit.id,
+            )
+            .where(
+                TripCountryVisit.trip_id == Trip.id,
+                CountryVisit.user_id == user_id,
+                CountryVisit.country_code == country_code,
+            )
+            .exists()
+        )
+
+        city_visit_association = (
+            select(TripCityVisit.trip_id)
+            .join(
+                CityVisit,
+                TripCityVisit.city_visit_id == CityVisit.id,
+            )
+            .join(
+                City,
+                CityVisit.city_id == City.id,
+            )
+            .where(
+                TripCityVisit.trip_id == Trip.id,
+                CityVisit.user_id == user_id,
+                City.country_code == country_code,
+            )
+            .exists()
+        )
+
+        statement = (
+            select(Trip)
+            .where(
+                Trip.user_id == user_id,
+                country_visit_association | city_visit_association,
+            )
             .order_by(
                 Trip.created_at.desc(),
                 Trip.id.desc(),
