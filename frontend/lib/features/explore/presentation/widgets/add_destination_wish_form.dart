@@ -64,8 +64,11 @@ class AddDestinationWishForm extends StatelessWidget {
           key: const Key('wishlistNoteField'),
           initialValue: note,
           enabled: enabled,
-          maxLines: 4,
+          keyboardType: TextInputType.multiline,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.newline,
           minLines: 3,
+          maxLines: 5,
           maxLength: 1000,
           maxLengthEnforcement: MaxLengthEnforcement.enforced,
           decoration: InputDecoration(

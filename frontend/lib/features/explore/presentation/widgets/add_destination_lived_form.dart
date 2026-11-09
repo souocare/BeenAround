@@ -98,8 +98,11 @@ class AddDestinationLivedForm extends StatelessWidget {
           key: const Key('residenceNoteField'),
           initialValue: note,
           enabled: enabled,
+          keyboardType: TextInputType.multiline,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.newline,
           minLines: 3,
-          maxLines: 4,
+          maxLines: 5,
           maxLength: 1000,
           maxLengthEnforcement: MaxLengthEnforcement.enforced,
           decoration: InputDecoration(

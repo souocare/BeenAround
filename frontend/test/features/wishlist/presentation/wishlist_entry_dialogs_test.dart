@@ -267,9 +267,41 @@ void main() {
         find.byKey(const Key('wishlistNoteField')),
         'Explore the Azores',
       );
+      await tester.pump();
 
-      await tester.tap(find.byKey(const Key('saveWishlistNoteButton')));
+      final saveButton = tester.widget<FilledButton>(
+        find.byKey(const Key('saveWishlistNoteButton')),
+      );
+
+      expect(
+        saveButton.onPressed,
+        isNotNull,
+        reason: 'Save must be enabled after modifying the note.',
+      );
+
+      final saveFinder = find.byKey(const Key('saveWishlistNoteButton'));
+
+      // Finish editing before interacting with the dialog actions.
+      tester.testTextInput.hide();
       await tester.pumpAndSettle();
+
+      await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<FilledButton>(saveFinder).onPressed, isNotNull);
+
+      // The repository must not be called before Save.
+      expect(repository.updateCalls, 0);
+
+      await tester.tap(saveFinder);
+      await tester.pumpAndSettle();
+
+      // Save must execute exactly one repository update.
+      expect(
+        repository.updateCalls,
+        1,
+        reason: 'Save should execute exactly one repository update.',
+      );
 
       expect(result, isTrue);
       expect(repository.updateCalls, 1);
@@ -296,8 +328,29 @@ void main() {
 
       await tester.enterText(find.byKey(const Key('wishlistNoteField')), '');
 
-      await tester.tap(find.byKey(const Key('saveWishlistNoteButton')));
+      final saveFinder = find.byKey(const Key('saveWishlistNoteButton'));
+
+      // Finish editing before interacting with the dialog actions.
+      tester.testTextInput.hide();
       await tester.pumpAndSettle();
+
+      await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<FilledButton>(saveFinder).onPressed, isNotNull);
+
+      // The repository must not be called before Save.
+      expect(repository.updateCalls, 0);
+
+      await tester.tap(saveFinder);
+      await tester.pumpAndSettle();
+
+      // Save must execute exactly one repository update.
+      expect(
+        repository.updateCalls,
+        1,
+        reason: 'Save should execute exactly one repository update.',
+      );
 
       expect(repository.updateCalls, 1);
       expect(repository.updatedNote, isNull);
@@ -327,8 +380,29 @@ void main() {
         'Updated note',
       );
 
-      await tester.tap(find.byKey(const Key('saveWishlistNoteButton')));
+      final saveFinder = find.byKey(const Key('saveWishlistNoteButton'));
+
+      // Finish editing before interacting with the dialog actions.
+      tester.testTextInput.hide();
       await tester.pumpAndSettle();
+
+      await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<FilledButton>(saveFinder).onPressed, isNotNull);
+
+      // The repository must not be called before Save.
+      expect(repository.updateCalls, 0);
+
+      await tester.tap(saveFinder);
+      await tester.pumpAndSettle();
+
+      // Save must execute exactly one repository update.
+      expect(
+        repository.updateCalls,
+        1,
+        reason: 'Save should execute exactly one repository update.',
+      );
 
       expect(find.text('Edit Wishlist Note'), findsOneWidget);
       expect(find.byKey(const Key('wishlistNoteError')), findsOneWidget);
