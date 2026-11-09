@@ -1,3 +1,5 @@
+import 'package:beenaround/core/widgets/adaptive_record_actions_menu.dart';
+import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/residences/application/residences_cubit.dart';
 import 'package:beenaround/features/residences/presentation/widgets/show_residences.dart';
 import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
@@ -18,10 +20,17 @@ import '../widgets/show_edit_country_visit.dart';
 import '../../../map/presentation/widgets/country_map.dart';
 import '../../../wishlist/presentation/widgets/wishlist_entry_controls.dart';
 import '../../../wishlist/presentation/widgets/show_edit_wishlist_note.dart';
+import '../../application/visited_cities_cubit.dart';
+import '../../application/visited_cities_state.dart';
+import '../../../geography/domain/city_visits_repository.dart';
+import '../../../residences/domain/residence_repository.dart';
+import '../../../wishlist/domain/wishlist_repository.dart';
+
+import 'city_details_page.dart';
+
+import '../../domain/visited_city.dart';
 
 enum _CountryTab { overview, visits, cities, trips }
-
-enum _VisitAction { edit, delete }
 
 class CountryDetailsPage extends StatefulWidget {
   const CountryDetailsPage({required this.country, super.key});
@@ -36,10 +45,6 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
   _CountryTab _selectedTab = _CountryTab.overview;
 
   Future<void> _addVisit() async {
-    final exploreCubit = context.read<ExploreCubit>();
-    final residencesCubit = context.read<ResidencesCubit>();
-    final wishlistCubit = context.read<WishlistCubit>();
-
     final created = await showAddDestination(
       context,
       initialCountry: widget.country,
@@ -47,11 +52,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
     if (!mounted || !created) return;
 
-    await Future.wait([
-      if (!exploreCubit.isClosed) exploreCubit.refresh(),
-      if (!residencesCubit.isClosed) residencesCubit.refresh(),
-      if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
-    ]);
+    await _refreshDetails();
   }
 
   Future<void> _editWishlistNote(WishlistEntry entry) async {
@@ -114,13 +115,33 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     );
   }
 
+  Future<void> _refreshDetails() async {
+    final exploreCubit = context.read<ExploreCubit>();
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    await Future.wait([
+      if (!exploreCubit.isClosed) exploreCubit.refresh(),
+      if (!visitedCitiesCubit.isClosed) visitedCitiesCubit.load(),
+      if (!residencesCubit.isClosed) residencesCubit.refresh(),
+      if (!wishlistCubit.isClosed) wishlistCubit.refresh(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Country Details')),
+      appBar: AppBar(
+        title: Text(
+          widget.country.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Add country visit',
         backgroundColor: colors.primary,
@@ -132,6 +153,11 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
         builder: (context, state) {
           final visits = state.visitsForCountry(widget.country.code).toList()
             ..sort(_compareVisits);
+          final visitedCitiesState = context.watch<VisitedCitiesCubit>().state;
+
+          final countryCities = visitedCitiesState.visitedCities
+              .where((city) => city.countryCode == widget.country.code)
+              .toList();
           final wishlistState = context.watch<WishlistCubit>().state;
 
           final wishlistEntry = wishlistState.entryForCountry(
@@ -150,7 +176,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
           final lastVisited = _lastVisitedDate(visits);
 
           return RefreshIndicator(
-            onRefresh: context.read<ExploreCubit>().refresh,
+            onRefresh: _refreshDetails,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
@@ -211,6 +237,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
                         _CountryStatistics(
                           visitCount: visits.length,
+                          cityCount: countryCities.length,
                           lastVisited: lastVisited,
                         ),
 
@@ -246,11 +273,9 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
                             onDelete: _deleteVisit,
                           ),
 
-                          _CountryTab.cities => const _EmptySection(
-                            icon: Icons.location_city_outlined,
-                            title: 'Visited cities',
-                            message:
-                                'City visits will appear here once city tracking is available.',
+                          _CountryTab.cities => _CountryVisitedCities(
+                            cities: countryCities,
+                            onCitySelected: _openCityDetails,
                           ),
 
                           _CountryTab.trips => const _EmptySection(
@@ -305,6 +330,46 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
     return latest;
   }
+
+  void _openCityDetails(VisitedCity city) {
+    final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
+    final residencesCubit = context.read<ResidencesCubit>();
+    final wishlistCubit = context.read<WishlistCubit>();
+
+    final cityVisitsRepository = context.read<CityVisitsRepository>();
+    final countriesRepository = context.read<CountriesRepository>();
+    final wishlistRepository = context.read<WishlistRepository>();
+    final residenceRepository = context.read<ResidenceRepository>();
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<CityVisitsRepository>.value(
+              value: cityVisitsRepository,
+            ),
+            RepositoryProvider<CountriesRepository>.value(
+              value: countriesRepository,
+            ),
+            RepositoryProvider<WishlistRepository>.value(
+              value: wishlistRepository,
+            ),
+            RepositoryProvider<ResidenceRepository>.value(
+              value: residenceRepository,
+            ),
+          ],
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+              BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+              BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+            ],
+            child: CityDetailsPage(city: city),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -327,43 +392,47 @@ class _CountryHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        CountryFlag(countryCode: country.code, size: 64),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 480;
 
-        const SizedBox(width: 14),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                country.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+        final identity = Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            CountryFlag(countryCode: country.code, size: compact ? 52 : 64),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    country.name,
+                    key: const Key('countryDetailsName'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    country.alpha3Code,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ],
+        );
 
-              const SizedBox(height: 5),
-
-              Text(
-                country.alpha3Code,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        final metadata = Wrap(
+          key: const Key('countryDetailsMetadata'),
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               country.continent,
@@ -372,9 +441,6 @@ class _CountryHeader extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-
-            const SizedBox(height: 8),
-
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -382,12 +448,10 @@ class _CountryHeader extends StatelessWidget {
                   isVisited
                       ? Icons.check_circle_rounded
                       : Icons.radio_button_unchecked_rounded,
-                  size: 15,
+                  size: 16,
                   color: isVisited ? colors.primary : colors.onSurfaceVariant,
                 ),
-
                 const SizedBox(width: 5),
-
                 Text(
                   isVisited ? 'Visited' : 'Not visited',
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -397,9 +461,6 @@ class _CountryHeader extends StatelessWidget {
                 ),
               ],
             ),
-
-            const SizedBox(height: 8),
-
             Text(
               '$visitCount ${visitCount == 1 ? 'visit' : 'visits'}',
               style: theme.textTheme.labelMedium?.copyWith(
@@ -407,8 +468,26 @@ class _CountryHeader extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ],
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [identity, const SizedBox(height: 16), metadata],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: identity),
+            const SizedBox(width: 24),
+            Flexible(
+              child: Align(alignment: Alignment.centerRight, child: metadata),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -417,50 +496,6 @@ class _CountryHeader extends StatelessWidget {
 // Map placeholder
 // -----------------------------------------------------------------------------
 
-class _CountryMapPlaceholder extends StatelessWidget {
-  const _CountryMapPlaceholder({required this.countryName});
-
-  final String countryName;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Container(
-      height: 220,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outline.withValues(alpha: 0.5)),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.public_rounded, size: 38, color: colors.primary),
-
-            const SizedBox(height: 12),
-
-            Text(
-              '$countryName map',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-
-            const SizedBox(height: 6),
-
-            Text(
-              'Country map coming next',
-              style: TextStyle(color: colors.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // -----------------------------------------------------------------------------
 // Statistics
 // -----------------------------------------------------------------------------
@@ -468,10 +503,12 @@ class _CountryMapPlaceholder extends StatelessWidget {
 class _CountryStatistics extends StatelessWidget {
   const _CountryStatistics({
     required this.visitCount,
+    required this.cityCount,
     required this.lastVisited,
   });
 
   final int visitCount;
+  final int cityCount;
   final DateTime? lastVisited;
 
   @override
@@ -500,8 +537,8 @@ class _CountryStatistics extends StatelessWidget {
 
                 _StatDivider(color: colors.outlineVariant),
 
-                const Expanded(
-                  child: _CountryStatItem(value: '—', label: 'CITIES'),
+                Expanded(
+                  child: _CountryStatItem(value: '$cityCount', label: 'CITIES'),
                 ),
 
                 _StatDivider(color: colors.outlineVariant),
@@ -858,40 +895,12 @@ class _VisitCard extends StatelessWidget {
             ),
           ),
 
-          PopupMenuButton<_VisitAction>(
+          AdaptiveRecordActionsMenu(
             tooltip: 'Visit actions',
-            icon: Icon(Icons.more_vert_rounded, color: colors.onSurfaceVariant),
-            onSelected: (action) {
-              switch (action) {
-                case _VisitAction.edit:
-                  onEdit();
-
-                case _VisitAction.delete:
-                  onDelete();
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _VisitAction.edit,
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_outlined),
-                    SizedBox(width: 12),
-                    Text('Edit visit'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: _VisitAction.delete,
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline),
-                    SizedBox(width: 12),
-                    Text('Delete visit'),
-                  ],
-                ),
-              ),
-            ],
+            editLabel: 'Edit visit',
+            deleteLabel: 'Delete visit',
+            onEdit: onEdit,
+            onDelete: onDelete,
           ),
         ],
       ),
@@ -949,6 +958,78 @@ class _EmptySection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CountryVisitedCities extends StatelessWidget {
+  const _CountryVisitedCities({
+    required this.cities,
+    required this.onCitySelected,
+  });
+
+  final List<VisitedCity> cities;
+  final ValueChanged<VisitedCity> onCitySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    if (cities.isEmpty) {
+      return const _EmptySection(
+        icon: Icons.location_city_outlined,
+        title: 'No visited cities yet',
+        message: 'Cities you visit in this country will appear here.',
+      );
+    }
+
+    return Column(
+      key: const Key('countryVisitedCities'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'VISITED CITIES',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        for (final city in cities) ...[
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              key: Key('countryVisitedCity-${city.cityId}'),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              leading: Icon(
+                Icons.location_city_outlined,
+                color: colors.primary,
+              ),
+              title: Text(
+                city.cityName,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                '${city.visitCount} ${city.visitCount == 1 ? 'visit' : 'visits'}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => onCitySelected(city),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

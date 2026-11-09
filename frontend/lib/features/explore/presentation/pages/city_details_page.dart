@@ -1,3 +1,4 @@
+import 'package:beenaround/core/widgets/adaptive_record_actions_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -345,68 +346,31 @@ class CityDetailsPage extends StatelessWidget {
                                     subtitle: Text(
                                       _formatVisitDates(visits[index]),
                                     ),
-                                    trailing: PopupMenuButton<String>(
+                                    trailing: AdaptiveRecordActionsMenu(
                                       key: Key(
                                         'cityVisitMenu-${visits[index].id}',
                                       ),
                                       tooltip: 'Visit actions',
-                                      onSelected: (action) {
+                                      editLabel: 'Edit visit',
+                                      deleteLabel: 'Delete visit',
+                                      onEdit: () {
                                         if (visitedCity == null) return;
 
-                                        switch (action) {
-                                          case 'edit':
-                                            _editVisit(
-                                              context,
-                                              visitedCity,
-                                              visits[index],
-                                            );
-
-                                          case 'delete':
-                                            _deleteVisit(
-                                              context,
-                                              visitedCity,
-                                              visits[index],
-                                            );
-                                        }
+                                        _editVisit(
+                                          context,
+                                          visitedCity,
+                                          visits[index],
+                                        );
                                       },
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem<String>(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.edit_outlined,
-                                                size: 20,
-                                              ),
-                                              SizedBox(width: 12),
-                                              Text('Edit visit'),
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuItem<String>(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.delete_outline_rounded,
-                                                size: 20,
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.error,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Text(
-                                                'Delete visit',
-                                                style: TextStyle(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.error,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
+                                      onDelete: () {
+                                        if (visitedCity == null) return;
+
+                                        _deleteVisit(
+                                          context,
+                                          visitedCity,
+                                          visits[index],
+                                        );
+                                      },
                                     ),
                                   ),
                                   if (index < visits.length - 1)

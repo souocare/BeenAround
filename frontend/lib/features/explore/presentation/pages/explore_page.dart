@@ -803,6 +803,7 @@ class _CountryCard extends StatelessWidget {
 
           final wishlistRepository = context.read<WishlistRepository>();
           final residenceRepository = context.read<ResidenceRepository>();
+          final visitedCitiesCubit = context.read<VisitedCitiesCubit>();
 
           Navigator.of(context).push(
             MaterialPageRoute<void>(
@@ -820,6 +821,9 @@ class _CountryCard extends StatelessWidget {
                     BlocProvider<ExploreCubit>.value(value: exploreCubit),
                     BlocProvider<WishlistCubit>.value(value: wishlistCubit),
                     BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+                    BlocProvider<VisitedCitiesCubit>.value(
+                      value: visitedCitiesCubit,
+                    ),
                   ],
                   child: CountryDetailsPage(country: country),
                 ),

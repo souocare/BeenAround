@@ -33,6 +33,10 @@ import '../wishlist/application/fake_wishlist_repository.dart';
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/explore/presentation/pages/country_details_page.dart';
+import 'package:beenaround/features/explore/application/visited_cities_cubit.dart';
+import 'package:beenaround/features/residences/application/residences_cubit.dart';
+import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -157,9 +161,15 @@ class FakeCountriesRepository implements CountriesRepository {
 }
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
-  @override
-  Future<List<CityVisit>> getCityVisits() async => const [];
+  FakeCityVisitsRepository({List<CityVisit> visits = const []})
+    : visits = List.of(visits);
 
+  final List<CityVisit> visits;
+
+  @override
+  Future<List<CityVisit>> getCityVisits() async => List.unmodifiable(visits);
+
+  @override
   Future<CityVisit> createCityVisit({
     required int cityId,
     required DateTime startedOn,
@@ -249,6 +259,26 @@ class FakeCountryDetailsTripAssociationRepository extends Fake
   }
 }
 
+CityVisit cityVisit({
+  required String id,
+  required int cityId,
+  required String cityName,
+  String countryCode = 'PT',
+  String countryName = 'Portugal',
+}) {
+  return CityVisit(
+    id: id,
+    cityId: cityId,
+    cityName: cityName,
+    countryCode: countryCode,
+    countryName: countryName,
+    startedOn: DateTime(2026, 5, 1),
+    endedOn: DateTime(2026, 5, 5),
+    createdAt: DateTime(2026, 5, 1),
+    updatedAt: DateTime(2026, 5, 1),
+  );
+}
+
 void main() {
   const portugal = Country(
     code: 'PT',
@@ -291,6 +321,7 @@ void main() {
     required List<CountryVisit> visits,
     FakeCountriesRepository? repository,
     Size size = const Size(390, 844),
+    List<CityVisit> cityVisits = const [],
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -314,7 +345,7 @@ void main() {
       MultiRepositoryProvider(
         providers: [
           RepositoryProvider<CityVisitsRepository>.value(
-            value: FakeCityVisitsRepository(),
+            value: FakeCityVisitsRepository(visits: cityVisits),
           ),
           RepositoryProvider<CityRepository>.value(value: FakeCityRepository()),
           RepositoryProvider<ResidenceRepository>.value(
@@ -336,6 +367,82 @@ void main() {
             value: cubit,
             child: const Scaffold(body: ExplorePage()),
           ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpCountryDetails(
+    WidgetTester tester, {
+    required List<CountryVisit> visits,
+    List<CityVisit> cityVisits = const [],
+  }) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final countriesRepository = FakeCountriesRepository(
+      countries: [portugal],
+      visits: visits,
+    );
+
+    final cityVisitsRepository = FakeCityVisitsRepository(visits: cityVisits);
+
+    final residencesRepository = FakeResidenceRepository();
+    final wishlistRepository = FakeWishlistRepository();
+
+    final exploreCubit = ExploreCubit(repository: countriesRepository);
+
+    final visitedCitiesCubit = VisitedCitiesCubit(
+      repository: cityVisitsRepository,
+    );
+
+    final residencesCubit = ResidencesCubit(repository: residencesRepository);
+
+    final wishlistCubit = WishlistCubit(repository: wishlistRepository);
+
+    addTearDown(exploreCubit.close);
+    addTearDown(visitedCitiesCubit.close);
+    addTearDown(residencesCubit.close);
+    addTearDown(wishlistCubit.close);
+
+    await Future.wait([
+      exploreCubit.load(),
+      visitedCitiesCubit.load(),
+      residencesCubit.refresh(),
+      wishlistCubit.refresh(),
+    ]);
+
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CountriesRepository>.value(
+            value: countriesRepository,
+          ),
+          RepositoryProvider<CityVisitsRepository>.value(
+            value: cityVisitsRepository,
+          ),
+          RepositoryProvider<ResidenceRepository>.value(
+            value: residencesRepository,
+          ),
+          RepositoryProvider<WishlistRepository>.value(
+            value: wishlistRepository,
+          ),
+        ],
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<ExploreCubit>.value(value: exploreCubit),
+            BlocProvider<VisitedCitiesCubit>.value(value: visitedCitiesCubit),
+            BlocProvider<ResidencesCubit>.value(value: residencesCubit),
+            BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+          ],
+          child: MaterialApp(home: CountryDetailsPage(country: portugal)),
         ),
       ),
     );
@@ -867,7 +974,7 @@ void main() {
     await tester.tap(find.text('Cities'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Visited cities'), findsOneWidget);
+    expect(find.text('No visited cities yet'), findsOneWidget);
     expect(find.text('Visit History'), findsNothing);
 
     await tester.tap(find.text('Trips'));
@@ -884,5 +991,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Visit History'), findsOneWidget);
+  });
+  testWidgets('shows distinct visited cities for country', (tester) async {
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      cityVisits: [
+        cityVisit(id: 'lisbon-1', cityId: 1, cityName: 'Lisbon'),
+        cityVisit(id: 'lisbon-2', cityId: 1, cityName: 'Lisbon'),
+        cityVisit(id: 'porto-1', cityId: 2, cityName: 'Porto'),
+      ],
+    );
+
+    // Navigate to Cities.
+    await tester.ensureVisible(find.text('Cities'));
+    await tester.tap(find.text('Cities'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('countryVisitedCities')), findsOneWidget);
+
+    expect(find.text('Lisbon'), findsOneWidget);
+    expect(find.text('Porto'), findsOneWidget);
+
+    expect(find.text('2 visits'), findsOneWidget);
+    expect(find.text('1 visit'), findsOneWidget);
+  });
+  testWidgets('city visits do not automatically mark country as visited', (
+    tester,
+  ) async {
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      cityVisits: [cityVisit(id: 'lisbon-1', cityId: 1, cityName: 'Lisbon')],
+    );
+
+    expect(find.text('Not visited'), findsOneWidget);
+    expect(find.text('0 visits'), findsOneWidget);
+
+    await tester.tap(find.text('Cities'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lisbon'), findsOneWidget);
+  });
+  testWidgets('opens city details from country cities tab', (tester) async {
+    await pumpCountryDetails(
+      tester,
+      visits: const [],
+      cityVisits: [cityVisit(id: 'lisbon-1', cityId: 1, cityName: 'Lisbon')],
+    );
+
+    await tester.tap(find.text('Cities'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('countryVisitedCity-1')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lisbon'), findsWidgets);
+  });
+  testWidgets('shows empty state when country has no visited cities', (
+    tester,
+  ) async {
+    await pumpCountryDetails(tester, visits: const [], cityVisits: const []);
+
+    await tester.tap(find.text('Cities'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No visited cities yet'), findsOneWidget);
   });
 }

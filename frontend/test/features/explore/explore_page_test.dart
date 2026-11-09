@@ -2407,7 +2407,10 @@ void main() {
     await tester.tap(portugalFinder);
     await tester.pumpAndSettle();
 
-    expect(find.text('Country Details'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Portugal')),
+      findsOneWidget,
+    );
 
     // Wishlist is represented by an interactive heart.
     final wishlistButton = find.byKey(const Key('wishlistStatusButton'));

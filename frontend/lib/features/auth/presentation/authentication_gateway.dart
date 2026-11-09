@@ -261,9 +261,6 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
         RepositoryProvider<TripRepository>(
           create: (_) => ApiTripRepository(apiClient: widget.apiClient),
         ),
-        RepositoryProvider<TripRepository>(
-          create: (_) => ApiTripRepository(apiClient: widget.apiClient),
-        ),
 
         RepositoryProvider<TripAssociationRepository>(
           create: (_) =>

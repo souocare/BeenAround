@@ -1,3 +1,4 @@
+import 'package:beenaround/core/widgets/adaptive_record_actions_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -174,30 +175,15 @@ class _ResidencesSheet extends StatelessWidget {
                                           residence.note!.isEmpty
                                       ? null
                                       : Text(residence.note!),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        key: Key(
-                                          'editResidence-${residence.id}',
-                                        ),
-                                        tooltip: 'Edit residence',
-                                        icon: const Icon(Icons.edit_outlined),
-                                        onPressed: () =>
-                                            _edit(context, residence),
-                                      ),
-                                      IconButton(
-                                        key: Key(
-                                          'deleteResidence-${residence.id}',
-                                        ),
-                                        tooltip: 'Delete residence',
-                                        icon: const Icon(
-                                          Icons.delete_outline_rounded,
-                                        ),
-                                        onPressed: () =>
-                                            _delete(context, residence),
-                                      ),
-                                    ],
+                                  trailing: AdaptiveRecordActionsMenu(
+                                    key: Key(
+                                      'residenceActions-${residence.id}',
+                                    ),
+                                    tooltip: 'Residence actions',
+                                    editLabel: 'Edit residence',
+                                    deleteLabel: 'Delete residence',
+                                    onEdit: () => _edit(context, residence),
+                                    onDelete: () => _delete(context, residence),
                                   ),
                                 ),
                               );
