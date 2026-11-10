@@ -1,3 +1,6 @@
+import 'package:beenaround/features/explore/data/countries_repository.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -97,13 +100,39 @@ class _TripsViewState extends State<_TripsView> {
   }
 
   Future<void> _openTripDetails(Trip trip) async {
+    final tripsCubit = context.read<TripsCubit>();
+
+    // Repositories used by Trip Details.
+    final tripRepository = context.read<TripRepository>();
+    final tripAssociationRepository = context.read<TripAssociationRepository>();
+
+    // Repositories used when selecting visits to associate.
+    final countriesRepository = context.read<CountriesRepository>();
+    final cityVisitsRepository = context.read<CityVisitsRepository>();
+
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => TripDetailsPage(tripId: trip.id)),
+      MaterialPageRoute(
+        builder: (_) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<TripRepository>.value(value: tripRepository),
+            RepositoryProvider<TripAssociationRepository>.value(
+              value: tripAssociationRepository,
+            ),
+            RepositoryProvider<CountriesRepository>.value(
+              value: countriesRepository,
+            ),
+            RepositoryProvider<CityVisitsRepository>.value(
+              value: cityVisitsRepository,
+            ),
+          ],
+          child: TripDetailsPage(tripId: trip.id),
+        ),
+      ),
     );
 
-    if (!mounted) return;
+    if (!mounted || tripsCubit.isClosed) return;
 
-    await context.read<TripsCubit>().refresh();
+    await tripsCubit.refresh();
   }
 
   Widget _buildHeader(BuildContext context) {

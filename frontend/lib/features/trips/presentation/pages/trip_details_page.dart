@@ -220,8 +220,6 @@ class _TripDetailsView extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xxxl),
 
-            const SizedBox(height: AppSpacing.xxxl),
-
             const TripAssociatedVisitsSection(),
           ],
         ),

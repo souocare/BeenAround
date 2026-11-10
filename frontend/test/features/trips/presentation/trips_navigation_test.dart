@@ -1,5 +1,7 @@
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
@@ -135,6 +137,14 @@ class InMemoryTripRepository implements TripRepository {
   bool containsTrip(String id) => _trips.containsKey(id);
 }
 
+class EmptyTripNavigationCityVisitsRepository extends Fake
+    implements CityVisitsRepository {
+  @override
+  Future<List<CityVisit>> getCityVisits() async {
+    return const [];
+  }
+}
+
 Trip sampleTrip({
   required String id,
   required String name,
@@ -184,6 +194,26 @@ Future<void> tapSaveTrip(WidgetTester tester) async {
 
   await tester.tap(button);
   await tester.pumpAndSettle();
+}
+
+Widget buildRouteScopedTripsTestApp(TripRepository repository) {
+  return MaterialApp(
+    home: MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<TripRepository>.value(value: repository),
+        RepositoryProvider<TripAssociationRepository>(
+          create: (_) => FakeTripAssociationRepository(),
+        ),
+        RepositoryProvider<CountriesRepository>(
+          create: (_) => FakeCountriesRepository(),
+        ),
+        RepositoryProvider<CityVisitsRepository>(
+          create: (_) => EmptyTripNavigationCityVisitsRepository(),
+        ),
+      ],
+      child: const Scaffold(body: TripsPage()),
+    ),
+  );
 }
 
 void main() {
@@ -325,5 +355,46 @@ void main() {
 
       expect(repository.detailCalls, 2);
     });
+    testWidgets(
+      'opens country and city visit pickers across route boundaries',
+      (tester) async {
+        final repository = InMemoryTripRepository(
+          initialTrips: [sampleTrip(id: 'trip-1', name: 'Honeymoon')],
+        );
+
+        await tester.pumpWidget(buildRouteScopedTripsTestApp(repository));
+
+        await tester.pumpAndSettle();
+
+        // Open Trip Details from the Trips list.
+        await openTrip(tester, 'trip-1');
+
+        expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+
+        expect(find.text('Honeymoon'), findsOneWidget);
+
+        // Open the country visit picker.
+        await tester.tap(find.text('Add').first);
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add country visit'), findsOneWidget);
+
+        expect(tester.takeException(), isNull);
+
+        // Close the country picker.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+
+        // Open the city visit picker.
+        await tester.tap(find.text('Add').last);
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add city visit'), findsOneWidget);
+
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
