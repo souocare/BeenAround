@@ -172,13 +172,14 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
     final colors = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.country.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+      // appBar: AppBar(
+      //   title: Text(
+      //     widget.country.name,
+      //     maxLines: 1,
+      //     overflow: TextOverflow.ellipsis,
+      //   ),
+      // ),
+      appBar: AppBar(),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Add country visit',
         backgroundColor: colors.primary,
