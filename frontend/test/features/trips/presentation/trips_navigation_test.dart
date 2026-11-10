@@ -171,6 +171,9 @@ Widget buildTestApp(TripRepository repository) {
       RepositoryProvider<CountriesRepository>(
         create: (_) => FakeCountriesRepository(),
       ),
+      RepositoryProvider<CityVisitsRepository>(
+        create: (_) => EmptyTripNavigationCityVisitsRepository(),
+      ),
     ],
     child: const MaterialApp(home: Scaffold(body: TripsPage())),
   );
