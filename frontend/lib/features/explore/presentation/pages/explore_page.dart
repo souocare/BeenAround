@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/features/explore/presentation/widgets/destination_filter_bar.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -604,46 +605,13 @@ class _ExploreContentState extends State<_ExploreContent> {
               onChanged: (value) => setState(() => _query = value),
             ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final filter in ExploreDestinationFilter.values)
-                ChoiceChip(
-                  key: Key('countryFilter-${filter.name}'),
-                  label: Text(switch (filter) {
-                    ExploreDestinationFilter.all => 'All',
-                    ExploreDestinationFilter.been => 'Been',
-                    ExploreDestinationFilter.lived => 'Lived',
-                    ExploreDestinationFilter.wish => 'Wish',
-                    ExploreDestinationFilter.multipleVisits =>
-                      'Multiple visits',
-                  }),
-                  selected: _filter == filter,
-                  showCheckmark: false,
-                  selectedColor: colors.secondary,
-                  backgroundColor: colors.surfaceContainerLow,
-                  side: BorderSide(
-                    color: _filter == filter
-                        ? Colors.transparent
-                        : colors.outlineVariant,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  labelStyle: TextStyle(
-                    color: _filter == filter
-                        ? colors.onSecondary
-                        : colors.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  onSelected: (_) => setState(() => _filter = filter),
-                ),
-            ],
+          DestinationFilterBar(
+            key: const Key('countryDestinationFilters'),
+            keyPrefix: 'countryFilter',
+            selectedFilter: _filter,
+            onSelected: (filter) {
+              setState(() => _filter = filter);
+            },
           ),
           const SizedBox(height: 12),
           // ------------------------------------------------------------

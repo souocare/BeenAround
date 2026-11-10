@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/presentation/widgets/destination_filter_bar.dart';
 import 'package:beenaround/features/residences/domain/residence_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
@@ -267,48 +268,13 @@ class _VisitedCitiesListState extends State<VisitedCitiesList> {
             // ------------------------------------------------------------
             // Filters
             // ------------------------------------------------------------
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final filter in ExploreDestinationFilter.values)
-                  ChoiceChip(
-                    key: Key('cityFilter-${filter.name}'),
-                    label: Text(switch (filter) {
-                      ExploreDestinationFilter.all => 'All',
-                      ExploreDestinationFilter.been => 'Been',
-                      ExploreDestinationFilter.lived => 'Lived',
-                      ExploreDestinationFilter.wish => 'Wish',
-                      ExploreDestinationFilter.multipleVisits =>
-                        'Multiple visits',
-                    }),
-                    selected: _filter == filter,
-                    showCheckmark: false,
-                    selectedColor: colors.secondary,
-                    backgroundColor: colors.surfaceContainerLow,
-                    side: BorderSide(
-                      color: _filter == filter
-                          ? Colors.transparent
-                          : colors.outlineVariant,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    labelStyle: TextStyle(
-                      color: _filter == filter
-                          ? colors.onSecondary
-                          : colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    onSelected: (_) {
-                      setState(() => _filter = filter);
-                    },
-                  ),
-              ],
+            DestinationFilterBar(
+              key: const Key('cityDestinationFilters'),
+              keyPrefix: 'cityFilter',
+              selectedFilter: _filter,
+              onSelected: (filter) {
+                setState(() => _filter = filter);
+              },
             ),
 
             const SizedBox(height: 12),
