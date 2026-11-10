@@ -490,16 +490,11 @@ class _ExploreContentState extends State<_ExploreContent> {
             );
           },
         ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.35),
-            ),
-          ),
+        const SizedBox(height: 12),
+
+        Padding(
+          key: const Key('exploreCompactStatistics'),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
             children: [
               Expanded(
@@ -509,7 +504,9 @@ class _ExploreContentState extends State<_ExploreContent> {
                   label: 'Countries visited',
                 ),
               ),
+
               Container(width: 1, height: 40, color: colors.outlineVariant),
+
               Expanded(
                 child: _CompactStatistic(
                   icon: Icons.place_outlined,
@@ -520,7 +517,8 @@ class _ExploreContentState extends State<_ExploreContent> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+
+        const SizedBox(height: 26),
         Row(
           children: [
             Expanded(
