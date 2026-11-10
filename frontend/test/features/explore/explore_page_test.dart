@@ -2454,10 +2454,14 @@ void main() {
     await tester.tap(portugalFinder);
     await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(of: find.byType(AppBar), matching: find.text('Portugal')),
-      findsOneWidget,
-    );
+    // Country Details displays the country name in its main header,
+    // rather than duplicating it in the AppBar.
+    // Country Details displays the country name in its main header.
+    final countryName = find.byKey(const Key('countryDetailsName'));
+
+    expect(countryName, findsOneWidget);
+
+    expect(tester.widget<Text>(countryName).data, 'Portugal');
 
     // Wishlist is represented by an interactive heart.
     final wishlistButton = find.byKey(const Key('wishlistStatusButton'));
