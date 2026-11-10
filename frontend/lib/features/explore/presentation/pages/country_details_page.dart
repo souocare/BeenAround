@@ -38,6 +38,7 @@ import '../../../trips/presentation/pages/trip_details_page.dart';
 import 'city_details_page.dart';
 
 import '../../domain/visited_city.dart';
+import '../widgets/destination_details_tabs.dart';
 
 enum _CountryTab { overview, visits, cities, trips }
 
@@ -283,11 +284,18 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
                         const SizedBox(height: 28),
 
-                        _CountryTabs(
-                          selectedTab: _selectedTab,
-                          onSelected: (tab) {
+                        DestinationDetailsTabs(
+                          key: const Key('countryDetailsTabs'),
+                          labels: const [
+                            'Overview',
+                            'Visits',
+                            'Cities',
+                            'Trips',
+                          ],
+                          selectedIndex: _selectedTab.index,
+                          onSelected: (index) {
                             setState(() {
-                              _selectedTab = tab;
+                              _selectedTab = _CountryTab.values[index];
                             });
                           },
                         ),
@@ -685,100 +693,6 @@ class _StatDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(height: 32, width: 1, color: color.withValues(alpha: 0.5));
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Tabs
-// -----------------------------------------------------------------------------
-
-class _CountryTabs extends StatelessWidget {
-  const _CountryTabs({required this.selectedTab, required this.onSelected});
-
-  final _CountryTab selectedTab;
-  final ValueChanged<_CountryTab> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          for (final tab in _CountryTab.values)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: _CountryTabButton(
-                  label: switch (tab) {
-                    _CountryTab.overview => 'Overview',
-                    _CountryTab.visits => 'Visits',
-                    _CountryTab.cities => 'Cities',
-                    _CountryTab.trips => 'Trips',
-                  },
-                  selected: selectedTab == tab,
-                  onTap: () => onSelected(tab),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountryTabButton extends StatelessWidget {
-  const _CountryTabButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeInOut,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? colors.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: selected ? colors.onPrimary : colors.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

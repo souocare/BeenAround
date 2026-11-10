@@ -974,11 +974,11 @@ void main() {
 
     expect(find.byKey(const Key('cityDetailsTabs')), findsOneWidget);
 
-    final overview = tester.widget<ChoiceChip>(
+    final overview = tester.widget<Semantics>(
       find.byKey(const Key('cityTab-overview')),
     );
 
-    expect(overview.selected, isTrue);
+    expect(overview.properties.selected, isTrue);
 
     expect(find.byKey(const Key('cityVisit-visit-1')), findsOneWidget);
   });
@@ -1022,11 +1022,11 @@ void main() {
     await tester.tap(viewAll);
     await tester.pumpAndSettle();
 
-    final visitsTab = tester.widget<ChoiceChip>(
+    final visitsTab = tester.widget<Semantics>(
       find.byKey(const Key('cityTab-visits')),
     );
 
-    expect(visitsTab.selected, isTrue);
+    expect(visitsTab.properties.selected, isTrue);
 
     for (final id in ['visit-1', 'visit-2', 'visit-3', 'visit-4']) {
       expect(find.byKey(Key('cityVisit-$id')), findsOneWidget);

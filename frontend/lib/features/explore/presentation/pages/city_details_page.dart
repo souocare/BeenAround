@@ -27,6 +27,7 @@ import '../../../trips/domain/trip_repository.dart';
 import '../../../trips/domain/trip_association_repository.dart';
 import '../../../trips/domain/trip.dart';
 import '../../../trips/presentation/pages/trip_details_page.dart';
+import '../widgets/destination_details_tabs.dart';
 
 enum _CityTab { overview, visits, trips }
 
@@ -378,76 +379,6 @@ class CityDetailsPage extends StatelessWidget {
                             onDelete: (city, visit) =>
                                 _deleteVisit(context, city, visit),
                           ),
-                          // Text(
-                          //   'Visit History',
-                          //   style: theme.textTheme.titleLarge?.copyWith(
-                          //     fontWeight: FontWeight.w700,
-                          //   ),
-                          // ),
-
-                          // const SizedBox(height: 16),
-
-                          // if (visits.isEmpty)
-                          //   const Card(
-                          //     child: Padding(
-                          //       padding: EdgeInsets.all(24),
-                          //       child: Text(
-                          //         'No visits recorded for this city.',
-                          //         textAlign: TextAlign.center,
-                          //       ),
-                          //     ),
-                          //   )
-                          // else
-                          //   Card(
-                          //     child: Column(
-                          //       children: [
-                          //         for (
-                          //           var index = 0;
-                          //           index < visits.length;
-                          //           index++
-                          //         ) ...[
-                          //           ListTile(
-                          //             key: Key('cityVisit-${visits[index].id}'),
-                          //             leading: const Icon(
-                          //               Icons.calendar_today_outlined,
-                          //             ),
-                          //             title: Text('Visit ${index + 1}'),
-                          //             subtitle: Text(
-                          //               _formatVisitDates(visits[index]),
-                          //             ),
-                          //             trailing: AdaptiveRecordActionsMenu(
-                          //               key: Key(
-                          //                 'cityVisitMenu-${visits[index].id}',
-                          //               ),
-                          //               tooltip: 'Visit actions',
-                          //               editLabel: 'Edit visit',
-                          //               deleteLabel: 'Delete visit',
-                          //               onEdit: () {
-                          //                 if (visitedCity == null) return;
-
-                          //                 _editVisit(
-                          //                   context,
-                          //                   visitedCity,
-                          //                   visits[index],
-                          //                 );
-                          //               },
-                          //               onDelete: () {
-                          //                 if (visitedCity == null) return;
-
-                          //                 _deleteVisit(
-                          //                   context,
-                          //                   visitedCity,
-                          //                   visits[index],
-                          //                 );
-                          //               },
-                          //             ),
-                          //           ),
-                          //           if (index < visits.length - 1)
-                          //             const Divider(height: 1),
-                          //         ],
-                          //       ],
-                          //     ),
-                          //   ),
                         ],
                       ),
                     ),
@@ -564,30 +495,16 @@ class _CityTabsAndHistoryState extends State<_CityTabsAndHistory> {
   }
 
   Widget _buildTabs(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Wrap(
+    return DestinationDetailsTabs(
       key: const Key('cityDetailsTabs'),
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final tab in _CityTab.values)
-          ChoiceChip(
-            key: Key('cityTab-${tab.name}'),
-            label: Text(switch (tab) {
-              _CityTab.overview => 'Overview',
-              _CityTab.visits => 'Visits',
-              _CityTab.trips => 'Trips',
-            }),
-            selected: _selectedTab == tab,
-            selectedColor: colors.primaryContainer,
-            onSelected: (_) {
-              setState(() {
-                _selectedTab = tab;
-              });
-            },
-          ),
-      ],
+      labels: const ['Overview', 'Visits', 'Trips'],
+      selectedIndex: _selectedTab.index,
+      tabKeyPrefix: 'cityTab',
+      onSelected: (index) {
+        setState(() {
+          _selectedTab = _CityTab.values[index];
+        });
+      },
     );
   }
 }
