@@ -13,6 +13,7 @@ from app.models import (
     city_visit,  # noqa: F401
     country,  # noqa: F401
     country_visit,  # noqa: F401
+    flight,  # noqa: F401
     residence,  # noqa: F401
     trip,  # noqa: F401
     trip_city_visit,  # noqa: F401
