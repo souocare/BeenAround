@@ -16,6 +16,10 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
 
   int addCountryVisitCalls = 0;
 
+  Future<void> Function(String tripId, String visitId)? onAddCityVisit;
+
+  int addCityVisitCalls = 0;
+
   @override
   Future<List<CountryVisit>> getCountryVisits({required String tripId}) async {
     return List.unmodifiable(countryVisits);
@@ -49,7 +53,17 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
     required String tripId,
     required String visitId,
   }) async {
-    throw UnimplementedError();
+    addCityVisitCalls++;
+
+    final handler = onAddCityVisit;
+
+    if (handler == null) {
+      throw UnimplementedError(
+        'Configure onAddCityVisit for tests that add visits.',
+      );
+    }
+
+    await handler(tripId, visitId);
   }
 
   @override

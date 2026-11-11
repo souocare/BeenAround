@@ -1,3 +1,4 @@
+import 'package:beenaround/features/trips/presentation/widgets/inline_trip_suggestions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -41,20 +42,22 @@ import 'residence_overlap_confirmation_dialog.dart';
 import '../../../trips/domain/trip_repository.dart';
 import '../../../trips/presentation/widgets/trip_selection_field.dart';
 
+import '../../../trips/domain/trip.dart';
+import '../../../trips/application/trip_suggestions.dart';
+import '../../../trips/domain/trip_date_compatibility.dart';
+
 enum _CityCountryAssociationMode { none, existing, createNew }
 
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({
     this.initialCountry,
     this.onTravelRecorded,
+    this.onVisitCreated,
     super.key,
   });
 
   final Country? initialCountry;
 
-  /// Called only after a visit or residence has been saved successfully.
-  ///
-  /// Wishlist registrations do not trigger this callback.
   final void Function({
     required String countryCode,
     required int? cityId,
@@ -62,6 +65,19 @@ class AddDestinationSheet extends StatefulWidget {
     required bool isResidence,
   })?
   onTravelRecorded;
+
+  /// Called after a country or city visit has been persisted.
+  ///
+  /// Never called for residences or Wishlist entries.
+  ///
+  /// Reports whether a Trip was already explicitly selected.
+  final void Function({
+    required String visitId,
+    required bool isCountry,
+    required bool hasSelectedTrip,
+    required bool suggestionsWereShown,
+  })?
+  onVisitCreated;
 
   @override
   State<AddDestinationSheet> createState() => _AddDestinationSheetState();
@@ -147,6 +163,12 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   bool _showResidenceDateErrors = false;
   bool _overlapDialogOpen = false;
+
+  Future<List<Trip>>? _tripsForSuggestionsFuture;
+
+  /// Whether compatible Trip suggestions were actually displayed
+  /// during this registration.
+  bool _inlineTripSuggestionsShown = false;
 
   @override
   void initState() {
@@ -316,6 +338,36 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     }
   }
 
+  void _notifyVisitCreated() {
+    if (_isCountry) {
+      final state = context.read<AddCountryVisitCubit>().state;
+      final visitId = state.createdVisitId;
+
+      if (visitId == null) return;
+
+      widget.onVisitCreated?.call(
+        visitId: visitId,
+        isCountry: true,
+        hasSelectedTrip: state.selectedTripId != null,
+        suggestionsWereShown: _inlineTripSuggestionsShown,
+      );
+
+      return;
+    }
+
+    final state = context.read<AddCityVisitCubit>().state;
+    final visitId = state.createdVisitId;
+
+    if (visitId == null) return;
+
+    widget.onVisitCreated?.call(
+      visitId: visitId,
+      isCountry: false,
+      hasSelectedTrip: state.selectedTripId != null,
+      suggestionsWereShown: _inlineTripSuggestionsShown,
+    );
+  }
+
   Future<void> _saveWish() async {
     if (!_isWish || _isAnySubmissionInProgress) {
       return;
@@ -482,6 +534,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     });
 
     _notifyTravelRecorded(isResidence: false);
+    _notifyVisitCreated();
 
     Navigator.of(context).pop(true);
   }
@@ -621,6 +674,113 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         });
       }
     }
+  }
+
+  void _ensureTripSuggestionsLoaded() {
+    if (!_isBeen || _tripsForSuggestionsFuture != null) {
+      return;
+    }
+
+    if (_startedOn == null || _endedOn == null) {
+      return;
+    }
+
+    if (CountryVisitDateValidator.validate(
+          startedOn: _startedOn,
+          endedOn: _endedOn,
+          startedOnPrecision: _startedOnPrecision,
+          endedOnPrecision: _endedOnPrecision,
+        ) !=
+        null) {
+      return;
+    }
+
+    setState(() {
+      _tripsForSuggestionsFuture = context.read<TripRepository>().getTrips();
+    });
+  }
+
+  Widget _buildInlineTripSuggestions() {
+    final future = _tripsForSuggestionsFuture;
+
+    if (!_isBeen ||
+        future == null ||
+        _startedOn == null ||
+        _endedOn == null ||
+        _isAnySubmissionInProgress) {
+      return const SizedBox.shrink();
+    }
+
+    if (CountryVisitDateValidator.validate(
+          startedOn: _startedOn,
+          endedOn: _endedOn,
+          startedOnPrecision: _startedOnPrecision,
+          endedOnPrecision: _endedOnPrecision,
+        ) !=
+        null) {
+      return const SizedBox.shrink();
+    }
+
+    // A manually selected Trip takes precedence over suggestions.
+    final selectedTripId = _isCountry ? _selectedTripId : _selectedCityTripId;
+
+    if (selectedTripId != null) {
+      return const SizedBox.shrink();
+    }
+
+    final visitStart = PartialVisitDate(
+      date: _startedOn!,
+      precision: _startedOnPrecision ?? VisitDatePrecision.day,
+    );
+
+    final visitEnd = PartialVisitDate(
+      date: _endedOn!,
+      precision: _endedOnPrecision ?? VisitDatePrecision.day,
+    );
+
+    return FutureBuilder<List<Trip>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final suggestions = findCompatibleTrips(
+          trips: snapshot.data!,
+          visitStart: visitStart,
+          visitEnd: visitEnd,
+        );
+
+        if (suggestions.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Record that the suggestions were actually presented.
+        if (!_inlineTripSuggestionsShown) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _inlineTripSuggestionsShown = true;
+            }
+          });
+        }
+
+        return InlineTripSuggestions(
+          suggestions: suggestions,
+          enabled: !_isAnySubmissionInProgress,
+          onTripSelected: (tripId) {
+            setState(() {
+              if (_isCountry) {
+                _selectedTripId = tripId;
+              } else {
+                _selectedCityTripId = tripId;
+              }
+            });
+
+            _clearActiveError();
+          },
+        );
+      },
+    );
   }
 
   Widget _buildCountryVisitAssociation(
@@ -1562,6 +1722,10 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+
+          _buildInlineTripSuggestions(),
 
           const SizedBox(height: 24),
 

@@ -19,6 +19,11 @@ import '../../../trips/domain/trip_repository.dart';
 import '../../../wishlist/application/wishlist_cubit.dart';
 import '../../../wishlist/application/wishlist_state.dart';
 import '../../../wishlist/presentation/widgets/show_remove_wishlist_entry.dart';
+import '../../../../core/models/partial_visit_date.dart';
+
+import '../../../trips/application/trip_suggestions.dart';
+import '../../../trips/presentation/widgets/suggested_trips_dialog.dart';
+import '../../application/post_registration_follow_ups.dart';
 
 Future<bool> showAddDestination(
   BuildContext context, {
@@ -33,6 +38,7 @@ Future<bool> showAddDestination(
   final tripRepository = context.read<TripRepository>();
 
   final tripAssociationRepository = context.read<TripAssociationRepository>();
+  final countriesRepository = repository;
 
   final width = MediaQuery.sizeOf(context).width;
 
@@ -40,6 +46,154 @@ Future<bool> showAddDestination(
 
   ({String countryCode, int? cityId, String destinationName, bool isResidence})?
   recordedDestination;
+  ({
+    String visitId,
+    bool isCountry,
+    bool hasSelectedTrip,
+    bool suggestionsWereShown,
+  })?
+  createdVisit;
+
+  Future<void> handleTripSuggestions() async {
+    final visit = createdVisit;
+
+    if (visit == null || visit.hasSelectedTrip || !context.mounted) {
+      return;
+    }
+
+    try {
+      // Load the persisted visit, not the original form values.
+      PartialVisitDate? visitStart;
+      PartialVisitDate? visitEnd;
+
+      if (visit.isCountry) {
+        final visits = await countriesRepository.getCountryVisits();
+
+        final matches = visits.where((item) => item.id == visit.visitId);
+
+        if (matches.isEmpty) return;
+
+        final persisted = matches.first;
+
+        if (persisted.startedOn != null &&
+            persisted.startedOnPrecision != null) {
+          visitStart = PartialVisitDate(
+            date: persisted.startedOn!,
+            precision: persisted.startedOnPrecision!,
+          );
+        }
+
+        if (persisted.endedOn != null && persisted.endedOnPrecision != null) {
+          visitEnd = PartialVisitDate(
+            date: persisted.endedOn!,
+            precision: persisted.endedOnPrecision!,
+          );
+        }
+      } else {
+        final visits = await cityVisitsRepository.getCityVisits();
+
+        final matches = visits.where((item) => item.id == visit.visitId);
+
+        if (matches.isEmpty) return;
+
+        final persisted = matches.first;
+
+        if (persisted.startedOn != null &&
+            persisted.startedOnPrecision != null) {
+          visitStart = PartialVisitDate(
+            date: persisted.startedOn!,
+            precision: persisted.startedOnPrecision!,
+          );
+        }
+
+        if (persisted.endedOn != null && persisted.endedOnPrecision != null) {
+          visitEnd = PartialVisitDate(
+            date: persisted.endedOn!,
+            precision: persisted.endedOnPrecision!,
+          );
+        }
+      }
+
+      // The MVP suggestion policy requires both date boundaries.
+      if (visitStart == null || visitEnd == null) {
+        return;
+      }
+
+      final trips = await tripRepository.getTrips();
+
+      if (!context.mounted) return;
+
+      final suggestions = findCompatibleTrips(
+        trips: trips,
+        visitStart: visitStart,
+        visitEnd: visitEnd,
+      );
+
+      if (suggestions.isEmpty) return;
+
+      final destinationName =
+          recordedDestination?.destinationName ?? 'Your visit';
+
+      await showSuggestedTripsDialog(
+        context: context,
+        visitId: visit.visitId,
+        isCountry: visit.isCountry,
+        destinationName: destinationName,
+        suggestions: suggestions,
+        associationRepository: tripAssociationRepository,
+      );
+    } catch (_) {
+      // Trip suggestions are optional.
+      //
+      // A failure here must never be reported as a failure to
+      // create the visit, which has already been persisted.
+    }
+  }
+
+  Future<void> handleWishlistFollowUp() async {
+    final destination = recordedDestination;
+
+    if (destination == null || wishlistCubit.isClosed || !context.mounted) {
+      return;
+    }
+
+    // Refresh before checking to avoid stale Wishlist data.
+    await wishlistCubit.refresh();
+
+    if (!context.mounted || wishlistCubit.isClosed) {
+      return;
+    }
+
+    final wishlistState = wishlistCubit.state;
+
+    if (wishlistState.phase != WishlistPhase.ready) {
+      return;
+    }
+
+    final entry = destination.cityId == null
+        ? wishlistState.entryForCountry(destination.countryCode)
+        : wishlistState.entryForCity(destination.cityId!);
+
+    if (entry == null) {
+      return;
+    }
+
+    final removed = await showRemoveWishlistEntry(
+      context: context,
+      entry: entry,
+      destinationName: destination.destinationName,
+      cancelLabel: 'Keep in Wishlist',
+      confirmationMessage: destination.isResidence
+          ? 'You have recorded living in ${destination.destinationName}. '
+                'Would you like to remove it from your Wishlist?'
+          : 'You have recorded a visit to ${destination.destinationName}. '
+                'Would you like to remove it from your Wishlist?',
+    );
+
+    if (removed && !wishlistCubit.isClosed) {
+      await wishlistCubit.refresh();
+    }
+  }
 
   Widget buildContent(BuildContext context) {
     return MultiRepositoryProvider(
@@ -87,6 +241,20 @@ Future<bool> showAddDestination(
                   isResidence: isResidence,
                 );
               },
+          onVisitCreated:
+              ({
+                required visitId,
+                required isCountry,
+                required hasSelectedTrip,
+                required suggestionsWereShown,
+              }) {
+                createdVisit = (
+                  visitId: visitId,
+                  isCountry: isCountry,
+                  hasSelectedTrip: hasSelectedTrip,
+                  suggestionsWereShown: suggestionsWereShown,
+                );
+              },
         ),
       ),
     );
@@ -99,53 +267,25 @@ Future<bool> showAddDestination(
       return created;
     }
 
-    final destination = recordedDestination;
+    final visit = createdVisit;
 
-    // A successful Wishlist creation is not a travel registration.
-    if (destination == null || wishlistCubit.isClosed) {
-      return created;
-    }
+    final shouldSuggestTrips =
+        visit != null && !visit.hasSelectedTrip && !visit.suggestionsWereShown;
 
-    // Refresh before checking, so we do not rely on stale Wishlist data.
-    await wishlistCubit.refresh();
+    return runPostRegistrationFollowUps(
+      registrationSucceeded: created,
+      shouldSuggestTrips: shouldSuggestTrips,
+      handleWishlist: () async {
+        if (!context.mounted) return;
 
-    if (!context.mounted || wishlistCubit.isClosed) {
-      return created;
-    }
+        await handleWishlistFollowUp();
+      },
+      handleTripSuggestions: () async {
+        if (!context.mounted) return;
 
-    final wishlistState = wishlistCubit.state;
-
-    if (wishlistState.phase != WishlistPhase.ready) {
-      return created;
-    }
-
-    final entry = destination.cityId == null
-        ? wishlistState.entryForCountry(destination.countryCode)
-        : wishlistState.entryForCity(destination.cityId!);
-
-    // No matching Wishlist entry: nothing else to do.
-    if (entry == null) {
-      return created;
-    }
-
-    final removed = await showRemoveWishlistEntry(
-      context: context,
-      entry: entry,
-      destinationName: destination.destinationName,
-      cancelLabel: 'Keep in Wishlist',
-      confirmationMessage: destination.isResidence
-          ? 'You have recorded living in ${destination.destinationName}. '
-                'Would you like to remove it from your Wishlist?'
-          : 'You have recorded a visit to ${destination.destinationName}. '
-                'Would you like to remove it from your Wishlist?',
+        await handleTripSuggestions();
+      },
     );
-
-    if (removed && !wishlistCubit.isClosed) {
-      await wishlistCubit.refresh();
-    }
-
-    // The travel record remains saved regardless of the Wishlist decision.
-    return created;
   }
 
   if (width >= 800) {
