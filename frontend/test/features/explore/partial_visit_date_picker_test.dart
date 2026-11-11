@@ -1,6 +1,7 @@
 import 'package:beenaround/core/models/partial_visit_date.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/presentation/widgets/partial_visit_date_picker.dart';
+import 'package:cupertino_calendar_picker/cupertino_calendar_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/cupertino.dart';
@@ -486,6 +487,186 @@ void main() {
 
       expect(completed, isTrue);
       expect(result, isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+  testWidgets('iOS exact date uses Cupertino calendar', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      await openPicker(
+        tester,
+        initialValue: PartialVisitDate(
+          date: DateTime(2024, 5, 15),
+          precision: VisitDatePrecision.day,
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('datePrecision_day')));
+
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('beenAroundCupertinoCalendar')),
+        findsOneWidget,
+      );
+
+      expect(find.byType(DatePickerDialog), findsNothing);
+
+      expect(find.byType(CupertinoDatePicker), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+  testWidgets('iOS calendar confirms selected exact date', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      PartialVisitDate? result;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () async {
+                  result = await showPartialVisitDatePicker(
+                    context: context,
+                    initialValue: PartialVisitDate(
+                      date: DateTime(2024, 5, 15),
+                      precision: VisitDatePrecision.day,
+                    ),
+                  );
+                },
+                child: const Text('Pick date'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Pick date'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('datePrecision_day')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('confirmCupertinoCalendar')));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.precision, VisitDatePrecision.day);
+      expect(result!.date, DateTime(2024, 5, 15));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+  testWidgets('iOS exact date cancellation preserves existing value', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      PartialVisitDate? result;
+      var completed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () async {
+                  result = await showPartialVisitDatePicker(
+                    context: context,
+                    initialValue: PartialVisitDate(
+                      date: DateTime(2024, 5, 15),
+                      precision: VisitDatePrecision.day,
+                    ),
+                  );
+
+                  completed = true;
+                },
+                child: const Text('Pick date'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Pick date'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('datePrecision_day')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('beenAroundCupertinoCalendar')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('cancelCupertinoCalendar')));
+      await tester.pumpAndSettle();
+
+      expect(completed, isTrue);
+      expect(result, isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+  testWidgets('iOS calendar respects configured date boundaries', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      await openPicker(
+        tester,
+        initialValue: PartialVisitDate(
+          date: DateTime(2024, 5, 15),
+          precision: VisitDatePrecision.day,
+        ),
+        firstDate: DateTime(2024, 5, 10),
+        lastDate: DateTime(2024, 5, 20),
+      );
+
+      await tester.tap(find.byKey(const Key('datePrecision_day')));
+      await tester.pumpAndSettle();
+
+      final calendar = tester.widget<CupertinoCalendar>(
+        find.byKey(const Key('beenAroundCupertinoCalendar')),
+      );
+
+      expect(calendar.minimumDateTime, DateTime(2024, 5, 10));
+
+      expect(calendar.maximumDateTime, DateTime(2024, 5, 20));
+
+      expect(calendar.initialDateTime, DateTime(2024, 5, 15));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+  testWidgets('Android exact date uses Material calendar', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      await openPicker(
+        tester,
+        initialValue: PartialVisitDate(
+          date: DateTime(2024, 5, 15),
+          precision: VisitDatePrecision.day,
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('datePrecision_day')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+
+      expect(
+        find.byKey(const Key('beenAroundCupertinoCalendar')),
+        findsNothing,
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

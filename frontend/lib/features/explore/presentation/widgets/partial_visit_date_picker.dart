@@ -167,53 +167,23 @@ Future<PartialVisitDate?> showPartialVisitDatePicker({
   }
 
   if (precision == VisitDatePrecision.year) {
-    if (precision == VisitDatePrecision.year) {
-      if (useCupertino) {
-        final selected = await showCupertinoPartialDateWheelPicker(
-          context: context,
-          initialDate: initial,
-          firstDate: minimum,
-          lastDate: maximum,
-          mode: CupertinoPeriodPickerMode.yearOnly,
-        );
-
-        if (selected == null) return null;
-
-        return PartialVisitDate(
-          date: DateTime(selected.year),
-          precision: VisitDatePrecision.year,
-        );
-      }
-
-      // Existing Material YearPicker for Android/Web.
-      final selected = await showDialog<int>(
+    if (useCupertino) {
+      final selected = await showCupertinoPartialDateWheelPicker(
         context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Select year'),
-            content: SizedBox(
-              width: 300,
-              height: 300,
-              child: YearPicker(
-                firstDate: minimum,
-                lastDate: maximum,
-                selectedDate: initial,
-                onChanged: (date) {
-                  Navigator.pop(dialogContext, date.year);
-                },
-              ),
-            ),
-          );
-        },
+        initialDate: initial,
+        firstDate: minimum,
+        lastDate: maximum,
+        mode: CupertinoPeriodPickerMode.yearOnly,
       );
 
       if (selected == null) return null;
 
       return PartialVisitDate(
-        date: DateTime(selected),
+        date: DateTime(selected.year),
         precision: VisitDatePrecision.year,
       );
     }
+
     final selected = await showDialog<int>(
       context: context,
       builder: (dialogContext) {
