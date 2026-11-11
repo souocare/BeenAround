@@ -8,6 +8,10 @@ import 'package:beenaround/features/trips/application/save_trip_state.dart';
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_input.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
+import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+
+import 'package:beenaround/features/explore/domain/country_visit.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +83,76 @@ Trip persistedTrip({String id = 'trip-1', String name = 'Japan 2027'}) {
     createdAt: DateTime(2026, 11, 5),
     updatedAt: DateTime(2026, 11, 5),
   );
+}
+
+class FakeSaveTripAssociationRepository implements TripAssociationRepository {
+  final List<String> addedCountries = [];
+  final List<String> addedCities = [];
+
+  int? failOnCountryCall;
+  int? failOnCityCall;
+
+  int countryCalls = 0;
+  int cityCalls = 0;
+
+  @override
+  Future<void> addCountryVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    countryCalls++;
+
+    if (failOnCountryCall == countryCalls) {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Unable to associate country visit.',
+        statusCode: 500,
+      );
+    }
+
+    addedCountries.add(visitId);
+  }
+
+  @override
+  Future<void> addCityVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    cityCalls++;
+
+    if (failOnCityCall == cityCalls) {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Unable to associate city visit.',
+        statusCode: 500,
+      );
+    }
+
+    addedCities.add(visitId);
+  }
+
+  @override
+  Future<List<CountryVisit>> getCountryVisits({required String tripId}) async =>
+      [];
+
+  @override
+  Future<List<CityVisit>> getCityVisits({required String tripId}) async => [];
+
+  @override
+  Future<void> removeCountryVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> removeCityVisit({
+    required String tripId,
+    required String visitId,
+  }) async {
+    throw UnimplementedError();
+  }
 }
 
 void main() {
@@ -274,5 +348,94 @@ void main() {
     await cubit.create(input: const TripInput(name: 'Japan'));
 
     expect(repository.createCalls, 0);
+  });
+  test('creates a Trip and associates selected visits', () async {
+    final associations = FakeSaveTripAssociationRepository();
+
+    final tripCubit = SaveTripCubit(
+      repository: repository,
+      associationRepository: associations,
+    );
+
+    addTearDown(tripCubit.close);
+
+    repository.onCreate = (_) async => persistedTrip();
+
+    await tripCubit.createWithVisits(
+      input: const TripInput(name: 'Japan 2027'),
+      countryVisitIds: ['country-1'],
+      cityVisitIds: ['city-1', 'city-2'],
+    );
+
+    expect(repository.createCalls, 1);
+
+    expect(associations.addedCountries, ['country-1']);
+    expect(associations.addedCities, ['city-1', 'city-2']);
+
+    expect(tripCubit.state.phase, SaveTripPhase.success);
+    expect(tripCubit.state.trip?.id, 'trip-1');
+  });
+  test('partial association failure never recreates the Trip', () async {
+    final associations = FakeSaveTripAssociationRepository()
+      ..failOnCityCall = 1;
+
+    final tripCubit = SaveTripCubit(
+      repository: repository,
+      associationRepository: associations,
+    );
+
+    addTearDown(tripCubit.close);
+
+    repository.onCreate = (_) async => persistedTrip();
+
+    await tripCubit.createWithVisits(
+      input: const TripInput(name: 'Japan 2027'),
+      countryVisitIds: ['country-1'],
+      cityVisitIds: ['city-1'],
+    );
+
+    expect(repository.createCalls, 1);
+
+    expect(tripCubit.state.phase, SaveTripPhase.partialFailure);
+    expect(tripCubit.state.trip?.id, 'trip-1');
+
+    expect(tripCubit.state.pendingCountryVisitIds, isEmpty);
+
+    expect(tripCubit.state.pendingCityVisitIds, ['city-1']);
+
+    associations.failOnCityCall = null;
+
+    await tripCubit.retryPendingAssociations();
+
+    expect(repository.createCalls, 1);
+    expect(associations.addedCountries, ['country-1']);
+    expect(associations.addedCities, ['city-1']);
+
+    expect(tripCubit.state.phase, SaveTripPhase.success);
+  });
+  test('creates a Trip without selected visits', () async {
+    final associations = FakeSaveTripAssociationRepository();
+
+    final tripCubit = SaveTripCubit(
+      repository: repository,
+      associationRepository: associations,
+    );
+
+    addTearDown(tripCubit.close);
+
+    repository.onCreate = (_) async => persistedTrip();
+
+    await tripCubit.createWithVisits(
+      input: const TripInput(name: 'Japan 2027'),
+      countryVisitIds: [],
+      cityVisitIds: [],
+    );
+
+    expect(repository.createCalls, 1);
+
+    expect(associations.countryCalls, 0);
+    expect(associations.cityCalls, 0);
+
+    expect(tripCubit.state.phase, SaveTripPhase.success);
   });
 }
