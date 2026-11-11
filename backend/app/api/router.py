@@ -10,6 +10,7 @@ from app.api.residences import router as residences_router
 from app.api.wishlist_entries import router as wishlist_router
 from app.api.trips import router as trips_router
 from app.api.trip_associations import router as trip_associations_router
+from app.api.airports import router as airports_router
 
 
 api_router = APIRouter(prefix="/api/v1")
@@ -24,6 +25,7 @@ api_router.include_router(residences_router)
 api_router.include_router(wishlist_router)
 api_router.include_router(trips_router)
 api_router.include_router(trip_associations_router)
+api_router.include_router(airports_router)
 
 
 @api_router.get("/health")
