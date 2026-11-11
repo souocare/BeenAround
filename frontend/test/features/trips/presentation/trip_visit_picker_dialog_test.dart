@@ -50,9 +50,6 @@ CityVisit cityVisit({
   );
 }
 
-/// Test double for loading existing country visits.
-///
-/// Other repository operations are deliberately unsupported.
 class FakePickerCountriesRepository extends Fake
     implements CountriesRepository {
   FakePickerCountriesRepository({
@@ -88,7 +85,6 @@ class FakePickerCountriesRepository extends Fake
   @override
   Future<List<Country>> getCountries() async {
     catalogLoadCount++;
-
     return List.unmodifiable(countries);
   }
 
@@ -105,7 +101,6 @@ class FakePickerCountriesRepository extends Fake
   }
 }
 
-/// Test double for loading existing city visits.
 class FakePickerCityVisitsRepository extends Fake
     implements CityVisitsRepository {
   FakePickerCityVisitsRepository({List<CityVisit> visits = const []})
@@ -134,7 +129,7 @@ Widget buildPickerTestApp({
   required CityVisitsRepository cityVisitsRepository,
   required bool isCountryPicker,
   required Set<String> excludedVisitIds,
-  required ValueChanged<String?> onSelected,
+  required ValueChanged<List<String>?> onSelected,
 }) {
   return MultiRepositoryProvider(
     providers: [
@@ -177,14 +172,14 @@ void main() {
   late FakePickerCountriesRepository countriesRepository;
   late FakePickerCityVisitsRepository cityVisitsRepository;
 
-  String? selectedVisitId;
+  List<String>? selectedVisitIds;
   bool selectionCompleted = false;
 
   setUp(() {
     countriesRepository = FakePickerCountriesRepository();
     cityVisitsRepository = FakePickerCityVisitsRepository();
 
-    selectedVisitId = null;
+    selectedVisitIds = null;
     selectionCompleted = false;
   });
 
@@ -200,7 +195,7 @@ void main() {
         isCountryPicker: isCountryPicker,
         excludedVisitIds: excludedVisitIds,
         onSelected: (value) {
-          selectedVisitId = value;
+          selectedVisitIds = value;
           selectionCompleted = true;
         },
       ),
@@ -211,13 +206,29 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> selectVisit(WidgetTester tester, String visitId) async {
+    final finder = find.byKey(Key('tripVisitOption-$visitId'));
+
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> confirmSelection(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+    await tester.pumpAndSettle();
+  }
+
   group('Trip country visit picker', () {
     testWidgets('shows existing country visits', (tester) async {
       countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
 
       await openPicker(tester, isCountryPicker: true);
 
-      expect(find.text('Add country visit'), findsOneWidget);
+      expect(find.text('Add country visits'), findsOneWidget);
 
       expect(
         find.byKey(const Key('tripVisitOption-country-visit-1')),
@@ -252,6 +263,13 @@ void main() {
         find.byKey(const Key('tripVisitOption-country-visit-2')),
         findsOneWidget,
       );
+
+      await selectVisit(tester, firstCountryVisitId);
+      await selectVisit(tester, secondCountryVisitId);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [firstCountryVisitId, secondCountryVisitId]);
     });
 
     testWidgets('excludes already associated visits', (tester) async {
@@ -303,19 +321,27 @@ void main() {
       );
     });
 
-    testWidgets('returns selected country visit ID', (tester) async {
-      countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+    testWidgets('returns selected country visit IDs', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId),
+        countryVisit(id: secondCountryVisitId),
+      ]);
 
       await openPicker(tester, isCountryPicker: true);
 
-      await tester.tap(
-        find.byKey(const Key('tripVisitOption-country-visit-1')),
-      );
+      await selectVisit(tester, firstCountryVisitId);
+      await selectVisit(tester, secondCountryVisitId);
 
-      await tester.pumpAndSettle();
+      // Selecting options does not close the picker.
+      expect(selectionCompleted, isFalse);
+
+      expect(find.text('2 visits selected'), findsOneWidget);
+
+      await confirmSelection(tester);
 
       expect(selectionCompleted, isTrue);
-      expect(selectedVisitId, firstCountryVisitId);
+
+      expect(selectedVisitIds, [firstCountryVisitId, secondCountryVisitId]);
     });
 
     testWidgets('cancel returns null', (tester) async {
@@ -323,12 +349,76 @@ void main() {
 
       await openPicker(tester, isCountryPicker: true);
 
+      await selectVisit(tester, firstCountryVisitId);
+
       await tester.tap(find.byKey(const Key('cancelTripVisitPickerButton')));
 
       await tester.pumpAndSettle();
 
       expect(selectionCompleted, isTrue);
-      expect(selectedVisitId, isNull);
+      expect(selectedVisitIds, isNull);
+    });
+
+    testWidgets('confirm is disabled without selection', (tester) async {
+      countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+
+      await openPicker(tester, isCountryPicker: true);
+
+      final button = tester.widget<FilledButton>(
+        find.byKey(const Key('confirmTripVisitPickerButton')),
+      );
+
+      expect(button.onPressed, isNull);
+      expect(selectionCompleted, isFalse);
+    });
+
+    testWidgets('selecting again deselects a visit', (tester) async {
+      countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+
+      await openPicker(tester, isCountryPicker: true);
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      expect(find.text('0 visits selected'), findsOneWidget);
+
+      final button = tester.widget<FilledButton>(
+        find.byKey(const Key('confirmTripVisitPickerButton')),
+      );
+
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('preserves selection while searching', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId, countryCode: 'JP'),
+        countryVisit(id: secondCountryVisitId, countryCode: 'PT'),
+      ]);
+
+      await openPicker(tester, isCountryPicker: true);
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      await tester.enterText(
+        find.byKey(const Key('tripVisitPickerSearch')),
+        'portugal',
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-1')),
+        findsNothing,
+      );
+
+      await selectVisit(tester, secondCountryVisitId);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [firstCountryVisitId, secondCountryVisitId]);
     });
 
     testWidgets('shows empty state', (tester) async {
@@ -359,6 +449,64 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('displays country names instead of ISO codes', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId, countryCode: 'JP'),
+        countryVisit(id: secondCountryVisitId, countryCode: 'PT'),
+      ]);
+
+      await openPicker(tester, isCountryPicker: true);
+
+      expect(find.text('Japan'), findsOneWidget);
+      expect(find.text('Portugal'), findsOneWidget);
+
+      expect(countriesRepository.catalogLoadCount, 1);
+      expect(countriesRepository.loadCount, 1);
+    });
+
+    testWidgets('searches by full country name', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId, countryCode: 'JP'),
+        countryVisit(id: secondCountryVisitId, countryCode: 'PT'),
+      ]);
+
+      await openPicker(tester, isCountryPicker: true);
+
+      await tester.enterText(
+        find.byKey(const Key('tripVisitPickerSearch')),
+        'portugal',
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-1')),
+        findsNothing,
+      );
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-2')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('falls back to ISO code when country is missing', (
+      tester,
+    ) async {
+      countriesRepository.visits.add(
+        countryVisit(id: firstCountryVisitId, countryCode: 'FR'),
+      );
+
+      await openPicker(tester, isCountryPicker: true);
+
+      expect(find.text('FR'), findsOneWidget);
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-1')),
+        findsOneWidget,
+      );
+    });
   });
 
   group('Trip city visit picker', () {
@@ -367,7 +515,8 @@ void main() {
 
       await openPicker(tester, isCountryPicker: false);
 
-      expect(find.text('Add city visit'), findsOneWidget);
+      expect(find.text('Add city visits'), findsOneWidget);
+
       expect(find.text('Tokyo'), findsOneWidget);
       expect(find.text('Japan'), findsOneWidget);
     });
@@ -456,17 +605,24 @@ void main() {
       );
     });
 
-    testWidgets('returns selected city visit ID', (tester) async {
-      cityVisitsRepository.visits.add(cityVisit(id: firstCityVisitId));
+    testWidgets('returns multiple city visit IDs', (tester) async {
+      cityVisitsRepository.visits.addAll([
+        cityVisit(id: firstCityVisitId, cityName: 'Tokyo'),
+        cityVisit(id: secondCityVisitId, cityName: 'Kyoto'),
+      ]);
 
       await openPicker(tester, isCountryPicker: false);
 
-      await tester.tap(find.byKey(const Key('tripVisitOption-city-visit-1')));
+      await selectVisit(tester, firstCityVisitId);
+      await selectVisit(tester, secondCityVisitId);
 
-      await tester.pumpAndSettle();
+      expect(selectionCompleted, isFalse);
+
+      await confirmSelection(tester);
 
       expect(selectionCompleted, isTrue);
-      expect(selectedVisitId, firstCityVisitId);
+
+      expect(selectedVisitIds, [firstCityVisitId, secondCityVisitId]);
     });
 
     testWidgets('shows no matching visits', (tester) async {
@@ -483,62 +639,39 @@ void main() {
 
       expect(find.text('No matching visits.'), findsOneWidget);
     });
-    testWidgets('displays country names instead of only ISO codes', (
-      tester,
-    ) async {
-      countriesRepository.visits.addAll([
-        countryVisit(id: firstCountryVisitId, countryCode: 'JP'),
-        countryVisit(id: secondCountryVisitId, countryCode: 'PT'),
-      ]);
+  });
+
+  group('Adaptive picker presentation', () {
+    testWidgets('uses a bottom sheet on narrow screens', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
       await openPicker(tester, isCountryPicker: true);
 
-      expect(find.text('Japan'), findsOneWidget);
-      expect(find.text('Portugal'), findsOneWidget);
+      expect(find.byType(BottomSheet), findsOneWidget);
 
-      expect(countriesRepository.catalogLoadCount, 1);
-      expect(countriesRepository.loadCount, 1);
+      expect(tester.takeException(), isNull);
     });
-    testWidgets('searches country visits by full country name', (tester) async {
-      countriesRepository.visits.addAll([
-        countryVisit(id: firstCountryVisitId, countryCode: 'JP'),
-        countryVisit(id: secondCountryVisitId, countryCode: 'PT'),
-      ]);
+
+    testWidgets('uses a dialog on wide screens', (tester) async {
+      tester.view.physicalSize = const Size(1000, 900);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
       await openPicker(tester, isCountryPicker: true);
 
-      await tester.enterText(
-        find.byKey(const Key('tripVisitPickerSearch')),
-        'portugal',
-      );
+      expect(find.byType(Dialog), findsOneWidget);
 
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const Key('tripVisitOption-country-visit-1')),
-        findsNothing,
-      );
-
-      expect(
-        find.byKey(const Key('tripVisitOption-country-visit-2')),
-        findsOneWidget,
-      );
-    });
-    testWidgets('falls back to ISO code when country is missing', (
-      tester,
-    ) async {
-      countriesRepository.visits.add(
-        countryVisit(id: firstCountryVisitId, countryCode: 'FR'),
-      );
-
-      await openPicker(tester, isCountryPicker: true);
-
-      expect(find.text('FR'), findsOneWidget);
-
-      expect(
-        find.byKey(const Key('tripVisitOption-country-visit-1')),
-        findsOneWidget,
-      );
+      expect(tester.takeException(), isNull);
     });
   });
 }

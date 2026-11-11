@@ -12,93 +12,143 @@ import '../../../geography/domain/city_visits_repository.dart';
 /// Opens a picker for an existing country visit.
 ///
 /// Returns the selected visit ID, or null when dismissed.
-Future<String?> showTripCountryVisitPicker({
+///
+/// Opens a picker for existing country visits.
+///
+/// Returns selected visit IDs, or null when dismissed.
+Future<List<String>?> showTripCountryVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
 }) {
   final repository = context.read<CountriesRepository>();
 
-  return showDialog<String>(
+  return _showTripVisitPicker(
     context: context,
-    builder: (_) => _TripVisitPickerDialog(
-      title: 'Add country visit',
-      searchHint: 'Search country visits',
-      emptyMessage: 'No country visits available.',
-      excludedVisitIds: excludedVisitIds,
-      loadVisits: () async {
-        final results = await Future.wait<Object>([
-          repository.getCountries(),
-          repository.getCountryVisits(),
-        ]);
+    title: 'Add country visits',
+    searchHint: 'Search country visits',
+    emptyMessage: 'No country visits available.',
+    excludedVisitIds: excludedVisitIds,
+    loadVisits: () async {
+      final results = await Future.wait<Object>([
+        repository.getCountries(),
+        repository.getCountryVisits(),
+      ]);
 
-        final countries = results[0] as List<Country>;
-        final visits = results[1] as List<CountryVisit>;
+      final countries = results[0] as List<Country>;
+      final visits = results[1] as List<CountryVisit>;
 
-        final countryNames = {
-          for (final country in countries) country.code: country.name,
-        };
+      final countryNames = {
+        for (final country in countries) country.code: country.name,
+      };
 
-        return visits
-            .map((visit) {
-              final countryName =
-                  countryNames[visit.countryCode] ?? visit.countryCode;
+      return visits
+          .map((visit) {
+            final countryName =
+                countryNames[visit.countryCode] ?? visit.countryCode;
 
-              return _VisitOption(
-                id: visit.id,
-                title: countryName,
-                subtitle: countryName == visit.countryCode
-                    ? null
-                    : visit.countryCode,
-                searchText: '$countryName ${visit.countryCode}',
-                startedOn: visit.startedOn,
-                startedOnPrecision: visit.startedOnPrecision,
-                endedOn: visit.endedOn,
-                endedOnPrecision: visit.endedOnPrecision,
-              );
-            })
-            .toList(growable: false);
-      },
-    ),
+            return _VisitOption(
+              id: visit.id,
+              title: countryName,
+              subtitle: countryName == visit.countryCode
+                  ? null
+                  : visit.countryCode,
+              searchText: '$countryName ${visit.countryCode}',
+              startedOn: visit.startedOn,
+              startedOnPrecision: visit.startedOnPrecision,
+              endedOn: visit.endedOn,
+              endedOnPrecision: visit.endedOnPrecision,
+            );
+          })
+          .toList(growable: false);
+    },
   );
 }
 
 /// Opens a picker for an existing city visit.
 ///
 /// Returns the selected visit ID, or null when dismissed.
-Future<String?> showTripCityVisitPicker({
+/// Opens a picker for existing city visits.
+///
+/// Returns selected visit IDs, or null when dismissed.
+Future<List<String>?> showTripCityVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
 }) {
   final repository = context.read<CityVisitsRepository>();
 
-  return showDialog<String>(
+  return _showTripVisitPicker(
     context: context,
-    builder: (_) => _TripVisitPickerDialog(
-      title: 'Add city visit',
-      searchHint: 'Search city visits',
-      emptyMessage: 'No city visits available.',
-      excludedVisitIds: excludedVisitIds,
-      loadVisits: () async {
-        final visits = await repository.getCityVisits();
+    title: 'Add city visits',
+    searchHint: 'Search city visits',
+    emptyMessage: 'No city visits available.',
+    excludedVisitIds: excludedVisitIds,
+    loadVisits: () async {
+      final visits = await repository.getCityVisits();
 
-        return visits
-            .map((visit) {
-              return _VisitOption(
-                id: visit.id,
-                title: visit.cityName,
-                subtitle: visit.countryName,
-                searchText:
-                    '${visit.cityName} ${visit.countryName} '
-                    '${visit.countryCode}',
-                startedOn: visit.startedOn,
-                startedOnPrecision: visit.startedOnPrecision,
-                endedOn: visit.endedOn,
-                endedOnPrecision: visit.endedOnPrecision,
-              );
-            })
-            .toList(growable: false);
-      },
+      return visits
+          .map((visit) {
+            return _VisitOption(
+              id: visit.id,
+              title: visit.cityName,
+              subtitle: visit.countryName,
+              searchText:
+                  '${visit.cityName} ${visit.countryName} '
+                  '${visit.countryCode}',
+              startedOn: visit.startedOn,
+              startedOnPrecision: visit.startedOnPrecision,
+              endedOn: visit.endedOn,
+              endedOnPrecision: visit.endedOnPrecision,
+            );
+          })
+          .toList(growable: false);
+    },
+  );
+}
+
+Future<List<String>?> _showTripVisitPicker({
+  required BuildContext context,
+  required String title,
+  required String searchHint,
+  required String emptyMessage,
+  required Set<String> excludedVisitIds,
+  required Future<List<_VisitOption>> Function() loadVisits,
+}) {
+  Widget buildPicker() {
+    return _TripVisitPickerDialog(
+      title: title,
+      searchHint: searchHint,
+      emptyMessage: emptyMessage,
+      excludedVisitIds: excludedVisitIds,
+      loadVisits: loadVisits,
+    );
+  }
+
+  if (MediaQuery.sizeOf(context).width >= 800) {
+    return showDialog<List<String>>(
+      context: context,
+      builder: (_) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 720),
+          child: buildPicker(),
+        ),
+      ),
+    );
+  }
+
+  return showModalBottomSheet<List<String>>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
+    builder: (_) {
+      final height = MediaQuery.sizeOf(context).height * 0.9;
+
+      return SizedBox(height: height, child: buildPicker());
+    },
   );
 }
 
@@ -159,6 +209,7 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
   String? _errorMessage;
 
   int _loadGeneration = 0;
+  final Set<String> _selectedVisitIds = {};
 
   @override
   void initState() {
@@ -171,6 +222,14 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
     ++_loadGeneration;
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _toggleVisit(String visitId) {
+    setState(() {
+      if (!_selectedVisitIds.add(visitId)) {
+        _selectedVisitIds.remove(visitId);
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -295,24 +354,49 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
       itemBuilder: (context, index) {
         final visit = visits[index];
 
-        return ListTile(
+        final selected = _selectedVisitIds.contains(visit.id);
+
+        return Card(
           key: Key('tripVisitOption-${visit.id}'),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
+          margin: const EdgeInsets.symmetric(vertical: 5),
+          color: selected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
-          title: Text(visit.title),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (visit.subtitle != null) Text(visit.subtitle!),
-              Text(_formatDateRange(visit)),
-            ],
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            title: Text(
+              visit.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (visit.subtitle != null) Text(visit.subtitle!),
+                const SizedBox(height: 4),
+                Text(_formatDateRange(visit)),
+              ],
+            ),
+            trailing: Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            onTap: () => _toggleVisit(visit.id),
           ),
-          trailing: const Icon(Icons.add_circle_outline),
-          onTap: () {
-            Navigator.of(context).pop(visit.id);
-          },
         );
       },
     );
@@ -320,35 +404,112 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 520,
-        height: 420,
-        child: Column(
-          children: [
-            TextField(
-              key: const Key('tripVisitPickerSearch'),
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: widget.searchHint,
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final selectedCount = _selectedVisitIds.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Select existing visits to add to this Trip.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: TextField(
+            key: const Key('tripVisitPickerSearch'),
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: widget.searchHint,
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            Expanded(child: _buildContent()),
-          ],
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          key: const Key('cancelTripVisitPickerButton'),
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+
+        const SizedBox(height: 12),
+
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildContent(),
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$selectedCount '
+                '${selectedCount == 1 ? 'visit' : 'visits'} selected',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      key: const Key('cancelTripVisitPickerButton'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      key: const Key('confirmTripVisitPickerButton'),
+                      onPressed: selectedCount == 0
+                          ? null
+                          : () {
+                              Navigator.of(
+                                context,
+                              ).pop(_selectedVisitIds.toList(growable: false));
+                            },
+                      child: Text(
+                        'Add $selectedCount '
+                        '${selectedCount == 1 ? 'visit' : 'visits'}',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );

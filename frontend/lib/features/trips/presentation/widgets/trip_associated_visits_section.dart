@@ -142,16 +142,18 @@ class _TripAssociatedVisitsSectionState
   ) async {
     final cubit = context.read<TripAssociationsCubit>();
 
-    final selectedVisitId = await showTripCountryVisitPicker(
+    final selectedVisitIds = await showTripCountryVisitPicker(
       context: context,
       excludedVisitIds: state.countryVisits.map((visit) => visit.id).toSet(),
     );
 
-    if (!context.mounted || selectedVisitId == null) {
+    if (!context.mounted ||
+        selectedVisitIds == null ||
+        selectedVisitIds.isEmpty) {
       return;
     }
 
-    await cubit.addCountryVisit(visitId: selectedVisitId);
+    await cubit.addCountryVisits(visitIds: selectedVisitIds);
   }
 
   Future<void> _addCityVisit(
@@ -160,16 +162,18 @@ class _TripAssociatedVisitsSectionState
   ) async {
     final cubit = context.read<TripAssociationsCubit>();
 
-    final selectedVisitId = await showTripCityVisitPicker(
+    final selectedVisitIds = await showTripCityVisitPicker(
       context: context,
       excludedVisitIds: state.cityVisits.map((visit) => visit.id).toSet(),
     );
 
-    if (!context.mounted || selectedVisitId == null) {
+    if (!context.mounted ||
+        selectedVisitIds == null ||
+        selectedVisitIds.isEmpty) {
       return;
     }
 
-    await cubit.addCityVisit(visitId: selectedVisitId);
+    await cubit.addCityVisits(visitIds: selectedVisitIds);
   }
 
   Future<void> _removeCountryVisit(

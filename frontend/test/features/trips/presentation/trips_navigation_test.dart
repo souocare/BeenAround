@@ -381,7 +381,7 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        expect(find.text('Add country visit'), findsOneWidget);
+        expect(find.text('Add country visits'), findsOneWidget);
 
         expect(tester.takeException(), isNull);
 
@@ -394,7 +394,7 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        expect(find.text('Add city visit'), findsOneWidget);
+        expect(find.text('Add city visits'), findsOneWidget);
 
         expect(tester.takeException(), isNull);
       },

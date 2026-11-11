@@ -350,6 +350,9 @@ void main() {
     await tester.tap(find.byKey(Key('tripVisitOption-${visit.id}')));
 
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+    await tester.pumpAndSettle();
 
     // The Cubit associates the visit and refreshes its data.
     expect(associationRepository.addCountryVisitCalls, 1);
