@@ -1,3 +1,4 @@
+import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_input.dart';
@@ -11,6 +12,7 @@ import 'package:beenaround/core/models/partial_visit_date.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/core/network/api_exception.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 import 'trip_visit_picker_dialog_test.dart'
     show
@@ -292,6 +294,29 @@ Future<void> selectTripFormVisit(
   await tester.pumpAndSettle();
 
   await tester.tap(confirmButton);
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectTripDate(
+  WidgetTester tester, {
+  required bool isStart,
+}) async {
+  final field = find.byKey(
+    Key(isStart ? 'tripStartDateField' : 'tripEndDateField'),
+  );
+
+  await tapVisibleTripFormButton(tester, field);
+
+  // Select exact-day precision.
+  await tester.tap(find.byKey(const Key('datePrecision_day')));
+
+  await tester.pumpAndSettle();
+
+  // Widget tests run with the Material date picker by default.
+  expect(find.byType(DatePickerDialog), findsOneWidget);
+
+  // Confirm its initially selected date.
+  await tester.tap(find.text('OK').last);
   await tester.pumpAndSettle();
 }
 
@@ -651,5 +676,223 @@ void main() {
     expect(associationRepository.attemptedCities, ['city-visit-1']);
 
     expect(find.byType(TripFormDialog), findsNothing);
+  });
+  testWidgets(
+    'suggests existing visits only after both Trip dates are selected',
+    (tester) async {
+      final today = DateTime.now();
+
+      final repository = FakeTripFormRepository();
+
+      final countriesRepository = FakePickerCountriesRepository(
+        visits: [
+          CountryVisit(
+            id: 'suggested-country-1',
+            countryCode: 'JP',
+            startedOn: DateTime(today.year, today.month, today.day),
+            endedOn: DateTime(today.year, today.month, today.day),
+            startedOnPrecision: VisitDatePrecision.day,
+            endedOnPrecision: VisitDatePrecision.day,
+            createdAt: today,
+            updatedAt: today,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        buildTestApp(repository, countriesRepository: countriesRepository),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('inlineTripVisitSuggestions')), findsNothing);
+
+      await selectTripDate(tester, isStart: true);
+
+      expect(find.byKey(const Key('inlineTripVisitSuggestions')), findsNothing);
+
+      await selectTripDate(tester, isStart: false);
+
+      expect(
+        find.byKey(const Key('inlineTripVisitSuggestions')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byKey(const Key('addSuggestedCountryVisit-suggested-country-1')),
+        findsOneWidget,
+      );
+
+      // Merely displaying suggestions must not create a Trip.
+      expect(repository.createCalls, 0);
+    },
+  );
+  testWidgets(
+    'selecting a suggested country adds it to the form without persisting',
+    (tester) async {
+      final today = DateTime.now();
+
+      final repository = FakeTripFormRepository();
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      final countriesRepository = FakePickerCountriesRepository(
+        visits: [
+          CountryVisit(
+            id: 'suggested-country-1',
+            countryCode: 'JP',
+            startedOn: DateTime(today.year, today.month, today.day),
+            endedOn: DateTime(today.year, today.month, today.day),
+            startedOnPrecision: VisitDatePrecision.day,
+            endedOnPrecision: VisitDatePrecision.day,
+            createdAt: today,
+            updatedAt: today,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        buildTestApp(
+          repository,
+          countriesRepository: countriesRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('tripNameField')),
+        'Japan 2026',
+      );
+
+      await selectTripDate(tester, isStart: true);
+      await selectTripDate(tester, isStart: false);
+
+      final suggestionButton = find.byKey(
+        const Key('addSuggestedCountryVisit-suggested-country-1'),
+      );
+
+      expect(suggestionButton, findsOneWidget);
+
+      await tapVisibleTripFormButton(tester, suggestionButton);
+
+      // Selected visits should no longer be suggested.
+      expect(suggestionButton, findsNothing);
+
+      // The existing visit is now selected in the form.
+      expect(
+        find.byKey(const Key('selectedCountryVisit-suggested-country-1')),
+        findsOneWidget,
+      );
+
+      // No Trip or association was persisted by selecting a suggestion.
+      expect(repository.createCalls, 0);
+      expect(associationRepository.addedCountries, isEmpty);
+      expect(associationRepository.addedCities, isEmpty);
+
+      await tapSaveTrip(tester);
+
+      expect(repository.createCalls, 1);
+
+      expect(associationRepository.addedCountries, ['suggested-country-1']);
+
+      expect(associationRepository.addedCities, isEmpty);
+    },
+  );
+  testWidgets(
+    'cancelling after selecting a suggestion does not persist anything',
+    (tester) async {
+      final today = DateTime.now();
+
+      final repository = FakeTripFormRepository();
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      final countriesRepository = FakePickerCountriesRepository(
+        visits: [
+          CountryVisit(
+            id: 'suggested-country-1',
+            countryCode: 'JP',
+            startedOn: DateTime(today.year, today.month, today.day),
+            endedOn: DateTime(today.year, today.month, today.day),
+            startedOnPrecision: VisitDatePrecision.day,
+            endedOnPrecision: VisitDatePrecision.day,
+            createdAt: today,
+            updatedAt: today,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        buildTestApp(
+          repository,
+          countriesRepository: countriesRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await selectTripDate(tester, isStart: true);
+      await selectTripDate(tester, isStart: false);
+
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('addSuggestedCountryVisit-suggested-country-1')),
+      );
+
+      await tapCancelTrip(tester);
+
+      expect(repository.createCalls, 0);
+      expect(associationRepository.addedCountries, isEmpty);
+      expect(associationRepository.addedCities, isEmpty);
+
+      expect(find.text('New Trip'), findsNothing);
+    },
+  );
+  testWidgets('clearing a Trip date hides existing visit suggestions', (
+    tester,
+  ) async {
+    final today = DateTime.now();
+
+    final repository = FakeTripFormRepository();
+
+    final countriesRepository = FakePickerCountriesRepository(
+      visits: [
+        CountryVisit(
+          id: 'suggested-country-1',
+          countryCode: 'JP',
+          startedOn: DateTime(today.year, today.month, today.day),
+          endedOn: DateTime(today.year, today.month, today.day),
+          startedOnPrecision: VisitDatePrecision.day,
+          endedOnPrecision: VisitDatePrecision.day,
+          createdAt: today,
+          updatedAt: today,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(repository, countriesRepository: countriesRepository),
+    );
+
+    await tester.tap(find.text('Open Form'));
+    await tester.pumpAndSettle();
+
+    await selectTripDate(tester, isStart: true);
+    await selectTripDate(tester, isStart: false);
+
+    expect(find.byKey(const Key('inlineTripVisitSuggestions')), findsOneWidget);
+
+    await tapVisibleTripFormButton(
+      tester,
+      find.byKey(const Key('clearTripEndDate')),
+    );
+
+    expect(find.byKey(const Key('inlineTripVisitSuggestions')), findsNothing);
+
+    expect(repository.createCalls, 0);
   });
 }

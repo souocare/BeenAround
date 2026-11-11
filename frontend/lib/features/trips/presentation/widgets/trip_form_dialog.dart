@@ -21,6 +21,10 @@ import '../../../explore/domain/country_visit.dart';
 import '../../../geography/domain/city_visit.dart';
 
 import '../../domain/trip_association_repository.dart';
+import '../../application/trip_visit_suggestions.dart';
+import '../../domain/trip_status.dart';
+
+import 'inline_trip_visit_suggestions.dart';
 
 /// Opens the Create/Edit Trip form.
 ///
@@ -180,6 +184,15 @@ class _TripFormDialogState extends State<TripFormDialog> {
 
   bool get _isEditing => widget.trip != null;
 
+  Future<
+    ({
+      List<Country> countries,
+      List<CountryVisit> countryVisits,
+      List<CityVisit> cityVisits,
+    })
+  >?
+  _suggestedVisitsFuture;
+
   @override
   void initState() {
     super.initState();
@@ -223,6 +236,45 @@ class _TripFormDialogState extends State<TripFormDialog> {
         _endedOn = selected;
       }
     });
+    _ensureSuggestedVisitsLoaded();
+  }
+
+  void _addSuggestedCountryVisit(
+    CountryVisit visit,
+    Map<String, String> countryNames,
+  ) {
+    if (_isEditing || context.read<SaveTripCubit>().state.isSubmitting) {
+      return;
+    }
+
+    if (_selectedCountryVisitIds.contains(visit.id)) {
+      return;
+    }
+
+    setState(() {
+      _selectedCountryVisitIds.add(visit.id);
+      _countryVisitsById[visit.id] = visit;
+      _countryNamesByCode.addAll(countryNames);
+
+      _countryDetailsError = null;
+    });
+  }
+
+  void _addSuggestedCityVisit(CityVisit visit) {
+    if (_isEditing || context.read<SaveTripCubit>().state.isSubmitting) {
+      return;
+    }
+
+    if (_selectedCityVisitIds.contains(visit.id)) {
+      return;
+    }
+
+    setState(() {
+      _selectedCityVisitIds.add(visit.id);
+      _cityVisitsById[visit.id] = visit;
+
+      _cityDetailsError = null;
+    });
   }
 
   Future<void> _selectCountryVisits() async {
@@ -262,7 +314,7 @@ class _TripFormDialogState extends State<TripFormDialog> {
         ..addAll(selected);
     });
 
-    await _loadSelectedCountryDetails();
+    await _loadSelectedCityDetails();
   }
 
   Future<void> _loadSelectedCountryDetails() async {
@@ -394,6 +446,11 @@ class _TripFormDialogState extends State<TripFormDialog> {
         ),
 
         const SizedBox(height: AppSpacing.lg),
+
+        if (!_isEditing) ...[
+          _buildSuggestedVisits(isSubmitting: isSubmitting),
+          const SizedBox(height: AppSpacing.lg),
+        ],
 
         _buildDestinationSelector(
           title: 'Countries',
@@ -535,6 +592,51 @@ class _TripFormDialogState extends State<TripFormDialog> {
       VisitDatePrecision.month => localization.formatMonthYear(date),
       VisitDatePrecision.year => '${date.year}',
     };
+  }
+
+  bool get _hasValidSuggestionDates {
+    if (_isEditing || _startedOn == null || _endedOn == null) {
+      return false;
+    }
+
+    final startBounds = tripDateBounds(_startedOn!);
+    final endBounds = tripDateBounds(_endedOn!);
+
+    return !startBounds.earliest.isAfter(endBounds.latest);
+  }
+
+  Future<
+    ({
+      List<Country> countries,
+      List<CountryVisit> countryVisits,
+      List<CityVisit> cityVisits,
+    })
+  >
+  _loadSuggestedVisits() async {
+    final countriesRepository = context.read<CountriesRepository>();
+    final cityVisitsRepository = context.read<CityVisitsRepository>();
+
+    final results = await Future.wait<Object>([
+      countriesRepository.getCountries(),
+      countriesRepository.getCountryVisits(),
+      cityVisitsRepository.getCityVisits(),
+    ]);
+
+    return (
+      countries: results[0] as List<Country>,
+      countryVisits: results[1] as List<CountryVisit>,
+      cityVisits: results[2] as List<CityVisit>,
+    );
+  }
+
+  void _ensureSuggestedVisitsLoaded() {
+    if (!_hasValidSuggestionDates || _suggestedVisitsFuture != null) {
+      return;
+    }
+
+    setState(() {
+      _suggestedVisitsFuture = _loadSuggestedVisits();
+    });
   }
 
   String _formatVisitDateRange({
@@ -735,6 +837,64 @@ class _TripFormDialogState extends State<TripFormDialog> {
           _selectedCityVisitIds.remove(visitId);
           _cityVisitsById.remove(visitId);
         });
+      },
+    );
+  }
+
+  Widget _buildSuggestedVisits({required bool isSubmitting}) {
+    final future = _suggestedVisitsFuture;
+
+    if (!_hasValidSuggestionDates || future == null) {
+      return const SizedBox.shrink();
+    }
+
+    return FutureBuilder<
+      ({
+        List<Country> countries,
+        List<CountryVisit> countryVisits,
+        List<CityVisit> cityVisits,
+      })
+    >(
+      future: future,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final data = snapshot.data!;
+
+        final countrySuggestions = findCompatibleCountryVisits(
+          visits: data.countryVisits,
+          tripStart: _startedOn,
+          tripEnd: _endedOn,
+          excludedVisitIds: _selectedCountryVisitIds,
+        );
+
+        final citySuggestions = findCompatibleCityVisits(
+          visits: data.cityVisits,
+          tripStart: _startedOn,
+          tripEnd: _endedOn,
+          excludedVisitIds: _selectedCityVisitIds,
+        );
+
+        if (countrySuggestions.isEmpty && citySuggestions.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final countryNames = {
+          for (final country in data.countries) country.code: country.name,
+        };
+
+        return InlineTripVisitSuggestions(
+          countrySuggestions: countrySuggestions,
+          citySuggestions: citySuggestions,
+          countryNamesByCode: countryNames,
+          enabled: !isSubmitting,
+          onCountrySelected: (visit) {
+            _addSuggestedCountryVisit(visit, countryNames);
+          },
+          onCitySelected: _addSuggestedCityVisit,
+        );
       },
     );
   }
