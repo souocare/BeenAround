@@ -400,4 +400,217 @@ void main() {
       });
     },
   );
+  group('batch associations', () {
+    test('adds multiple country visits and refreshes once', () async {
+      final addedIds = <String>[];
+
+      repository.onAddCountry = (visitId) async {
+        addedIds.add(visitId);
+
+        repository.countries = [
+          ...repository.countries,
+          sampleCountryVisit(id: visitId),
+        ];
+      };
+
+      await cubit.addCountryVisits(
+        visitIds: ['country-1', 'country-2', 'country-3'],
+      );
+
+      expect(addedIds, ['country-1', 'country-2', 'country-3']);
+
+      expect(repository.addCountryCalls, 3);
+
+      // A single refresh after the entire batch.
+      expect(repository.countryLoads, 1);
+      expect(repository.cityLoads, 1);
+
+      expect(cubit.state.countryVisits, hasLength(3));
+      expect(cubit.state.hasLoaded, isTrue);
+      expect(cubit.state.isMutating, isFalse);
+      expect(cubit.state.mutationError, isNull);
+    });
+    test('adds multiple city visits and refreshes once', () async {
+      repository.onAddCity = (visitId) async {
+        repository.cities = [
+          ...repository.cities,
+          sampleCityVisit(id: visitId),
+        ];
+      };
+
+      await cubit.addCityVisits(visitIds: ['city-1', 'city-2']);
+
+      expect(repository.addCityCalls, 2);
+
+      expect(repository.countryLoads, 1);
+      expect(repository.cityLoads, 1);
+
+      expect(cubit.state.cityVisits.map((visit) => visit.id).toList(), [
+        'city-1',
+        'city-2',
+      ]);
+
+      expect(cubit.state.mutationError, isNull);
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('deduplicates visit IDs while preserving selection order', () async {
+      final addedIds = <String>[];
+
+      repository.onAddCountry = (visitId) async {
+        addedIds.add(visitId);
+      };
+
+      await cubit.addCountryVisits(
+        visitIds: [
+          'country-2',
+          'country-1',
+          'country-2',
+          'country-3',
+          'country-1',
+        ],
+      );
+
+      expect(addedIds, ['country-2', 'country-1', 'country-3']);
+
+      expect(repository.addCountryCalls, 3);
+    });
+    test('empty batch performs no requests or refresh', () async {
+      await cubit.addCountryVisits(visitIds: []);
+      await cubit.addCityVisits(visitIds: []);
+
+      expect(repository.addCountryCalls, 0);
+      expect(repository.addCityCalls, 0);
+
+      expect(repository.countryLoads, 0);
+      expect(repository.cityLoads, 0);
+
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('partial failure preserves successful associations', () async {
+      final attemptedIds = <String>[];
+
+      repository.onAddCountry = (visitId) async {
+        attemptedIds.add(visitId);
+
+        if (visitId == 'country-3') {
+          throw const ApiException(
+            type: ApiErrorType.server,
+            message: 'Unable to associate this visit.',
+            statusCode: 500,
+          );
+        }
+
+        repository.countries = [
+          ...repository.countries,
+          sampleCountryVisit(id: visitId),
+        ];
+      };
+
+      await cubit.addCountryVisits(
+        visitIds: ['country-1', 'country-2', 'country-3', 'country-4'],
+      );
+
+      // The batch stops after the first failure.
+      expect(attemptedIds, ['country-1', 'country-2', 'country-3']);
+
+      expect(repository.addCountryCalls, 3);
+
+      // Successful associations remain available.
+      expect(cubit.state.countryVisits.map((visit) => visit.id).toSet(), {
+        'country-1',
+        'country-2',
+      });
+
+      expect(cubit.state.mutationError, contains('Added 2 of 4 visits'));
+
+      expect(
+        cubit.state.mutationError,
+        contains('Unable to associate this visit.'),
+      );
+
+      expect(repository.countryLoads, 1);
+      expect(repository.cityLoads, 1);
+
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('does not start another mutation during a batch', () async {
+      final pending = Completer<void>();
+
+      repository.onAddCountry = (_) => pending.future;
+
+      final batch = cubit.addCountryVisits(visitIds: ['country-1']);
+
+      expect(cubit.state.isMutating, isTrue);
+
+      // Must not execute while the batch is active.
+      await cubit.addCountryVisit(visitId: 'country-2');
+
+      await cubit.addCityVisits(visitIds: ['city-1']);
+
+      expect(repository.addCountryCalls, 1);
+      expect(repository.addCityCalls, 0);
+
+      pending.complete();
+
+      await batch;
+
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('closing during a batch prevents remaining associations', () async {
+      final pending = Completer<void>();
+
+      repository.onAddCountry = (_) => pending.future;
+
+      final batch = cubit.addCountryVisits(
+        visitIds: ['country-1', 'country-2'],
+      );
+
+      expect(repository.addCountryCalls, 1);
+
+      await cubit.close();
+
+      pending.complete();
+
+      await batch;
+
+      expect(repository.addCountryCalls, 1);
+      expect(repository.countryLoads, 0);
+      expect(repository.cityLoads, 0);
+      expect(cubit.isClosed, isTrue);
+    });
+    test('batch refresh failure preserves existing data', () async {
+      repository.countries = [sampleCountryVisit(id: 'existing-country')];
+
+      await cubit.load();
+
+      repository.onAddCountry = (visitId) async {
+        repository.countries = [
+          ...repository.countries,
+          sampleCountryVisit(id: visitId),
+        ];
+      };
+
+      repository.onGetCountries = () async {
+        throw const ApiException(
+          type: ApiErrorType.server,
+          message: 'Unable to refresh associations.',
+          statusCode: 500,
+        );
+      };
+
+      await cubit.addCountryVisits(visitIds: ['new-country']);
+
+      expect(repository.addCountryCalls, 1);
+
+      expect(cubit.state.countryVisits.map((visit) => visit.id).toList(), [
+        'existing-country',
+      ]);
+
+      expect(cubit.state.mutationError, isNull);
+
+      expect(cubit.state.loadError, 'Unable to refresh associations.');
+
+      expect(cubit.state.isMutating, isFalse);
+    });
+  });
 }
