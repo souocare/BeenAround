@@ -8,10 +8,17 @@ import '../../domain/trip.dart';
 import '../../domain/trip_status.dart';
 
 class TripCard extends StatelessWidget {
-  const TripCard({required this.trip, this.onEdit, this.onTap, super.key});
+  const TripCard({
+    required this.trip,
+    this.onEdit,
+    this.onDelete,
+    this.onTap,
+    super.key,
+  });
 
   final Trip trip;
   final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   String _formatPartialDate(PartialVisitDate value) {
@@ -235,6 +242,18 @@ class TripCard extends StatelessWidget {
                         color: colors.onSurfaceVariant,
                       ),
                     ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton(
+                      key: Key('deleteTrip-${trip.id}'),
+                      tooltip: 'Delete Trip',
+                      onPressed: onDelete,
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        color: colors.error,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],

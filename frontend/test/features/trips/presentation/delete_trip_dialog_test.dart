@@ -1,5 +1,6 @@
 import 'dart:async';
-
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 
 import 'package:beenaround/features/trips/domain/trip.dart';
@@ -259,5 +260,44 @@ void main() {
     );
 
     expect(find.text('Delete Trip?'), findsOneWidget);
+  });
+  testWidgets('uses Cupertino confirmation on iOS', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      final repository = FakeDeleteTripRepository();
+
+      await tester.pumpWidget(buildTestApp(repository));
+
+      await tester.tap(find.text('Open Delete Dialog'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('cupertinoDeleteTripDialog')),
+        findsOneWidget,
+      );
+
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+
+      expect(find.byType(AlertDialog), findsNothing);
+
+      final deleteButton = tester.widget<CupertinoDialogAction>(
+        find.byKey(const Key('confirmDeleteTripButton')),
+      );
+
+      expect(deleteButton.isDestructiveAction, isTrue);
+
+      expect(repository.deleteCalls, 0);
+
+      await tester.tap(find.byKey(const Key('cancelDeleteTripButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(repository.deleteCalls, 0);
+
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

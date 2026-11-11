@@ -8,10 +8,16 @@ import 'package:beenaround/features/trips/domain/trip_repository.dart';
 import 'package:beenaround/features/trips/presentation/pages/trips_page.dart';
 
 class FakeTripRepository implements TripRepository {
-  FakeTripRepository({this.trips = const [], this.shouldFail = false});
+  FakeTripRepository({List<Trip> trips = const [], this.shouldFail = false})
+    : trips = List.of(trips);
 
   final List<Trip> trips;
   final bool shouldFail;
+
+  int deleteCalls = 0;
+  String? lastDeletedId;
+
+  bool failDeletion = false;
 
   @override
   Future<List<Trip>> getTrips() async {
@@ -48,8 +54,15 @@ class FakeTripRepository implements TripRepository {
   }
 
   @override
-  Future<void> deleteTrip({required String tripId}) {
-    throw UnimplementedError();
+  Future<void> deleteTrip({required String tripId}) async {
+    deleteCalls++;
+    lastDeletedId = tripId;
+
+    if (failDeletion) {
+      throw Exception('Unable to delete Trip.');
+    }
+
+    trips.removeWhere((trip) => trip.id == tripId);
   }
 }
 
@@ -169,5 +182,118 @@ void main() {
     expect(find.byKey(const Key('tripsFilter-ongoing')), findsOneWidget);
 
     expect(find.byKey(const Key('tripsFilter-completed')), findsOneWidget);
+  });
+  testWidgets('Trip cards expose a delete action', (tester) async {
+    final repository = FakeTripRepository(
+      trips: [testTrip(id: 'trip-1', name: 'Honeymoon')],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('editTrip-trip-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('deleteTrip-trip-1')), findsOneWidget);
+
+    expect(repository.deleteCalls, 0);
+  });
+  testWidgets('cancelling deletion keeps the Trip', (tester) async {
+    final repository = FakeTripRepository(
+      trips: [testTrip(id: 'trip-1', name: 'Honeymoon')],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('deleteTrip-trip-1')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Trip?'), findsOneWidget);
+
+    expect(repository.deleteCalls, 0);
+
+    await tester.tap(find.byKey(const Key('cancelDeleteTripButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 0);
+    expect(repository.trips.length, 1);
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsOneWidget);
+  });
+  testWidgets('confirming deletion removes the Trip from the list', (
+    tester,
+  ) async {
+    final repository = FakeTripRepository(
+      trips: [
+        testTrip(id: 'trip-1', name: 'Honeymoon'),
+        testTrip(id: 'trip-2', name: 'Italy 2026'),
+      ],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCard-trip-2')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('deleteTrip-trip-1')));
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteTripButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.lastDeletedId, 'trip-1');
+
+    expect(repository.trips.map((trip) => trip.id), ['trip-2']);
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsNothing);
+
+    expect(find.byKey(const Key('tripCard-trip-2')), findsOneWidget);
+
+    expect(find.text('Italy 2026'), findsOneWidget);
+    expect(find.text('Honeymoon'), findsNothing);
+  });
+  testWidgets('failed deletion preserves the Trip and allows retry', (
+    tester,
+  ) async {
+    final repository = FakeTripRepository(
+      trips: [testTrip(id: 'trip-1', name: 'Honeymoon')],
+    )..failDeletion = true;
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('deleteTrip-trip-1')));
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('confirmDeleteTripButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+
+    expect(find.byKey(const Key('deleteTripError')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsOneWidget);
+
+    // Simulate backend recovery.
+    repository.failDeletion = false;
+
+    await tester.tap(find.byKey(const Key('confirmDeleteTripButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 2);
+
+    expect(find.byKey(const Key('tripCard-trip-1')), findsNothing);
   });
 }

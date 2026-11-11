@@ -1,6 +1,7 @@
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/trips/presentation/widgets/delete_trip_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -97,6 +98,18 @@ class _TripsViewState extends State<_TripsView> {
     }
 
     await context.read<TripsCubit>().refresh();
+  }
+
+  Future<void> _deleteTrip(Trip trip) async {
+    final tripsCubit = context.read<TripsCubit>();
+
+    final deleted = await showDeleteTripDialog(context: context, trip: trip);
+
+    if (!mounted || !deleted || tripsCubit.isClosed) {
+      return;
+    }
+
+    await tripsCubit.refresh();
   }
 
   Future<void> _openTripDetails(Trip trip) async {
@@ -365,6 +378,7 @@ class _TripsViewState extends State<_TripsView> {
               trip: trip,
               onTap: () => _openTripDetails(trip),
               onEdit: () => _openTripForm(trip: trip),
+              onDelete: () => _deleteTrip(trip),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
