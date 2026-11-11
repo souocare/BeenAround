@@ -19,6 +19,7 @@ import '../../../geography/domain/city_visits_repository.dart';
 Future<List<String>?> showTripCountryVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
+  Set<String> initiallySelectedVisitIds = const {},
 }) {
   final repository = context.read<CountriesRepository>();
 
@@ -27,6 +28,7 @@ Future<List<String>?> showTripCountryVisitPicker({
     title: 'Add country visits',
     searchHint: 'Search country visits',
     emptyMessage: 'No country visits available.',
+    initiallySelectedVisitIds: initiallySelectedVisitIds,
     excludedVisitIds: excludedVisitIds,
     loadVisits: () async {
       final results = await Future.wait<Object>([
@@ -73,6 +75,7 @@ Future<List<String>?> showTripCountryVisitPicker({
 Future<List<String>?> showTripCityVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
+  Set<String> initiallySelectedVisitIds = const {},
 }) {
   final repository = context.read<CityVisitsRepository>();
 
@@ -82,6 +85,7 @@ Future<List<String>?> showTripCityVisitPicker({
     searchHint: 'Search city visits',
     emptyMessage: 'No city visits available.',
     excludedVisitIds: excludedVisitIds,
+    initiallySelectedVisitIds: initiallySelectedVisitIds,
     loadVisits: () async {
       final visits = await repository.getCityVisits();
 
@@ -111,6 +115,7 @@ Future<List<String>?> _showTripVisitPicker({
   required String searchHint,
   required String emptyMessage,
   required Set<String> excludedVisitIds,
+  required Set<String> initiallySelectedVisitIds,
   required Future<List<_VisitOption>> Function() loadVisits,
 }) {
   Widget buildPicker() {
@@ -119,6 +124,7 @@ Future<List<String>?> _showTripVisitPicker({
       searchHint: searchHint,
       emptyMessage: emptyMessage,
       excludedVisitIds: excludedVisitIds,
+      initiallySelectedVisitIds: initiallySelectedVisitIds,
       loadVisits: loadVisits,
     );
   }
@@ -185,6 +191,7 @@ class _TripVisitPickerDialog extends StatefulWidget {
     required this.searchHint,
     required this.emptyMessage,
     required this.excludedVisitIds,
+    required this.initiallySelectedVisitIds,
     required this.loadVisits,
   });
 
@@ -193,6 +200,7 @@ class _TripVisitPickerDialog extends StatefulWidget {
   final String emptyMessage;
 
   final Set<String> excludedVisitIds;
+  final Set<String> initiallySelectedVisitIds;
 
   final Future<List<_VisitOption>> Function() loadVisits;
 
@@ -209,11 +217,15 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
   String? _errorMessage;
 
   int _loadGeneration = 0;
-  final Set<String> _selectedVisitIds = {};
+  late final Set<String> _selectedVisitIds;
 
   @override
   void initState() {
     super.initState();
+
+    _selectedVisitIds = {...widget.initiallySelectedVisitIds}
+      ..removeAll(widget.excludedVisitIds);
+
     _load();
   }
 
@@ -249,6 +261,10 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
         _visits = List.unmodifiable(
           visits.where((visit) => !widget.excludedVisitIds.contains(visit.id)),
         );
+
+        final availableIds = _visits.map((visit) => visit.id).toSet();
+
+        _selectedVisitIds.removeWhere((id) => !availableIds.contains(id));
 
         _isLoading = false;
       });

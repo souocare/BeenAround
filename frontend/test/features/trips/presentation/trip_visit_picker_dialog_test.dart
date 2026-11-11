@@ -130,6 +130,7 @@ Widget buildPickerTestApp({
   required bool isCountryPicker,
   required Set<String> excludedVisitIds,
   required ValueChanged<List<String>?> onSelected,
+  Set<String> initiallySelectedVisitIds = const {},
 }) {
   return MultiRepositoryProvider(
     providers: [
@@ -150,10 +151,12 @@ Widget buildPickerTestApp({
                       ? await showTripCountryVisitPicker(
                           context: context,
                           excludedVisitIds: excludedVisitIds,
+                          initiallySelectedVisitIds: initiallySelectedVisitIds,
                         )
                       : await showTripCityVisitPicker(
                           context: context,
                           excludedVisitIds: excludedVisitIds,
+                          initiallySelectedVisitIds: initiallySelectedVisitIds,
                         );
 
                   onSelected(selected);
@@ -187,6 +190,7 @@ void main() {
     WidgetTester tester, {
     required bool isCountryPicker,
     Set<String> excludedVisitIds = const {},
+    Set<String> initiallySelectedVisitIds = const {},
   }) async {
     await tester.pumpWidget(
       buildPickerTestApp(
@@ -194,6 +198,7 @@ void main() {
         cityVisitsRepository: cityVisitsRepository,
         isCountryPicker: isCountryPicker,
         excludedVisitIds: excludedVisitIds,
+        initiallySelectedVisitIds: initiallySelectedVisitIds,
         onSelected: (value) {
           selectedVisitIds = value;
           selectionCompleted = true;
@@ -506,6 +511,73 @@ void main() {
         find.byKey(const Key('tripVisitOption-country-visit-1')),
         findsOneWidget,
       );
+    });
+    testWidgets('restores initially selected country visits', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId),
+        countryVisit(id: secondCountryVisitId),
+      ]);
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        initiallySelectedVisitIds: {firstCountryVisitId},
+      );
+
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      await selectVisit(tester, secondCountryVisitId);
+
+      expect(find.text('2 visits selected'), findsOneWidget);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [firstCountryVisitId, secondCountryVisitId]);
+    });
+    testWidgets('allows deselecting an initially selected visit', (
+      tester,
+    ) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId),
+        countryVisit(id: secondCountryVisitId),
+      ]);
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        initiallySelectedVisitIds: {firstCountryVisitId, secondCountryVisitId},
+      );
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [secondCountryVisitId]);
+    });
+
+    testWidgets('excluded visits are never preselected', (tester) async {
+      countriesRepository.visits.addAll([
+        countryVisit(id: firstCountryVisitId),
+        countryVisit(id: secondCountryVisitId),
+      ]);
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        excludedVisitIds: {firstCountryVisitId},
+        initiallySelectedVisitIds: {firstCountryVisitId, secondCountryVisitId},
+      );
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-1')),
+        findsNothing,
+      );
+
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [secondCountryVisitId]);
     });
   });
 
