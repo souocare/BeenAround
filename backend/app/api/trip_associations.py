@@ -19,6 +19,9 @@ from app.schemas.trip_associations import (
     TripCityVisitCreate,
     TripCountryVisitCreate,
     TripVisitAssociationResponse,
+    TripFlightCreate,
+    TripFlightAssociationResponse,
+    TripFlightListResponse,
 )
 
 from app.services.trip_associations import (
@@ -30,9 +33,13 @@ from app.services.trip_associations import (
     list_trip_country_visits,
     remove_trip_city_visit,
     remove_trip_country_visit,
+    FlightNotFound,
+    add_trip_flight,
+    list_trip_flights,
+    remove_trip_flight,
 )
 from app.services.trips import TripNotFound
-
+from app.schemas.flights import FlightResponse
 
 router = APIRouter(
     prefix="/trips",
@@ -76,10 +83,7 @@ def get_trip_country_visits(
         _raise_not_found(error)
 
     return CountryVisitListResponse(
-        items=[
-            CountryVisitResponse.model_validate(visit)
-            for visit in visits
-        ],
+        items=[CountryVisitResponse.model_validate(visit) for visit in visits],
         total=len(visits),
     )
 
@@ -253,6 +257,100 @@ def delete_trip_city_visit_association(
     except (
         TripNotFound,
         VisitNotFound,
+        TripAssociationNotFound,
+    ) as error:
+        _raise_not_found(error)
+
+
+# ---------------------------------------------------------
+# Flights
+# ---------------------------------------------------------
+
+
+@router.get(
+    "/{trip_id}/flights",
+    response_model=TripFlightListResponse,
+)
+def get_trip_flights(
+    trip_id: UUID,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> TripFlightListResponse:
+    """List flights explicitly associated with an owned Trip."""
+
+    try:
+        flights = list_trip_flights(
+            session=session,
+            user_id=user.id,
+            trip_id=trip_id,
+        )
+
+    except TripNotFound as error:
+        _raise_not_found(error)
+
+    return TripFlightListResponse(
+        items=[FlightResponse.model_validate(flight) for flight in flights],
+        total=len(flights),
+    )
+
+
+@router.post(
+    "/{trip_id}/flights",
+    response_model=TripFlightAssociationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_trip_flight_association(
+    trip_id: UUID,
+    payload: TripFlightCreate,
+    response: Response,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> TripFlightAssociationResponse:
+    """Associate an existing owned flight with an owned Trip."""
+
+    try:
+        created = add_trip_flight(
+            engine=get_write_engine(session),
+            user_id=user.id,
+            trip_id=trip_id,
+            flight_id=payload.flight_id,
+        )
+
+    except (TripNotFound, FlightNotFound) as error:
+        _raise_not_found(error)
+
+    if not created:
+        response.status_code = status.HTTP_200_OK
+
+    return TripFlightAssociationResponse(
+        trip_id=trip_id,
+        flight_id=payload.flight_id,
+    )
+
+
+@router.delete(
+    "/{trip_id}/flights/{flight_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_trip_flight_association(
+    trip_id: UUID,
+    flight_id: UUID,
+    user: CurrentApiUser,
+    session: DatabaseSession,
+) -> None:
+    """Remove a Trip–Flight association without deleting the flight."""
+
+    try:
+        remove_trip_flight(
+            engine=get_write_engine(session),
+            user_id=user.id,
+            trip_id=trip_id,
+            flight_id=flight_id,
+        )
+
+    except (
+        TripNotFound,
+        FlightNotFound,
         TripAssociationNotFound,
     ) as error:
         _raise_not_found(error)

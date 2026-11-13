@@ -12,6 +12,8 @@ from app.models.country import Country
 from app.models.country_visit import CountryVisit
 from app.models.trip_city_visit import TripCityVisit
 from app.models.trip_country_visit import TripCountryVisit
+from app.models.flight import Flight
+from app.models.trip_flight import TripFlight
 
 
 type CityVisitAssociationRow = tuple[
@@ -199,6 +201,84 @@ class TripAssociationRepository:
         statement = delete(TripCityVisit).where(
             TripCityVisit.trip_id == trip_id,
             TripCityVisit.city_visit_id == visit_id,
+        )
+
+        result = self._session.execute(statement)
+
+        return result.rowcount == 1
+
+
+        # ---------------------------------------------------------
+    # Flights
+    # ---------------------------------------------------------
+
+    def list_flights(
+        self,
+        *,
+        trip_id: UUID,
+    ) -> list[Flight]:
+        """Return independent flights associated with a Trip."""
+
+        statement = (
+            select(Flight)
+            .join(
+                TripFlight,
+                TripFlight.flight_id == Flight.id,
+            )
+            .where(
+                TripFlight.trip_id == trip_id,
+            )
+            .order_by(
+                Flight.departure_on.asc(),
+                Flight.departure_time.asc(),
+                Flight.id.asc(),
+            )
+        )
+
+        return list(self._session.scalars(statement).all())
+
+    def add_flight(
+        self,
+        *,
+        trip_id: UUID,
+        flight_id: UUID,
+    ) -> bool:
+        """Associate an existing flight with a Trip.
+
+        Returns True if created, False if already associated.
+
+        The service must verify ownership of both records.
+        """
+
+        statement = (
+            sqlite_insert(TripFlight)
+            .values(
+                trip_id=trip_id,
+                flight_id=flight_id,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    TripFlight.trip_id,
+                    TripFlight.flight_id,
+                ],
+            )
+        )
+
+        result = self._session.execute(statement)
+
+        return result.rowcount == 1
+
+    def remove_flight(
+        self,
+        *,
+        trip_id: UUID,
+        flight_id: UUID,
+    ) -> bool:
+        """Remove only the association, preserving the flight."""
+
+        statement = delete(TripFlight).where(
+            TripFlight.trip_id == trip_id,
+            TripFlight.flight_id == flight_id,
         )
 
         result = self._session.execute(statement)

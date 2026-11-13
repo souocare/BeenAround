@@ -18,6 +18,7 @@ from app.models import (
     trip,  # noqa: F401
     trip_city_visit,  # noqa: F401
     trip_country_visit,  # noqa: F401
+    trip_flight,  # noqa: F401
     user,  # noqa: F401
     wishlist_entry,  # noqa: F401
 )

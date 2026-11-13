@@ -17,12 +17,17 @@ from app.repositories.trip_associations import (
     TripAssociationRepository,
 )
 from app.repositories.trips import TripRepository
-
 from app.services.trips import TripNotFound
+from app.models.flight import Flight
+from app.repositories.flights import FlightRepository
 
 
 class VisitNotFound(Exception):
     """The visit does not exist or is not owned by the user."""
+
+
+class FlightNotFound(Exception):
+    """The flight does not exist or is not owned by the user."""
 
 
 class TripAssociationNotFound(Exception):
@@ -185,6 +190,25 @@ def remove_trip_country_visit(
             raise TripAssociationNotFound("Trip country visit association not found.")
 
 
+def _require_owned_flight(
+    *,
+    session: Session,
+    user_id: UUID,
+    flight_id: UUID,
+) -> None:
+    """Require an existing flight belonging to the user."""
+
+    repository = FlightRepository(session)
+
+    flight = repository.get_for_user(
+        flight_id=flight_id,
+        user_id=user_id,
+    )
+
+    if flight is None:
+        raise FlightNotFound("Flight not found.")
+
+
 # ---------------------------------------------------------
 # City visit associations
 # ---------------------------------------------------------
@@ -274,3 +298,95 @@ def remove_trip_city_visit(
 
         if not removed:
             raise TripAssociationNotFound("Trip city visit association not found.")
+
+
+# ---------------------------------------------------------
+# Flight associations
+# ---------------------------------------------------------
+
+
+def list_trip_flights(
+    *,
+    session: Session,
+    user_id: UUID,
+    trip_id: UUID,
+) -> list[Flight]:
+    """List flights explicitly associated with an owned Trip."""
+
+    _require_owned_trip(
+        session=session,
+        user_id=user_id,
+        trip_id=trip_id,
+    )
+
+    repository = TripAssociationRepository(session)
+
+    return repository.list_flights(
+        trip_id=trip_id,
+    )
+
+
+def add_trip_flight(
+    *,
+    engine: Engine,
+    user_id: UUID,
+    trip_id: UUID,
+    flight_id: UUID,
+) -> bool:
+    """Associate an existing owned flight with an owned Trip.
+
+    Returns True if created and False if already associated.
+    """
+
+    with sqlite_write_session(engine) as session:
+        _require_owned_trip(
+            session=session,
+            user_id=user_id,
+            trip_id=trip_id,
+        )
+
+        _require_owned_flight(
+            session=session,
+            user_id=user_id,
+            flight_id=flight_id,
+        )
+
+        repository = TripAssociationRepository(session)
+
+        return repository.add_flight(
+            trip_id=trip_id,
+            flight_id=flight_id,
+        )
+
+
+def remove_trip_flight(
+    *,
+    engine: Engine,
+    user_id: UUID,
+    trip_id: UUID,
+    flight_id: UUID,
+) -> None:
+    """Remove a flight association without deleting the flight."""
+
+    with sqlite_write_session(engine) as session:
+        _require_owned_trip(
+            session=session,
+            user_id=user_id,
+            trip_id=trip_id,
+        )
+
+        _require_owned_flight(
+            session=session,
+            user_id=user_id,
+            flight_id=flight_id,
+        )
+
+        repository = TripAssociationRepository(session)
+
+        removed = repository.remove_flight(
+            trip_id=trip_id,
+            flight_id=flight_id,
+        )
+
+        if not removed:
+            raise TripAssociationNotFound("Trip flight association not found.")

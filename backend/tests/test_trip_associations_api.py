@@ -24,6 +24,9 @@ from app.models.trip import Trip
 from app.models.trip_city_visit import TripCityVisit
 from app.models.trip_country_visit import TripCountryVisit
 from app.models.user import User
+from app.models.airport import Airport
+from app.models.flight import Flight
+from app.models.trip_flight import TripFlight
 
 
 TEST_PASSWORD = "correct-password-123"
@@ -49,6 +52,32 @@ def associations_client(
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
+        session.add_all(
+            [
+                Airport(
+                    id=100,
+                    ident="TEST-LIS",
+                    name="Test Lisbon Airport",
+                    source_country_code=None,
+                    country_code=None,
+                    latitude=38.7,
+                    longitude=-9.1,
+                    type="large_airport",
+                    scheduled_service=True,
+                ),
+                Airport(
+                    id=200,
+                    ident="TEST-BCN",
+                    name="Test Barcelona Airport",
+                    source_country_code=None,
+                    country_code=None,
+                    latitude=41.3,
+                    longitude=2.1,
+                    type="large_airport",
+                    scheduled_service=True,
+                ),
+            ]
+        )
         session.add(
             Country(
                 code="PT",
@@ -100,6 +129,29 @@ def associations_client(
             name="Private Trip",
         )
 
+        second_own_trip = Trip(
+            user_id=first_user.id,
+            name="European Flights",
+        )
+
+        own_flight = Flight(
+            user_id=first_user.id,
+            departure_airport_id=100,
+            arrival_airport_id=200,
+            departure_on=date(2025, 7, 10),
+            status="flown",
+            flight_number="TP1234",
+        )
+
+        other_flight = Flight(
+            user_id=second_user.id,
+            departure_airport_id=200,
+            arrival_airport_id=100,
+            departure_on=date(2025, 8, 10),
+            status="flown",
+            flight_number="TP5678",
+        )
+
         own_country_visit = CountryVisit(
             user_id=first_user.id,
             country_code="PT",
@@ -140,10 +192,13 @@ def associations_client(
             [
                 own_trip,
                 other_trip,
+                second_own_trip,
                 own_country_visit,
                 other_country_visit,
                 own_city_visit,
                 other_city_visit,
+                own_flight,
+                other_flight,
             ]
         )
 
@@ -156,6 +211,9 @@ def associations_client(
             "other_country_visit": str(other_country_visit.id),
             "own_city_visit": str(own_city_visit.id),
             "other_city_visit": str(other_city_visit.id),
+            "second_own_trip": str(second_own_trip.id),
+            "own_flight": str(own_flight.id),
+            "other_flight": str(other_flight.id),
         }
 
         session.commit()
@@ -224,6 +282,12 @@ def country_url(trip_id: str) -> str:
 
 def city_url(trip_id: str) -> str:
     return f"{BASE_URL}/{trip_id}/city-visits"
+
+
+def flight_url(trip_id: str) -> str:
+    """URL for explicitly associated flights in a Trip."""
+
+    return f"{BASE_URL}/{trip_id}/flights"
 
 
 def city_trips_url(city_id: int = LISBON_ID) -> str:
@@ -1613,3 +1677,342 @@ def test_city_trips_do_not_infer_associations_from_dates(
         "items": [],
         "total": 0,
     }
+
+
+# ---------------------------------------------------------
+# Flight associations
+# ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "method,suffix",
+    [
+        ("GET", "flights"),
+        ("POST", "flights"),
+        ("DELETE", f"flights/{uuid4()}"),
+    ],
+)
+def test_flight_associations_require_authentication(
+    associations_client,
+    method: str,
+    suffix: str,
+) -> None:
+    client, _, ids = associations_client
+
+    response = client.request(
+        method,
+        f"{BASE_URL}/{ids['own_trip']}/{suffix}",
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 401
+
+
+def test_add_existing_flight_to_trip(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.post(
+        flight_url(ids["own_trip"]),
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 201, response.text
+
+    assert response.json() == {
+        "trip_id": ids["own_trip"],
+        "flight_id": ids["own_flight"],
+    }
+
+    with Session(engine) as session:
+        associations = session.scalars(select(TripFlight)).all()
+
+        assert len(associations) == 1
+        assert str(associations[0].trip_id) == ids["own_trip"]
+        assert str(associations[0].flight_id) == ids["own_flight"]
+
+
+def test_adding_same_flight_twice_is_idempotent(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+    url = flight_url(ids["own_trip"])
+    payload = {"flight_id": ids["own_flight"]}
+
+    first = client.post(
+        url,
+        json=payload,
+        headers=headers,
+    )
+
+    second = client.post(
+        url,
+        json=payload,
+        headers=headers,
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 200
+
+    assert first.json() == second.json()
+
+    with Session(engine) as session:
+        associations = session.scalars(select(TripFlight)).all()
+
+        assert len(associations) == 1
+
+
+def test_list_trip_flights(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    headers = login_mobile(client)
+    url = flight_url(ids["own_trip"])
+
+    client.post(
+        url,
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    response = client.get(
+        url,
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+    flight = body["items"][0]
+
+    assert flight["id"] == ids["own_flight"]
+    assert flight["departure_airport_id"] == 100
+    assert flight["arrival_airport_id"] == 200
+    assert flight["flight_number"] == "TP1234"
+
+
+def test_same_flight_can_be_associated_with_multiple_trips(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+
+    first = client.post(
+        flight_url(ids["own_trip"]),
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    second = client.post(
+        flight_url(ids["second_own_trip"]),
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    with Session(engine) as session:
+        associations = session.scalars(
+            select(TripFlight).where(TripFlight.flight_id == UUID(ids["own_flight"]))
+        ).all()
+
+        assert len(associations) == 2
+
+        assert {str(association.trip_id) for association in associations} == {
+            ids["own_trip"],
+            ids["second_own_trip"],
+        }
+
+
+def test_cannot_associate_another_users_flight(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.post(
+        flight_url(ids["own_trip"]),
+        json={"flight_id": ids["other_flight"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+    with Session(engine) as session:
+        assert session.scalars(select(TripFlight)).all() == []
+
+
+def test_cannot_associate_flight_with_another_users_trip(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.post(
+        flight_url(ids["other_trip"]),
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+    with Session(engine) as session:
+        assert session.scalars(select(TripFlight)).all() == []
+
+
+def test_cannot_list_another_users_trip_flights(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.get(
+        flight_url(ids["other_trip"]),
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_remove_trip_flight_preserves_original_flight(
+    associations_client,
+) -> None:
+    client, engine, ids = associations_client
+
+    headers = login_mobile(client)
+    url = flight_url(ids["own_trip"])
+
+    created = client.post(
+        url,
+        json={"flight_id": ids["own_flight"]},
+        headers=headers,
+    )
+
+    assert created.status_code == 201
+
+    removed = client.delete(
+        f"{url}/{ids['own_flight']}",
+        headers=headers,
+    )
+
+    assert removed.status_code == 204
+
+    listed = client.get(
+        url,
+        headers=headers,
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 0
+
+    # The independent Flight must still exist.
+    flight_response = client.get(
+        f"/api/v1/flights/{ids['own_flight']}",
+        headers=headers,
+    )
+
+    assert flight_response.status_code == 200
+
+    with Session(engine) as session:
+        assert (
+            session.get(
+                Flight,
+                UUID(ids["own_flight"]),
+            )
+            is not None
+        )
+
+
+def test_remove_missing_trip_flight_returns_404(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.delete(
+        f"{flight_url(ids['own_trip'])}/{ids['own_flight']}",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_cannot_remove_flight_from_private_trip(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.delete(
+        f"{flight_url(ids['other_trip'])}/{ids['other_flight']}",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_trip_flight_create_rejects_extra_fields(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    headers = login_mobile(client)
+
+    response = client.post(
+        flight_url(ids["own_trip"]),
+        json={
+            "flight_id": ids["own_flight"],
+            "user_id": str(uuid4()),
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_web_user_can_manage_trip_flights(
+    associations_client,
+) -> None:
+    client, _, ids = associations_client
+
+    login_web(client)
+
+    url = flight_url(ids["own_trip"])
+
+    created = client.post(
+        url,
+        json={"flight_id": ids["own_flight"]},
+        headers=ORIGIN,
+    )
+
+    assert created.status_code == 201, created.text
+
+    listed = client.get(url)
+
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+
+    removed = client.delete(
+        f"{url}/{ids['own_flight']}",
+        headers=ORIGIN,
+    )
+
+    assert removed.status_code == 204
