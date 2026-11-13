@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Displays a country flag using its ISO 3166-1 alpha-2 code.
+///
+/// Falls back to a globe when the code is unavailable or invalid.
 class CountryFlag extends StatelessWidget {
   const CountryFlag({required this.countryCode, this.size = 48, super.key});
 
@@ -7,7 +10,7 @@ class CountryFlag extends StatelessWidget {
   final double size;
 
   String get _emoji {
-    final code = countryCode.toUpperCase();
+    final code = countryCode.trim().toUpperCase();
 
     if (!RegExp(r'^[A-Z]{2}$').hasMatch(code)) {
       return '🌍';

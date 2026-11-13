@@ -34,6 +34,13 @@ import '../../trips/domain/trip_repository.dart';
 import '../../trips/data/remote/api_trip_repository.dart';
 import '../../trips/domain/trip_association_repository.dart';
 import '../../trips/data/remote/api_trip_association_repository.dart';
+import '../../flights/domain/flight_repository.dart';
+import '../../flights/domain/airport_repository.dart';
+import '../../flights/domain/airline_repository.dart';
+
+import '../../flights/data/remote/api_flight_repository.dart';
+import '../../flights/data/remote/api_airport_repository.dart';
+import '../../flights/data/remote/api_airline_repository.dart';
 
 class AuthenticationDependencies {
   const AuthenticationDependencies({
@@ -265,6 +272,15 @@ class _AuthenticatedSessionState extends State<_AuthenticatedSession> {
         RepositoryProvider<TripAssociationRepository>(
           create: (_) =>
               ApiTripAssociationRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<FlightRepository>(
+          create: (_) => ApiFlightRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<AirportRepository>(
+          create: (_) => ApiAirportRepository(apiClient: widget.apiClient),
+        ),
+        RepositoryProvider<AirlineRepository>(
+          create: (_) => ApiAirlineRepository(apiClient: widget.apiClient),
         ),
       ],
       child: BlocProvider<ExploreCubit>(

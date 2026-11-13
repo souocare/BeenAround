@@ -28,6 +28,7 @@ import '../../application/post_registration_follow_ups.dart';
 Future<bool> showAddDestination(
   BuildContext context, {
   Country? initialCountry,
+  AddDestinationType initialDestinationType = AddDestinationType.country,
 }) async {
   final exploreCubit = context.read<ExploreCubit>();
   final repository = exploreCubit.repository;
@@ -227,6 +228,7 @@ Future<bool> showAddDestination(
         ],
         child: AddDestinationSheet(
           initialCountry: initialCountry,
+          initialDestinationType: initialDestinationType,
           onTravelRecorded:
               ({
                 required countryCode,

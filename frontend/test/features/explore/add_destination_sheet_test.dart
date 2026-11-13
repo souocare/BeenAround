@@ -40,6 +40,26 @@ Finder get addDestinationButton => find.byWidgetPredicate(
   (widget) => widget is IconButton && widget.tooltip == 'Add Destination',
 );
 
+/// Opens the existing geographic destination form through
+/// the global Add Record selector.
+///
+/// Tests targeting AddDestinationSheet should not need to
+/// repeat the global navigation flow.
+Future<void> openAddDestination(
+  WidgetTester tester, {
+  String recordType = 'Country',
+}) async {
+  await tester.tap(addDestinationButton);
+  await tester.pumpAndSettle();
+
+  expect(find.text('Add to BeenAround'), findsOneWidget);
+
+  await tester.tap(find.text(recordType));
+  await tester.pumpAndSettle();
+
+  expect(find.byType(AddDestinationSheet), findsOneWidget);
+}
+
 // -----------------------------------------------------------------------------
 // Fake repositories
 // -----------------------------------------------------------------------------
@@ -862,8 +882,7 @@ void main() {
   }
 
   Future<void> prepareCountryVisit(WidgetTester tester) async {
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -933,9 +952,17 @@ void main() {
   testWidgets('opens Add Destination from Explore', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
+    await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
 
+    // New global record selector.
+    expect(find.text('Add to BeenAround'), findsOneWidget);
+
+    // Select Country to open the existing destination form.
+    await tester.tap(find.text('Country'));
+    await tester.pumpAndSettle();
+
+    // Existing destination form.
     expect(find.text('Add Destination'), findsOneWidget);
     expect(find.text('Where have you been?'), findsOneWidget);
     expect(find.text('Country'), findsOneWidget);
@@ -949,8 +976,7 @@ void main() {
   testWidgets('searches countries and selects a destination', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -975,8 +1001,7 @@ void main() {
   testWidgets('closes modal using the close button', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
@@ -987,8 +1012,7 @@ void main() {
   testWidgets('uses a dialog on desktop', (tester) async {
     await pumpExplore(tester, width: 1200);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     expect(find.byType(Dialog), findsOneWidget);
     expect(find.text('Add Destination'), findsOneWidget);
@@ -999,8 +1023,7 @@ void main() {
   ) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     final button = tester.widget<FilledButton>(
       find.ancestor(
@@ -1021,8 +1044,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1058,8 +1080,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1083,8 +1104,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1116,8 +1136,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1145,8 +1164,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1227,8 +1245,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(addDestinationButton);
-      await tester.pumpAndSettle();
+      await openAddDestination(tester);
 
       await tester.tap(find.text('Select a country'));
       await tester.pumpAndSettle();
@@ -1251,8 +1268,7 @@ void main() {
   testWidgets('switches from Country to City', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('City'));
     await tester.pumpAndSettle();
@@ -1266,8 +1282,7 @@ void main() {
 
     await pumpExplore(tester, cityRepository: cityRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('City'));
     await tester.pumpAndSettle();
@@ -1310,8 +1325,7 @@ void main() {
       cityVisitsRepository: cityVisitsRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('City'));
     await tester.pumpAndSettle();
@@ -1365,8 +1379,7 @@ void main() {
       cityVisitsRepository: cityVisitsRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('City'));
     await tester.pumpAndSettle();
@@ -1404,8 +1417,7 @@ void main() {
       cityVisitsRepository: cityVisitsRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('City'));
     await tester.pumpAndSettle();
@@ -1631,8 +1643,7 @@ void main() {
   ) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     expect(find.text('START DATE'), findsOneWidget);
     expect(find.text('END DATE'), findsOneWidget);
@@ -1657,8 +1668,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1680,8 +1690,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -1711,8 +1720,7 @@ void main() {
   ) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     expect(find.byKey(const Key('cityAssociationNone')), findsNothing);
 
@@ -1732,8 +1740,7 @@ void main() {
       cityVisitsRepository: cityVisitsRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2245,8 +2252,7 @@ void main() {
 
     await pumpExplore(tester, repository: repository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     expect(find.text('Where have you been?'), findsOneWidget);
 
@@ -2287,8 +2293,7 @@ void main() {
       wishlistRepository: wishlistRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2386,8 +2391,7 @@ void main() {
 
     await pumpExplore(tester, wishlistRepository: wishlistRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2415,8 +2419,7 @@ void main() {
 
     await pumpExplore(tester, repository: countriesRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2442,8 +2445,7 @@ void main() {
   ) async {
     await pumpExplore(tester);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(addDestinationOption('Lived'));
     await tester.pumpAndSettle();
@@ -2466,8 +2468,7 @@ void main() {
       residenceRepository: residenceRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2501,8 +2502,7 @@ void main() {
       residenceRepository: residenceRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2642,8 +2642,7 @@ void main() {
 
     await pumpExplore(tester, residenceRepository: residenceRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2696,8 +2695,7 @@ void main() {
 
     await pumpExplore(tester, residenceRepository: residenceRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2751,8 +2749,7 @@ void main() {
 
     await pumpExplore(tester, residenceRepository: residenceRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2829,8 +2826,7 @@ void main() {
 
     await pumpExplore(tester, residenceRepository: residenceRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -2878,8 +2874,7 @@ void main() {
 
     await pumpExplore(tester, tripRepository: tripRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await scrollToTripSelection(tester);
 
@@ -2901,8 +2896,7 @@ void main() {
 
     await pumpExplore(tester, tripRepository: tripRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     final selectionButton = find.byKey(const Key('selectExistingTripButton'));
 
@@ -2933,8 +2927,7 @@ void main() {
 
     await pumpExplore(tester, tripRepository: tripRepository);
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     final selectionButton = find.byKey(const Key('selectExistingTripButton'));
 
@@ -2962,8 +2955,7 @@ void main() {
   ) async {
     await pumpExplore(tester, tripRepository: FakeExploreTripRepository());
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await scrollToTripSelection(tester);
 
@@ -3559,8 +3551,7 @@ void main() {
       wishlistRepository: wishlistRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();
@@ -3617,8 +3608,7 @@ void main() {
         wishlistRepository: wishlistRepository,
       );
 
-      await tester.tap(addDestinationButton);
-      await tester.pumpAndSettle();
+      await openAddDestination(tester);
 
       await tester.tap(find.text('Select a country'));
       await tester.pumpAndSettle();
@@ -3674,8 +3664,7 @@ void main() {
         wishlistRepository: wishlistRepository,
       );
 
-      await tester.tap(addDestinationButton);
-      await tester.pumpAndSettle();
+      await openAddDestination(tester);
 
       await tester.tap(find.text('Select a country'));
       await tester.pumpAndSettle();
@@ -3740,8 +3729,7 @@ void main() {
         wishlistRepository: wishlistRepository,
       );
 
-      await tester.tap(addDestinationButton);
-      await tester.pumpAndSettle();
+      await openAddDestination(tester);
 
       await tester.tap(find.text('Select a country'));
       await tester.pumpAndSettle();
@@ -3778,8 +3766,7 @@ void main() {
       wishlistRepository: wishlistRepository,
     );
 
-    await tester.tap(addDestinationButton);
-    await tester.pumpAndSettle();
+    await openAddDestination(tester);
 
     await tester.tap(find.text('Select a country'));
     await tester.pumpAndSettle();

@@ -8,7 +8,7 @@ import '../../../geography/domain/city.dart';
 import '../../../geography/domain/city_repository.dart';
 import '../../../geography/domain/city_sort.dart';
 import '../../../geography/domain/country_city_count.dart';
-import 'country_flag.dart';
+import 'package:beenaround/app/widgets/country_flag.dart';
 
 class CityBrowser extends StatefulWidget {
   const CityBrowser({

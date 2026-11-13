@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:beenaround/features/explore/presentation/widgets/destination_filter_bar.dart';
+import 'package:beenaround/features/explore/presentation/widgets/show_add_record.dart';
+import 'package:beenaround/features/flights/application/flights_state.dart';
+import 'package:beenaround/features/flights/presentation/widgets/flights_list.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -30,13 +33,19 @@ import '../../application/explore_state.dart';
 import '../../application/visited_cities_cubit.dart';
 import '../../application/visited_cities_state.dart';
 import '../../domain/country.dart';
-import '../widgets/country_flag.dart';
+import 'package:beenaround/app/widgets/country_flag.dart';
 import '../widgets/show_add_destination.dart';
 import '../widgets/visited_cities_list.dart';
 import 'country_details_page.dart';
 import '../../application/country_trips_cubit.dart';
 import '../../../trips/domain/trip_repository.dart';
 import '../../../trips/domain/trip_association_repository.dart';
+import '../../../flights/application/flights_cubit.dart';
+import '../../../flights/application/flight_catalog_resolver.dart';
+
+import '../../../flights/domain/flight_repository.dart';
+import '../../../flights/domain/airport_repository.dart';
+import '../../../flights/domain/airline_repository.dart';
 
 class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key});
@@ -63,6 +72,15 @@ class ExplorePage extends StatelessWidget {
         BlocProvider<ExploreCitiesCubit>(
           create: (context) => ExploreCitiesCubit(
             cityRepository: context.read<CityRepository>(),
+          ),
+        ),
+        BlocProvider<FlightsCubit>(
+          create: (context) => FlightsCubit(
+            repository: context.read<FlightRepository>(),
+            catalogResolver: FlightCatalogResolver(
+              airportRepository: context.read<AirportRepository>(),
+              airlineRepository: context.read<AirlineRepository>(),
+            ),
           ),
         ),
       ],
@@ -199,8 +217,17 @@ class _ExploreViewState extends State<_ExploreView> {
   }
 
   Future<void> _addDestination() async {
-    final created = await showAddDestination(context);
-    if (!created || !mounted) return;
+    final result = await showAddRecord(context);
+
+    if (!mounted || result == null || !result.created) {
+      return;
+    }
+
+    if (result.isFlightCreated) {
+      await context.read<FlightsCubit>().refresh();
+      return;
+    }
+
     await _refreshExploreData();
   }
 
@@ -535,10 +562,28 @@ class _ExploreContentState extends State<_ExploreContent> {
                     label: Text('Cities'),
                     icon: Icon(Icons.location_city_outlined),
                   ),
+                  ButtonSegment<int>(
+                    value: 2,
+                    label: Text('Flights'),
+                    icon: Icon(Icons.flight_outlined),
+                  ),
                 ],
                 selected: {_selectedHistoryTab},
                 onSelectionChanged: (selection) {
-                  setState(() => _selectedHistoryTab = selection.first);
+                  final selectedTab = selection.first;
+
+                  setState(() {
+                    _selectedHistoryTab = selectedTab;
+                  });
+
+                  // Load flights only when the Flights tab is selected.
+                  if (selectedTab == 2) {
+                    final flightsCubit = context.read<FlightsCubit>();
+
+                    if (flightsCubit.state.phase == FlightsPhase.initial) {
+                      unawaited(flightsCubit.load());
+                    }
+                  }
                 },
               ),
             ),
@@ -702,8 +747,10 @@ class _ExploreContentState extends State<_ExploreContent> {
               ),
             ),
           ],
-        ] else ...[
+        ] else if (_selectedHistoryTab == 1) ...[
           const VisitedCitiesList(),
+        ] else ...[
+          const FlightsList(),
         ],
       ],
     );

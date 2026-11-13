@@ -9,7 +9,7 @@ import '../../application/add_country_visit_state.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'country_flag.dart';
+import 'package:beenaround/app/widgets/country_flag.dart';
 
 import '../../application/add_city_visit_cubit.dart';
 import '../../application/add_city_visit_state.dart';
@@ -48,15 +48,19 @@ import '../../../trips/domain/trip_date_compatibility.dart';
 
 enum _CityCountryAssociationMode { none, existing, createNew }
 
+enum AddDestinationType { country, city }
+
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({
     this.initialCountry,
+    this.initialDestinationType = AddDestinationType.country,
     this.onTravelRecorded,
     this.onVisitCreated,
     super.key,
   });
 
   final Country? initialCountry;
+  final AddDestinationType initialDestinationType;
 
   final void Function({
     required String countryCode,
@@ -173,7 +177,14 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   @override
   void initState() {
     super.initState();
+
     _selectedCountry = widget.initialCountry;
+
+    _selectedDestinationType =
+        widget.initialCountry != null ||
+            widget.initialDestinationType == AddDestinationType.country
+        ? 0
+        : 1;
   }
 
   Future<void> _loadCountryVisits() async {

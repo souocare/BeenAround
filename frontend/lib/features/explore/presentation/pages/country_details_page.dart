@@ -15,7 +15,7 @@ import '../../application/explore_state.dart';
 import '../../domain/country.dart';
 import '../../domain/country_visit.dart';
 
-import '../widgets/country_flag.dart';
+import 'package:beenaround/app/widgets/country_flag.dart';
 import '../widgets/show_add_destination.dart';
 import '../widgets/show_delete_country_visit.dart';
 import '../widgets/show_edit_country_visit.dart';

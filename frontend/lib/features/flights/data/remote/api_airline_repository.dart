@@ -28,15 +28,13 @@ class ApiAirlineRepository implements AirlineRepository {
 
     final normalizedQuery = query?.trim();
 
-    if (normalizedQuery == null || normalizedQuery.isEmpty) {
-      throw ArgumentError('An airline search query is required.');
-    }
+    final hasQuery = normalizedQuery != null && normalizedQuery.isNotEmpty;
 
     try {
       final response = await apiClient.dio.get<Map<String, dynamic>>(
         'airlines',
         queryParameters: {
-          'q': normalizedQuery,
+          if (hasQuery) 'q': normalizedQuery,
           'limit': limit,
           'offset': offset,
         },
