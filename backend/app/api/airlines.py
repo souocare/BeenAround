@@ -22,15 +22,18 @@ router = APIRouter(
 def search_airlines(
     user: CurrentApiUser,
     session: DatabaseSession,
-    q: Annotated[str, Query(min_length=1, max_length=200)],
+    q: Annotated[
+        str | None,
+        Query(min_length=1, max_length=200),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AirlineListResponse:
     """Search the shared airline catalog."""
 
-    normalized_query = q.strip()
+    normalized_query = q.strip() if q is not None else None
 
-    if not normalized_query:
+    if q is not None and not normalized_query:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Provide a non-empty search query.",

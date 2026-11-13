@@ -339,14 +339,25 @@ def test_get_unknown_airline_returns_404(
     assert response.status_code == 404
 
 
-def test_search_requires_query(
+def test_search_without_query_lists_airlines(
     airlines_client: TestClient,
 ) -> None:
     web_login(airlines_client)
 
     response = airlines_client.get("/api/v1/airlines")
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "items" in data
+    assert "total" in data
+    assert data["limit"] == 20
+    assert data["offset"] == 0
+
+    names = [item["name"] for item in data["items"]]
+
+    assert names == sorted(names, key=str.casefold)
 
 
 def test_blank_query_returns_422(
