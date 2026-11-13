@@ -157,4 +157,45 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+  testWidgets('shows departure date in compact header', (tester) async {
+    await pumpCard(tester, flight: createFlight());
+
+    final context = tester.element(find.byType(FlightCard));
+
+    final expectedDate = MaterialLocalizations.of(
+      context,
+    ).formatMediumDate(DateTime(2026, 11, 12));
+
+    expect(find.text(expectedDate), findsOneWidget);
+
+    expect(find.text('TAP Air Portugal'), findsOneWidget);
+  });
+  testWidgets('does not display an estimated flight duration', (tester) async {
+    await pumpCard(tester, flight: createFlight());
+
+    expect(find.textContaining('1h 25m'), findsNothing);
+    expect(find.text('Direct'), findsNothing);
+
+    expect(find.text('TP1234'), findsOneWidget);
+  });
+  testWidgets('retains route information without airline metadata', (
+    tester,
+  ) async {
+    await pumpCard(
+      tester,
+      flight: createFlight(
+        airlineId: null,
+        airlineName: null,
+        flightNumber: null,
+      ),
+      selectedAirline: null,
+    );
+
+    expect(find.text('LIS'), findsOneWidget);
+    expect(find.text('DXB'), findsOneWidget);
+
+    expect(find.text('Airline not recorded'), findsOneWidget);
+
+    expect(find.text('Flight'), findsOneWidget);
+  });
 }

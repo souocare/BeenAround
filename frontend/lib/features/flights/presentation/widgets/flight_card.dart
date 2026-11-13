@@ -10,10 +10,11 @@ import 'airline_avatar.dart';
 
 /// Compact visual representation of an independent flight record.
 ///
-/// All aviation catalog metadata is optional.
-/// The flight remains displayable when catalog resolution fails.
+/// Catalog metadata is optional. Flights remain displayable even
+/// when airport or airline resolution is unavailable.
 ///
-/// This widget does not modify visits, Trips or other travel records.
+/// Dates are local calendar dates and must never be converted
+/// using the device timezone.
 class FlightCard extends StatelessWidget {
   const FlightCard({
     required this.flight,
@@ -59,8 +60,6 @@ class FlightCard extends StatelessWidget {
   }
 
   String _formatDepartureDate(BuildContext context) {
-    // Flight dates are local calendar dates.
-    // Do not convert them into the device's timezone.
     final parts = flight.departureOn.split('-');
 
     if (parts.length != 3) {
@@ -108,12 +107,11 @@ class FlightCard extends StatelessWidget {
         'Airline not recorded';
 
     final number = flight.flightNumber?.trim();
-
     final hasFlightNumber = number != null && number.isNotEmpty;
 
     return Container(
       key: ValueKey('flight-card-${flight.id}'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(18),
@@ -122,13 +120,60 @@ class FlightCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // --------------------------------------------------------
-          // Route
-          // --------------------------------------------------------
+          // --------------------------------------------------
+          // Header: airline / date / status
+          // --------------------------------------------------
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AirlineAvatar(airline: airline, size: 38),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Text(
+                  displayAirlineName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatDepartureDate(context),
+                    maxLines: 1,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  _FlightStatusIndicator(status: flight.status),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 22),
+
+          // --------------------------------------------------
+          // Route
+          // --------------------------------------------------
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
+                flex: 3,
                 child: _FlightAirport(
                   airport: departureAirport,
                   code: departureCode,
@@ -139,14 +184,18 @@ class FlightCard extends StatelessWidget {
 
               const SizedBox(width: 8),
 
-              Padding(
-                padding: const EdgeInsets.only(top: 13),
-                child: _FlightRouteIndicator(color: colors.primary),
+              Expanded(
+                flex: 3,
+                child: _FlightRouteIndicator(
+                  color: colors.primary,
+                  flightNumber: hasFlightNumber ? number : null,
+                ),
               ),
 
               const SizedBox(width: 8),
 
               Expanded(
+                flex: 3,
                 child: _FlightAirport(
                   airport: arrivalAirport,
                   code: arrivalCode,
@@ -156,73 +205,13 @@ class FlightCard extends StatelessWidget {
               ),
             ],
           ),
-
-          const SizedBox(height: 18),
-
-          Divider(
-            height: 1,
-            color: colors.outlineVariant.withValues(alpha: 0.45),
-          ),
-
-          const SizedBox(height: 14),
-
-          // --------------------------------------------------------
-          // Airline and flight information
-          // --------------------------------------------------------
-          Row(
-            children: [
-              AirlineAvatar(airline: airline, size: 42),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayAirlineName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    Text(
-                      [
-                        if (hasFlightNumber) number,
-                        _formatDepartureDate(context),
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // --------------------------------------------------------
-          // Status
-          // --------------------------------------------------------
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _FlightStatusBadge(status: flight.status),
-          ),
         ],
       ),
     );
   }
 }
 
-/// Airport code, flag and city displayed inside a flight route.
+/// Airport code, country flag and city displayed in a flight route.
 class _FlightAirport extends StatelessWidget {
   const _FlightAirport({
     required this.airport,
@@ -245,6 +234,7 @@ class _FlightAirport extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: alignment,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisAlignment: isRightAligned
@@ -252,8 +242,8 @@ class _FlightAirport extends StatelessWidget {
               : MainAxisAlignment.start,
           children: [
             if (!isRightAligned) ...[
-              CountryFlag(countryCode: airport?.countryCode ?? '', size: 28),
-              const SizedBox(width: 6),
+              CountryFlag(countryCode: airport?.countryCode ?? '', size: 22),
+              const SizedBox(width: 5),
             ],
 
             Flexible(
@@ -261,16 +251,18 @@ class _FlightAirport extends StatelessWidget {
                 code,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.3,
+                  height: 1.1,
+                  color: colors.onSurface,
                 ),
               ),
             ),
 
             if (isRightAligned) ...[
-              const SizedBox(width: 6),
-              CountryFlag(countryCode: airport?.countryCode ?? '', size: 28),
+              const SizedBox(width: 5),
+              CountryFlag(countryCode: airport?.countryCode ?? '', size: 22),
             ],
           ],
         ),
@@ -284,6 +276,7 @@ class _FlightAirport extends StatelessWidget {
           textAlign: isRightAligned ? TextAlign.right : TextAlign.left,
           style: theme.textTheme.bodySmall?.copyWith(
             color: colors.onSurfaceVariant,
+            height: 1.2,
           ),
         ),
       ],
@@ -291,40 +284,86 @@ class _FlightAirport extends StatelessWidget {
   }
 }
 
-/// Decorative flight route between two airport codes.
+/// Decorative route indicator between the departure and arrival.
+///
+/// No duration is shown until timezone-aware flight duration
+/// calculations are supported.
 class _FlightRouteIndicator extends StatelessWidget {
-  const _FlightRouteIndicator({required this.color});
+  const _FlightRouteIndicator({required this.color, this.flightNumber});
 
   final Color color;
+  final String? flightNumber;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 54,
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(height: 1, color: color.withValues(alpha: 0.45)),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+            ),
+
+            Expanded(
+              child: Container(
+                height: 1.5,
+                color: color.withValues(alpha: 0.35),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(Icons.flight_rounded, size: 21, color: color),
+            ),
+
+            Expanded(
+              child: Container(
+                height: 1.5,
+                color: color.withValues(alpha: 0.35),
+              ),
+            ),
+
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 9),
+
+        Text(
+          flightNumber ?? 'Flight',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
           ),
-
-          const SizedBox(width: 4),
-
-          Icon(Icons.flight_rounded, size: 20, color: color),
-
-          const SizedBox(width: 4),
-
-          Expanded(
-            child: Container(height: 1, color: color.withValues(alpha: 0.45)),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// Subtle visual distinction between completed and planned flights.
-class _FlightStatusBadge extends StatelessWidget {
-  const _FlightStatusBadge({required this.status});
+/// Minimal status indicator matching the compact card design.
+class _FlightStatusIndicator extends StatelessWidget {
+  const _FlightStatusIndicator({required this.status});
 
   final FlightStatus status;
 
@@ -337,34 +376,27 @@ class _FlightStatusBadge extends StatelessWidget {
 
     final color = completed ? colors.primary : colors.onSurfaceVariant;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            completed
-                ? Icons.check_circle_outline_rounded
-                : Icons.schedule_rounded,
-            size: 15,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          completed
+              ? Icons.check_circle_outline_rounded
+              : Icons.schedule_rounded,
+          color: color,
+          size: 13,
+        ),
+
+        const SizedBox(width: 4),
+
+        Text(
+          completed ? 'Completed' : 'Planned',
+          style: theme.textTheme.labelSmall?.copyWith(
             color: color,
+            fontWeight: FontWeight.w700,
           ),
-
-          const SizedBox(width: 6),
-
-          Text(
-            completed ? 'Completed' : 'Planned',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
