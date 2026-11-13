@@ -1,4 +1,5 @@
 import 'flight.dart';
+import 'flight_detail.dart';
 import 'flight_input.dart';
 
 /// Operations supported for authenticated personal flights.
@@ -12,6 +13,11 @@ abstract interface class FlightRepository {
 
   /// Retrieve one user-owned flight.
   Future<Flight> getFlight({required String flightId});
+
+  /// Retrieve a flight with backend-calculated timing.
+  ///
+  /// Available through the authenticated detail endpoint.
+  Future<FlightDetail> getFlightDetail({required String flightId});
 
   /// Create an independent personal flight record.
   Future<Flight> createFlight({required FlightCreateInput input});

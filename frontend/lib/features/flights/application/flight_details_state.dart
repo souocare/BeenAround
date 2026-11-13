@@ -1,17 +1,20 @@
 import '../domain/airline.dart';
 import '../domain/airport.dart';
 import '../domain/flight.dart';
+import '../domain/flight_timing.dart';
 
 enum FlightDetailsPhase { initial, loading, ready, failure }
 
 /// Immutable state of a single personal flight.
 ///
-/// Missing aviation catalog metadata must not prevent
-/// displaying the flight itself.
+/// The flight and its backend-calculated timing are loaded
+/// together. Aviation catalog metadata is resolved separately
+/// and must never prevent the flight from being displayed.
 class FlightDetailsState {
   const FlightDetailsState({
     this.phase = FlightDetailsPhase.initial,
     this.flight,
+    this.timing,
     this.departureAirport,
     this.arrivalAirport,
     this.airline,
@@ -21,6 +24,9 @@ class FlightDetailsState {
   final FlightDetailsPhase phase;
 
   final Flight? flight;
+
+  /// Backend-calculated timing for the selected flight.
+  final FlightTiming? timing;
 
   final Airport? departureAirport;
   final Airport? arrivalAirport;

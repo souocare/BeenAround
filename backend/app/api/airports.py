@@ -69,6 +69,7 @@ def search_airports(
                 longitude=airport.longitude,
                 type=airport.type,
                 scheduled_service=airport.scheduled_service,
+                timezone_id=airport.timezone_id,
             )
             for airport, country_name in rows
         ],
@@ -115,4 +116,5 @@ def get_airport(
         longitude=airport.longitude,
         type=airport.type,
         scheduled_service=airport.scheduled_service,
+        timezone_id=airport.timezone_id,
     )

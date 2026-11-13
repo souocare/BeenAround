@@ -22,6 +22,7 @@ from app.core.config import get_settings
 from app.db.session import create_database_engine
 from app.models.airport import Airport
 from app.models.country import Country
+from app.services.airport_timezones import AirportTimezoneResolver
 
 
 BATCH_SIZE = 1000
@@ -113,6 +114,7 @@ def parse_airport_row(
     row: dict[str, str | None],
     *,
     known_country_codes: set[str],
+    timezone_resolver: AirportTimezoneResolver | None = None,
 ) -> dict:
     """Validate and normalize one OurAirports CSV record."""
 
@@ -189,6 +191,14 @@ def parse_airport_row(
     if (latitude is None) != (longitude is None):
         raise ValueError("Airport coordinates must be complete.")
 
+    timezone_id = None
+
+    if timezone_resolver is not None:
+        timezone_id = timezone_resolver.resolve(
+            latitude=latitude,
+            longitude=longitude,
+        )
+
     scheduled_service = (row.get("scheduled_service") or "").strip().lower()
 
     if scheduled_service not in {"yes", "no"}:
@@ -205,6 +215,7 @@ def parse_airport_row(
         "country_code": country_code,
         "latitude": latitude,
         "longitude": longitude,
+        "timezone_id": timezone_id,
         "type": airport_type,
         "scheduled_service": scheduled_service == "yes",
     }
@@ -257,6 +268,7 @@ def import_airports(
     updated = 0
 
     unknown_country_codes: set[str] = set()
+    timezone_resolver = AirportTimezoneResolver()
 
     with engine.begin() as connection:
         known_country_codes = set(connection.scalars(select(Country.code)))
@@ -286,6 +298,7 @@ def import_airports(
                     airport = parse_airport_row(
                         row,
                         known_country_codes=known_country_codes,
+                        timezone_resolver=timezone_resolver,
                     )
                 except ValueError as exc:
                     raise ValueError(f"Invalid airport at CSV line {line_number}: {exc}") from exc

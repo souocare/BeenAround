@@ -13,6 +13,9 @@ from app.schemas.flights import (
     FlightListResponse,
     FlightResponse,
     FlightUpdate,
+    FlightDetailResponse,
+    FlightLocalTimeResponse,
+    FlightTimingResponse,
 )
 from app.services.flights import (
     AirlineNotFound,
@@ -25,6 +28,8 @@ from app.services.flights import (
     list_flights,
     update_flight,
 )
+from app.models.airport import Airport
+from app.services.flight_time import calculate_flight_timing
 
 
 router = APIRouter(
@@ -73,6 +78,63 @@ def _raise_flight_error(error: Exception) -> None:
 
     raise error
 
+def _build_flight_timing_response(
+    *,
+    flight: FlightResponse,
+    session: DatabaseSession,
+) -> FlightTimingResponse:
+    """Calculate timing from the flight's airport-local schedules."""
+
+    departure_airport = session.get(
+        Airport,
+        flight.departure_airport_id,
+    )
+
+    arrival_airport = session.get(
+        Airport,
+        flight.arrival_airport_id,
+    )
+
+    timing = calculate_flight_timing(
+        departure_on=flight.departure_on.isoformat(),
+        departure_time=(
+            flight.departure_time.isoformat()
+            if flight.departure_time is not None
+            else None
+        ),
+        departure_timezone_id=(
+            departure_airport.timezone_id
+            if departure_airport is not None
+            else None
+        ),
+        arrival_on=(
+            flight.arrival_on.isoformat()
+            if flight.arrival_on is not None
+            else None
+        ),
+        arrival_time=(
+            flight.arrival_time.isoformat()
+            if flight.arrival_time is not None
+            else None
+        ),
+        arrival_timezone_id=(
+            arrival_airport.timezone_id
+            if arrival_airport is not None
+            else None
+        ),
+    )
+
+    return FlightTimingResponse(
+        departure=FlightLocalTimeResponse(
+            status=timing.departure.status,
+            utc_offset_minutes=timing.departure.utc_offset_minutes,
+        ),
+        arrival=FlightLocalTimeResponse(
+            status=timing.arrival.status,
+            utc_offset_minutes=timing.arrival.utc_offset_minutes,
+        ),
+        duration_minutes=timing.duration_minutes,
+    )
 
 @router.get(
     "",
@@ -136,14 +198,14 @@ def register_flight(
 
 @router.get(
     "/{flight_id}",
-    response_model=FlightResponse,
+    response_model=FlightDetailResponse,
 )
 def get_my_flight(
     flight_id: UUID,
     user: CurrentApiUser,
     session: DatabaseSession,
-) -> FlightResponse:
-    """Retrieve one flight belonging to the authenticated user."""
+) -> FlightDetailResponse:
+    """Retrieve one owned flight with calculated timing information."""
 
     try:
         flight = get_flight(
@@ -154,7 +216,19 @@ def get_my_flight(
     except FlightNotFound as error:
         _raise_flight_error(error)
 
-    return FlightResponse.model_validate(flight)
+    # Ownership has already been verified by get_flight().
+    # Never resolve personal flight details before authorization.
+    flight_response = FlightResponse.model_validate(flight)
+
+    timing_response = _build_flight_timing_response(
+        flight=flight_response,
+        session=session,
+    )
+
+    return FlightDetailResponse(
+        **flight_response.model_dump(),
+        timing=timing_response,
+    )
 
 
 @router.patch(

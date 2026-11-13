@@ -24,6 +24,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "pyshp>=3.0,<4.0",
+    "timezonefinder>=9.2,<10",
 ]
 
 [tool.hatch.build.targets.wheel]

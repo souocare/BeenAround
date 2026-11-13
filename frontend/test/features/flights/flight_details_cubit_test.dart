@@ -12,6 +12,8 @@ import 'package:beenaround/features/flights/domain/flight.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/flights/domain/flight_detail.dart';
+import 'package:beenaround/features/flights/domain/flight_timing.dart';
 
 // ---------------------------------------------------------------------------
 // Fake flight repository
@@ -48,6 +50,26 @@ class FakeDetailsFlightRepository extends Fake implements FlightRepository {
     }
 
     return flight;
+  }
+
+  @override
+  Future<FlightDetail> getFlightDetail({required String flightId}) async {
+    final flight = await getFlight(flightId: flightId);
+
+    return FlightDetail(
+      flight: flight,
+      timing: const FlightTiming(
+        departure: FlightLocalTime(
+          status: FlightLocalTimeStatus.valid,
+          utcOffsetMinutes: 60,
+        ),
+        arrival: FlightLocalTime(
+          status: FlightLocalTimeStatus.valid,
+          utcOffsetMinutes: 120,
+        ),
+        durationMinutes: 115,
+      ),
+    );
   }
 }
 
@@ -463,5 +485,25 @@ void main() {
     await loadFuture;
 
     expect(cubit.isClosed, isTrue);
+  });
+  test('preserves timing after catalog resolution', () async {
+    final flight = makeFlight(id: 'flight-1');
+
+    flightRepository.flights[flight.id] = flight;
+
+    await cubit.load(flight.id);
+
+    expect(cubit.state.isReady, isTrue);
+
+    expect(cubit.state.timing?.durationMinutes, 115);
+
+    expect(cubit.state.timing?.departure.utcOffsetMinutes, 60);
+
+    expect(cubit.state.timing?.arrival.utcOffsetMinutes, 120);
+
+    // Catalog metadata must also remain available.
+    expect(cubit.state.departureAirport?.displayCode, 'LIS');
+
+    expect(cubit.state.arrivalAirport?.displayCode, 'BCN');
   });
 }

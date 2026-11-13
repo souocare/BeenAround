@@ -291,6 +291,7 @@ def test_web_user_can_search_airports(
         "longitude": -9.13,
         "type": "large_airport",
         "scheduled_service": True,
+        "timezone_id": None,
     }
 
 

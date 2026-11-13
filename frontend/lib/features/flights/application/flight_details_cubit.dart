@@ -4,16 +4,18 @@ import '../../../core/network/api_exception.dart';
 
 import '../domain/flight.dart';
 import '../domain/flight_repository.dart';
+import '../domain/flight_timing.dart';
 
 import 'flight_catalog_resolver.dart';
 import 'flight_details_state.dart';
 
 /// Loads and presents one user-owned flight.
 ///
-/// The backend remains responsible for ownership checks.
+/// The backend remains responsible for ownership checks
+/// and timezone-aware timing calculations.
 ///
-/// Catalog resolution is best-effort: a missing airport or
-/// airline must not make the flight inaccessible.
+/// Catalog resolution is best-effort: missing airports
+/// or airlines must not make the flight inaccessible.
 class FlightDetailsCubit extends Cubit<FlightDetailsState> {
   FlightDetailsCubit({
     required FlightRepository repository,
@@ -23,7 +25,6 @@ class FlightDetailsCubit extends Cubit<FlightDetailsState> {
        super(const FlightDetailsState());
 
   final FlightRepository _repository;
-
   final FlightCatalogResolver _catalogResolver;
 
   int _requestGeneration = 0;
@@ -36,15 +37,30 @@ class FlightDetailsCubit extends Cubit<FlightDetailsState> {
     emit(const FlightDetailsState(phase: FlightDetailsPhase.loading));
 
     try {
-      final flight = await _repository.getFlight(flightId: flightId);
+      final detail = await _repository.getFlightDetail(flightId: flightId);
 
       if (!_isCurrent(generation)) return;
 
-      // A flight record can be shown before its catalog
-      // metadata is available.
-      emit(FlightDetailsState(phase: FlightDetailsPhase.ready, flight: flight));
+      final flight = detail.flight;
+      final timing = detail.timing;
 
-      await _resolveCatalog(flight, generation);
+      // Show the flight and its calculated timing immediately.
+      //
+      // The UI must not wait for airport or airline
+      // catalog requests to finish.
+      emit(
+        FlightDetailsState(
+          phase: FlightDetailsPhase.ready,
+          flight: flight,
+          timing: timing,
+        ),
+      );
+
+      await _resolveCatalog(
+        flight: flight,
+        timing: timing,
+        generation: generation,
+      );
     } on ApiException catch (error) {
       if (!_isCurrent(generation)) return;
 
@@ -66,7 +82,11 @@ class FlightDetailsCubit extends Cubit<FlightDetailsState> {
     }
   }
 
-  Future<void> _resolveCatalog(Flight flight, int generation) async {
+  Future<void> _resolveCatalog({
+    required Flight flight,
+    required FlightTiming timing,
+    required int generation,
+  }) async {
     try {
       final catalog = await _catalogResolver.resolve([flight]);
 
@@ -76,19 +96,24 @@ class FlightDetailsCubit extends Cubit<FlightDetailsState> {
         FlightDetailsState(
           phase: FlightDetailsPhase.ready,
           flight: flight,
+
+          // Preserve timing when catalog metadata arrives.
+          timing: timing,
+
           departureAirport: catalog.airportFor(flight.departureAirportId),
+
           arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
+
           airline: flight.airlineId == null
               ? null
               : catalog.airlineFor(flight.airlineId!),
         ),
       );
     } catch (_) {
-      // Flight details must remain usable when catalog
-      // resolution fails.
+      // Flight details and timing remain visible.
       //
-      // The resolver does not cache failed requests,
-      // allowing another load to retry later.
+      // Failed catalog requests are not cached, so another
+      // load can retry them.
     }
   }
 

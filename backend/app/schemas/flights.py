@@ -19,7 +19,7 @@ from app.domain.flights import (
     validate_flight_consistency,
     validate_local_time,
 )
-
+from app.services.flight_time import LocalTimeStatus
 
 TEXT_LIMITS = {
     "airline_name": 200,
@@ -167,3 +167,23 @@ class FlightListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+class FlightLocalTimeResponse(BaseModel):
+    """Timezone resolution for one airport-local flight time."""
+
+    status: LocalTimeStatus
+    utc_offset_minutes: int | None
+
+
+class FlightTimingResponse(BaseModel):
+    """Calculated timing information for a flight segment."""
+
+    departure: FlightLocalTimeResponse
+    arrival: FlightLocalTimeResponse
+    duration_minutes: int | None
+
+
+class FlightDetailResponse(FlightResponse):
+    """Detailed flight representation with calculated timing."""
+
+    timing: FlightTimingResponse

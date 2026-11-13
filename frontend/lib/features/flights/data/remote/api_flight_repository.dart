@@ -4,10 +4,14 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_error_mapper.dart';
 
 import '../../domain/flight.dart';
+import '../../domain/flight_detail.dart';
 import '../../domain/flight_input.dart';
 import '../../domain/flight_repository.dart';
 
 /// Authenticated REST implementation of FlightRepository.
+///
+/// The backend is the source of truth for flight timing,
+/// including timezone offsets and elapsed duration.
 class ApiFlightRepository implements FlightRepository {
   const ApiFlightRepository({required this.apiClient});
 
@@ -51,6 +55,17 @@ class ApiFlightRepository implements FlightRepository {
 
   @override
   Future<Flight> getFlight({required String flightId}) async {
+    // Reuse the detail endpoint implementation.
+    //
+    // No duplicate HTTP requests or independent
+    // flight response parsing.
+    final detail = await getFlightDetail(flightId: flightId);
+
+    return detail.flight;
+  }
+
+  @override
+  Future<FlightDetail> getFlightDetail({required String flightId}) async {
     final id = _validatedFlightId(flightId);
 
     try {
@@ -61,10 +76,10 @@ class ApiFlightRepository implements FlightRepository {
       final data = response.data;
 
       if (data == null) {
-        throw const FormatException('Missing flight response.');
+        throw const FormatException('Missing flight detail response.');
       }
 
-      return Flight.fromJson(data);
+      return FlightDetail.fromJson(data);
     } on DioException catch (error) {
       throw ApiErrorMapper.fromDioException(error);
     }

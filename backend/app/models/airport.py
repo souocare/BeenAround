@@ -95,6 +95,11 @@ class Airport(Base):
         nullable=True,
     )
 
+    timezone_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     type: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

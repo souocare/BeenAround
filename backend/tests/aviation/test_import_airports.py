@@ -200,6 +200,8 @@ def test_imports_airports(engine, tmp_path):
         airports = connection.execute(select(Airport.__table__).order_by(Airport.id)).all()
 
     assert len(airports) == 2
+    assert airports[0].timezone_id == "Europe/Lisbon"
+    assert airports[1].timezone_id == "Europe/Lisbon"
 
 
 def test_reimport_updates_without_duplicates(engine, tmp_path):
@@ -281,3 +283,68 @@ def test_reports_unknown_countries(engine, tmp_path):
 
     assert airport.source_country_code == "XK"
     assert airport.country_code is None
+
+
+def test_imports_airport_without_coordinates(engine, tmp_path):
+    catalog = write_catalog(
+        tmp_path,
+        [
+            airport_row(
+                latitude="",
+                longitude="",
+            ),
+        ],
+    )
+
+    report = import_airports(
+        engine=engine,
+        catalog_path=catalog,
+    )
+
+    assert report.inserted == 1
+
+    with engine.connect() as connection:
+        airport = connection.execute(select(Airport.__table__)).one()
+
+    assert airport.timezone_id is None
+
+
+def test_reimport_updates_airport_timezone(engine, tmp_path):
+    catalog = write_catalog(
+        tmp_path,
+        [airport_row()],
+    )
+
+    import_airports(
+        engine=engine,
+        catalog_path=catalog,
+    )
+
+    with engine.connect() as connection:
+        airport = connection.execute(select(Airport.__table__)).one()
+
+    assert airport.timezone_id == "Europe/Lisbon"
+
+    # Move the same catalog airport to coordinates
+    # belonging to another timezone.
+    catalog = write_catalog(
+        tmp_path,
+        [
+            airport_row(
+                latitude="35.5494",
+                longitude="139.7798",
+            ),
+        ],
+    )
+
+    report = import_airports(
+        engine=engine,
+        catalog_path=catalog,
+    )
+
+    assert report.updated == 1
+
+    with engine.connect() as connection:
+        airport = connection.execute(select(Airport.__table__)).one()
+
+    assert airport.timezone_id == "Asia/Tokyo"

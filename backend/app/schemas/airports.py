@@ -21,6 +21,7 @@ class AirportResponse(BaseModel):
 
     latitude: float | None
     longitude: float | None
+    timezone_id: str | None
 
     type: str
     scheduled_service: bool

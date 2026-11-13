@@ -1,3 +1,4 @@
+import 'package:beenaround/features/flights/presentation/formatters/flight_timing_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -13,6 +14,7 @@ import '../../domain/flight_distance.dart';
 
 import '../widgets/airline_avatar.dart';
 import '../widgets/flight_route_map.dart';
+import '../../domain/flight_timing.dart';
 
 /// Read-only details of an authenticated user's flight.
 ///
@@ -94,7 +96,11 @@ class _FlightDetailsContent extends StatelessWidget {
 
         const SizedBox(height: 14),
 
-        _FlightStatistics(distanceKm: distance, cabinClass: flight.cabinClass),
+        _FlightStatistics(
+          distanceKm: distance,
+          durationMinutes: state.timing?.durationMinutes,
+          cabinClass: flight.cabinClass,
+        ),
 
         const SizedBox(height: 24),
 
@@ -106,6 +112,7 @@ class _FlightDetailsContent extends StatelessWidget {
           flight: flight,
           departure: departure,
           arrival: arrival,
+          timing: state.timing,
         ),
 
         const SizedBox(height: 24),
@@ -330,9 +337,14 @@ class _FlightStatusLabel extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _FlightStatistics extends StatelessWidget {
-  const _FlightStatistics({required this.distanceKm, required this.cabinClass});
+  const _FlightStatistics({
+    required this.distanceKm,
+    required this.durationMinutes,
+    required this.cabinClass,
+  });
 
   final double? distanceKm;
+  final int? durationMinutes;
   final FlightCabinClass? cabinClass;
 
   @override
@@ -355,7 +367,10 @@ class _FlightStatistics extends StatelessWidget {
           ),
 
           Expanded(
-            child: _StatisticValue(label: 'DURATION', value: '—'),
+            child: _StatisticValue(
+              label: 'DURATION',
+              value: FlightTimingFormatter.duration(durationMinutes),
+            ),
           ),
 
           Expanded(
@@ -416,11 +431,15 @@ class _FlightScheduleCard extends StatelessWidget {
     required this.flight,
     required this.departure,
     required this.arrival,
+    required this.timing,
   });
 
   final Flight flight;
+
   final Airport? departure;
   final Airport? arrival;
+
+  final FlightTiming? timing;
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +459,7 @@ class _FlightScheduleCard extends StatelessWidget {
             name: departure?.name ?? 'Unknown airport',
             date: flight.departureOn,
             time: flight.departureTime,
+            localTime: timing?.departure,
           ),
 
           Padding(
@@ -477,6 +497,7 @@ class _FlightScheduleCard extends StatelessWidget {
             name: arrival?.name ?? 'Unknown airport',
             date: flight.arrivalOn,
             time: flight.arrivalTime,
+            localTime: timing?.arrival,
           ),
         ],
       ),
@@ -491,18 +512,28 @@ class _ScheduleStop extends StatelessWidget {
     required this.name,
     required this.date,
     required this.time,
+    required this.localTime,
   });
 
   final IconData icon;
   final String code;
   final String name;
+
   final String? date;
   final String? time;
+
+  final FlightLocalTime? localTime;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+
+    final offsetLabel = FlightTimingFormatter.localTimeOffset(localTime);
+
+    final statusDescription = FlightTimingFormatter.statusDescription(
+      localTime,
+    );
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,12 +596,28 @@ class _ScheduleStop extends StatelessWidget {
               ),
             ),
 
+            const SizedBox(height: 3),
+
             Text(
-              'Local time',
+              offsetLabel,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: colors.onSurfaceVariant,
               ),
             ),
+
+            if (statusDescription != null &&
+                localTime?.status != FlightLocalTimeStatus.unavailable)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Tooltip(
+                  message: statusDescription,
+                  child: Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: colors.tertiary,
+                  ),
+                ),
+              ),
           ],
         ),
       ],

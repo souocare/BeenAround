@@ -11,6 +11,8 @@ import 'package:beenaround/features/flights/domain/flight.dart';
 import 'package:beenaround/features/flights/domain/flight_input.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/flights/domain/flight_detail.dart';
+import 'package:beenaround/features/flights/domain/flight_timing.dart';
 
 class FakeFlightRepository implements FlightRepository {
   final Map<int, FlightPage> pages = {};
@@ -45,6 +47,26 @@ class FakeFlightRepository implements FlightRepository {
   @override
   Future<Flight> getFlight({required String flightId}) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<FlightDetail> getFlightDetail({required String flightId}) async {
+    final flight = await getFlight(flightId: flightId);
+
+    return FlightDetail(
+      flight: flight,
+      timing: const FlightTiming(
+        departure: FlightLocalTime(
+          status: FlightLocalTimeStatus.unavailable,
+          utcOffsetMinutes: null,
+        ),
+        arrival: FlightLocalTime(
+          status: FlightLocalTimeStatus.unavailable,
+          utcOffsetMinutes: null,
+        ),
+        durationMinutes: null,
+      ),
+    );
   }
 
   @override
