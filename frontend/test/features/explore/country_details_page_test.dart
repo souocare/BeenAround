@@ -4,6 +4,7 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/explore/presentation/pages/explore_page.dart';
+import 'package:beenaround/features/flights/domain/flight.dart';
 import 'package:beenaround/features/geography/domain/country_visit_date_expansion.dart';
 import 'package:beenaround/features/geography/domain/new_country_visit_input.dart';
 import 'package:beenaround/features/trips/presentation/pages/trip_details_page.dart';
@@ -39,6 +40,9 @@ import 'package:beenaround/features/explore/presentation/pages/country_details_p
 import 'package:beenaround/features/explore/application/visited_cities_cubit.dart';
 import 'package:beenaround/features/residences/application/residences_cubit.dart';
 import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
+import 'package:beenaround/features/flights/domain/flight_repository.dart';
+import 'package:beenaround/features/flights/domain/airport_repository.dart';
+import 'package:beenaround/features/flights/domain/airline_repository.dart';
 
 class FakeCountriesRepository implements CountriesRepository {
   FakeCountriesRepository({
@@ -297,7 +301,20 @@ class FakeCountryDetailsTripAssociationRepository extends Fake
   Future<List<CityVisit>> getCityVisits({required String tripId}) async {
     return const [];
   }
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) async {
+    return const [];
+  }
 }
+
+class FakeNavigationFlightRepository extends Fake implements FlightRepository {}
+
+class FakeNavigationAirportRepository extends Fake
+    implements AirportRepository {}
+
+class FakeNavigationAirlineRepository extends Fake
+    implements AirlineRepository {}
 
 CityVisit cityVisit({
   required String id,
@@ -417,6 +434,15 @@ void main() {
           RepositoryProvider<TripAssociationRepository>(
             create: (_) => FakeCountryDetailsTripAssociationRepository(),
           ),
+          RepositoryProvider<FlightRepository>(
+            create: (_) => FakeNavigationFlightRepository(),
+          ),
+          RepositoryProvider<AirportRepository>(
+            create: (_) => FakeNavigationAirportRepository(),
+          ),
+          RepositoryProvider<AirlineRepository>(
+            create: (_) => FakeNavigationAirlineRepository(),
+          ),
         ],
         child: MaterialApp(
           home: BlocProvider.value(
@@ -508,6 +534,17 @@ void main() {
           ),
           RepositoryProvider<TripAssociationRepository>.value(
             value: FakeCountryDetailsTripAssociationRepository(),
+          ),
+
+          // Dependencies required when opening Trip Details.
+          RepositoryProvider<FlightRepository>(
+            create: (_) => FakeNavigationFlightRepository(),
+          ),
+          RepositoryProvider<AirportRepository>(
+            create: (_) => FakeNavigationAirportRepository(),
+          ),
+          RepositoryProvider<AirlineRepository>(
+            create: (_) => FakeNavigationAirlineRepository(),
           ),
         ],
         child: MultiBlocProvider(

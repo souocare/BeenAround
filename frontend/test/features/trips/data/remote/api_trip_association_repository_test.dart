@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 const tripId = '550e8400-e29b-41d4-a716-446655440101';
 const countryVisitId = '550e8400-e29b-41d4-a716-446655440201';
 const cityVisitId = '550e8400-e29b-41d4-a716-446655440301';
+const flightId = '550e8400-e29b-41d4-a716-446655440401';
 
 class FakeTripAssociationHttpAdapter implements HttpClientAdapter {
   FakeTripAssociationHttpAdapter(this.handler);
@@ -71,6 +72,29 @@ Map<String, dynamic> cityVisitResponse({String id = cityVisitId}) {
     'ended_on_precision': 'day',
     'created_at': '2026-11-05T10:00:00Z',
     'updated_at': '2026-11-05T10:00:00Z',
+  };
+}
+
+Map<String, dynamic> flightResponse({String id = flightId}) {
+  return {
+    'id': id,
+    'departure_airport_id': 100,
+    'arrival_airport_id': 200,
+    'airline_id': null,
+    'airline_name': null,
+    'flight_number': 'TP1234',
+    'departure_on': '2026-10-10',
+    'departure_time': '19:20:00',
+    'arrival_on': '2026-10-10',
+    'arrival_time': '22:15:00',
+    'status': 'flown',
+    'aircraft_type': null,
+    'aircraft_registration': null,
+    'seat': null,
+    'cabin_class': null,
+    'notes': null,
+    'created_at': '2026-10-10T10:00:00Z',
+    'updated_at': '2026-10-10T10:00:00Z',
   };
 }
 
@@ -487,6 +511,57 @@ void main() {
           ),
         ),
       );
+    });
+  });
+  group('ApiTripAssociationRepository - flights', () {
+    test('loads associated flights', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'GET');
+        expect(options.uri.path, '/api/v1/trips/$tripId/flights');
+
+        return jsonResponse({
+          'items': [flightResponse()],
+          'total': 1,
+        });
+      });
+
+      final flights = await repository.getFlights(tripId: tripId);
+
+      expect(flights, hasLength(1));
+
+      final flight = flights.single;
+
+      expect(flight.id, flightId);
+      expect(flight.departureAirportId, 100);
+      expect(flight.arrivalAirportId, 200);
+      expect(flight.flightNumber, 'TP1234');
+      expect(flight.departureOn, '2026-10-10');
+    });
+    test('associates an existing flight', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'POST');
+        expect(options.uri.path, '/api/v1/trips/$tripId/flights');
+
+        expect(options.data, {'flight_id': flightId});
+
+        return jsonResponse({
+          'trip_id': tripId,
+          'flight_id': flightId,
+        }, statusCode: 201);
+      });
+
+      await repository.addFlight(tripId: tripId, flightId: flightId);
+    });
+    test('removes a flight association', () async {
+      final repository = createRepository((options) {
+        expect(options.method, 'DELETE');
+
+        expect(options.uri.path, '/api/v1/trips/$tripId/flights/$flightId');
+
+        return ResponseBody.fromString('', 204);
+      });
+
+      await repository.removeFlight(tripId: tripId, flightId: flightId);
     });
   });
 }

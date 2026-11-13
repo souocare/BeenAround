@@ -24,6 +24,9 @@ import 'package:beenaround/features/residences/domain/residence_repository.dart'
 import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
+import 'package:beenaround/features/flights/domain/flight_repository.dart';
+import 'package:beenaround/features/flights/domain/airport_repository.dart';
+import 'package:beenaround/features/flights/domain/airline_repository.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
   FakeCityVisitsRepository({required this.visits});
@@ -291,6 +294,14 @@ class EmptyWishlistRepository implements WishlistRepository {
   }
 }
 
+class FakeNavigationFlightRepository extends Fake implements FlightRepository {}
+
+class FakeNavigationAirportRepository extends Fake
+    implements AirportRepository {}
+
+class FakeNavigationAirlineRepository extends Fake
+    implements AirlineRepository {}
+
 void main() {
   const lisbonId = 2267057;
 
@@ -334,6 +345,15 @@ void main() {
             value:
                 tripAssociationRepository ??
                 FakeCityDetailsTripAssociationRepository(),
+          ),
+          RepositoryProvider<FlightRepository>(
+            create: (_) => FakeNavigationFlightRepository(),
+          ),
+          RepositoryProvider<AirportRepository>(
+            create: (_) => FakeNavigationAirportRepository(),
+          ),
+          RepositoryProvider<AirlineRepository>(
+            create: (_) => FakeNavigationAirlineRepository(),
           ),
         ],
         child: BlocProvider<VisitedCitiesCubit>.value(

@@ -28,6 +28,7 @@ import '../../../trips/domain/trip_association_repository.dart';
 import '../../../trips/domain/trip.dart';
 import '../../../trips/presentation/pages/trip_details_page.dart';
 import '../widgets/destination_details_tabs.dart';
+import '../../../trips/presentation/navigation/open_trip_details.dart';
 
 enum _CityTab { overview, visits, trips }
 
@@ -85,25 +86,11 @@ class CityDetailsPage extends StatelessWidget {
   Future<void> _openTripDetails(BuildContext context, Trip trip) async {
     final cityTripsCubit = context.read<CityTripsCubit>();
 
-    final tripRepository = context.read<TripRepository>();
+    await openTripDetails(context, tripId: trip.id);
 
-    final tripAssociationRepository = context.read<TripAssociationRepository>();
-
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider<TripRepository>.value(value: tripRepository),
-            RepositoryProvider<TripAssociationRepository>.value(
-              value: tripAssociationRepository,
-            ),
-          ],
-          child: TripDetailsPage(tripId: trip.id),
-        ),
-      ),
-    );
-
-    if (!context.mounted || cityTripsCubit.isClosed) return;
+    if (!context.mounted || cityTripsCubit.isClosed) {
+      return;
+    }
 
     await cityTripsCubit.refresh();
   }

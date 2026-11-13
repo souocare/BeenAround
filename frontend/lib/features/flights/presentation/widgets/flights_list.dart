@@ -9,7 +9,6 @@ import '../../application/flights_cubit.dart';
 import '../../application/flights_state.dart';
 
 import 'flight_card.dart';
-import '../../application/flight_catalog_resolver.dart';
 import '../../application/flight_details_cubit.dart';
 
 import '../../domain/flight_repository.dart';
@@ -19,6 +18,7 @@ import '../../domain/airline_repository.dart';
 import '../pages/flight_details_page.dart';
 import '../../../explore/data/countries_repository.dart';
 import '../../application/delete_flight_cubit.dart';
+import '../navigation/open_flight_details.dart';
 
 class FlightsList extends StatelessWidget {
   const FlightsList({super.key});
@@ -33,74 +33,15 @@ class _FlightsListContent extends StatelessWidget {
   const _FlightsListContent();
 
   Future<void> _openFlightDetails(BuildContext context, String flightId) async {
-    // Capture dependencies before opening a Navigator route.
-    //
-    // Providers registered below the Navigator are not
-    // necessarily inherited by the new route.
-    final flightRepository = context.read<FlightRepository>();
-    final airportRepository = context.read<AirportRepository>();
-    final airlineRepository = context.read<AirlineRepository>();
-    final countriesRepository = context.read<CountriesRepository>();
-
     final flightsCubit = context.read<FlightsCubit>();
 
-    final resolver = FlightCatalogResolver(
-      airportRepository: airportRepository,
-      airlineRepository: airlineRepository,
-    );
-
-    // Track successful edits without refreshing the list
-    // when the user only views a flight.
-    var flightWasUpdated = false;
-
-    final deleted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) {
-          return MultiRepositoryProvider(
-            providers: [
-              RepositoryProvider<FlightRepository>.value(
-                value: flightRepository,
-              ),
-              RepositoryProvider<AirportRepository>.value(
-                value: airportRepository,
-              ),
-              RepositoryProvider<AirlineRepository>.value(
-                value: airlineRepository,
-              ),
-              RepositoryProvider<CountriesRepository>.value(
-                value: countriesRepository,
-              ),
-            ],
-            child: MultiBlocProvider(
-              providers: [
-                BlocProvider<FlightDetailsCubit>(
-                  create: (_) => FlightDetailsCubit(
-                    repository: flightRepository,
-                    catalogResolver: resolver,
-                  )..load(flightId),
-                ),
-                BlocProvider<DeleteFlightCubit>(
-                  create: (_) =>
-                      DeleteFlightCubit(repository: flightRepository),
-                ),
-              ],
-              child: FlightDetailsPage(
-                flightId: flightId,
-                onFlightUpdated: () {
-                  flightWasUpdated = true;
-                },
-              ),
-            ),
-          );
-        },
-      ),
-    );
+    final result = await openFlightDetails(context, flightId: flightId);
 
     if (!context.mounted || flightsCubit.isClosed) {
       return;
     }
 
-    if (flightWasUpdated || deleted == true) {
+    if (result != FlightDetailsNavigationResult.viewed) {
       await flightsCubit.refresh();
     }
   }

@@ -39,6 +39,7 @@ import 'city_details_page.dart';
 
 import '../../domain/visited_city.dart';
 import '../widgets/destination_details_tabs.dart';
+import '../../../trips/presentation/navigation/open_trip_details.dart';
 
 enum _CountryTab { overview, visits, cities, trips }
 
@@ -144,24 +145,11 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
   Future<void> _openTripDetails(Trip trip) async {
     final countryTripsCubit = context.read<CountryTripsCubit>();
 
-    final tripRepository = context.read<TripRepository>();
-    final tripAssociationRepository = context.read<TripAssociationRepository>();
+    await openTripDetails(context, tripId: trip.id);
 
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider<TripRepository>.value(value: tripRepository),
-            RepositoryProvider<TripAssociationRepository>.value(
-              value: tripAssociationRepository,
-            ),
-          ],
-          child: TripDetailsPage(tripId: trip.id),
-        ),
-      ),
-    );
-
-    if (!mounted || countryTripsCubit.isClosed) return;
+    if (!mounted || countryTripsCubit.isClosed) {
+      return;
+    }
 
     await countryTripsCubit.refresh();
   }

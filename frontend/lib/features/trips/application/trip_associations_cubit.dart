@@ -7,14 +7,12 @@ import '../../geography/domain/city_visit.dart';
 
 import '../domain/trip_association_repository.dart';
 import 'trip_associations_state.dart';
+import '../../flights/domain/flight.dart';
 
 /// Coordinates the independent visits associated with one Trip.
 class TripAssociationsCubit extends Cubit<TripAssociationsState> {
-  TripAssociationsCubit({
-    required TripAssociationRepository repository,
-    required this.tripId,
-  }) : _repository = repository,
-       super(const TripAssociationsState());
+  TripAssociationsCubit({required this._repository, required this.tripId})
+    : super(const TripAssociationsState());
 
   final TripAssociationRepository _repository;
 
@@ -49,17 +47,20 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
       final results = await Future.wait<Object>([
         _repository.getCountryVisits(tripId: tripId),
         _repository.getCityVisits(tripId: tripId),
+        _repository.getFlights(tripId: tripId),
       ]);
 
       if (!_isCurrent(generation)) return;
 
       final countries = results[0] as List<CountryVisit>;
       final cities = results[1] as List<CityVisit>;
+      final flights = results[2] as List<Flight>;
 
       emit(
         state.copyWith(
           countryVisits: List.unmodifiable(countries),
           cityVisits: List.unmodifiable(cities),
+          flights: List.unmodifiable(flights),
           hasLoaded: true,
           isLoading: false,
           loadError: null,
@@ -75,7 +76,7 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
       emit(
         state.copyWith(
           isLoading: false,
-          loadError: 'Unable to load Trip visits.',
+          loadError: 'Unable to load Trip associations.',
         ),
       );
     }
@@ -96,19 +97,34 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
   /// Associations are performed sequentially to avoid concurrent mutations.
   /// Successful associations are preserved if a later request fails.
   Future<void> addCountryVisits({required List<String> visitIds}) {
-    return _addVisitsBatch(
-      visitIds: visitIds,
-      addVisit: (visitId) =>
+    return _addRecordsBatch(
+      recordIds: visitIds,
+      recordLabel: 'country visit',
+      addRecord: (visitId) =>
           _repository.addCountryVisit(tripId: tripId, visitId: visitId),
     );
   }
 
   /// Associates multiple existing city visits with this Trip.
   Future<void> addCityVisits({required List<String> visitIds}) {
-    return _addVisitsBatch(
-      visitIds: visitIds,
-      addVisit: (visitId) =>
+    return _addRecordsBatch(
+      recordIds: visitIds,
+      recordLabel: 'city visit',
+      addRecord: (visitId) =>
           _repository.addCityVisit(tripId: tripId, visitId: visitId),
+    );
+  }
+
+  /// Associate multiple existing flights with this Trip.
+  ///
+  /// Requests are sequential. Successful associations are preserved
+  /// if a subsequent request fails.
+  Future<void> addFlights({required List<String> flightIds}) {
+    return _addRecordsBatch(
+      recordIds: flightIds,
+      recordLabel: 'flight',
+      addRecord: (flightId) =>
+          _repository.addFlight(tripId: tripId, flightId: flightId),
     );
   }
 
@@ -135,21 +151,40 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
   }
 
   // ---------------------------------------------------------
+  // Flight associations
+  // ---------------------------------------------------------
+
+  /// Associate an existing independent flight with this Trip.
+  Future<void> addFlight({required String flightId}) {
+    return _mutate(
+      () => _repository.addFlight(tripId: tripId, flightId: flightId),
+    );
+  }
+
+  /// Remove a flight association without deleting the flight.
+  Future<void> removeFlight({required String flightId}) {
+    return _mutate(
+      () => _repository.removeFlight(tripId: tripId, flightId: flightId),
+    );
+  }
+
+  // ---------------------------------------------------------
   // Shared mutation logic
   // ---------------------------------------------------------
 
-  Future<void> _addVisitsBatch({
-    required List<String> visitIds,
-    required Future<void> Function(String visitId) addVisit,
+  Future<void> _addRecordsBatch({
+    required List<String> recordIds,
+    required Future<void> Function(String recordId) addRecord,
+    required String recordLabel,
   }) async {
     if (isClosed || state.isMutating) {
       return;
     }
 
     // Preserve selection order and avoid duplicate requests.
-    final uniqueVisitIds = visitIds.toSet().toList(growable: false);
+    final uniqueRecordIds = recordIds.toSet().toList(growable: false);
 
-    if (uniqueVisitIds.isEmpty) {
+    if (uniqueRecordIds.isEmpty) {
       return;
     }
 
@@ -168,17 +203,17 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
     var completed = 0;
     String? failureMessage;
 
-    for (final visitId in uniqueVisitIds) {
+    for (final recordId in uniqueRecordIds) {
       if (isClosed) return;
 
       try {
-        await addVisit(visitId);
+        await addRecord(recordId);
         completed++;
       } on ApiException catch (error) {
         failureMessage = error.message;
         break;
       } catch (_) {
-        failureMessage = 'Unable to add this visit.';
+        failureMessage = 'Unable to add this $recordLabel.';
         break;
       }
     }
@@ -195,8 +230,8 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
 
     final mutationError = failureMessage == null
         ? null
-        : 'Added $completed of ${uniqueVisitIds.length} visits. '
-              '$failureMessage';
+        : 'Added $completed of ${uniqueRecordIds.length} '
+              '${recordLabel}s. $failureMessage';
 
     emit(state.copyWith(isMutating: false, mutationError: mutationError));
   }
@@ -232,7 +267,9 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
     } catch (_) {
       if (isClosed) return;
 
-      emit(state.copyWith(mutationError: 'Unable to update Trip visits.'));
+      emit(
+        state.copyWith(mutationError: 'Unable to update Trip associations.'),
+      );
     } finally {
       if (!isClosed) {
         emit(state.copyWith(isMutating: false));

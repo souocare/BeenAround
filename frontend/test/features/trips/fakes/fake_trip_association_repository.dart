@@ -1,14 +1,17 @@
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/flights/domain/flight.dart';
 
 /// Shared in-memory fake for Trip presentation tests.
 class FakeTripAssociationRepository implements TripAssociationRepository {
   FakeTripAssociationRepository({
     List<CountryVisit> countryVisits = const [],
     List<CityVisit> cityVisits = const [],
+    List<Flight> flights = const [],
   }) : countryVisits = List.of(countryVisits),
-       cityVisits = List.of(cityVisits);
+       cityVisits = List.of(cityVisits),
+       flights = List.of(flights);
 
   final List<CountryVisit> countryVisits;
   final List<CityVisit> cityVisits;
@@ -19,6 +22,14 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
   Future<void> Function(String tripId, String visitId)? onAddCityVisit;
 
   int addCityVisitCalls = 0;
+
+  final List<Flight> flights;
+
+  Future<void> Function(String tripId, String flightId)? onAddFlight;
+  Future<void> Function(String tripId, String flightId)? onRemoveFlight;
+
+  int addFlightCalls = 0;
+  int removeFlightCalls = 0;
 
   @override
   Future<List<CountryVisit>> getCountryVisits({required String tripId}) async {
@@ -80,5 +91,41 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
     required String visitId,
   }) async {
     cityVisits.removeWhere((visit) => visit.id == visitId);
+  }
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) async {
+    return List.unmodifiable(flights);
+  }
+
+  @override
+  Future<void> addFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    addFlightCalls++;
+
+    final handler = onAddFlight;
+
+    if (handler != null) {
+      await handler(tripId, flightId);
+    }
+  }
+
+  @override
+  Future<void> removeFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    removeFlightCalls++;
+
+    final handler = onRemoveFlight;
+
+    if (handler != null) {
+      await handler(tripId, flightId);
+      return;
+    }
+
+    flights.removeWhere((flight) => flight.id == flightId);
   }
 }

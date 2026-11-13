@@ -16,6 +16,10 @@ import '../../domain/trip_status.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_dialog.dart';
 import 'trip_details_page.dart';
+import '../../../flights/domain/flight_repository.dart';
+import '../../../flights/domain/airport_repository.dart';
+import '../../../flights/domain/airline_repository.dart';
+import '../navigation/open_trip_details.dart';
 
 enum _TripsFilter { all, upcoming, ongoing, completed }
 
@@ -115,35 +119,11 @@ class _TripsViewState extends State<_TripsView> {
   Future<void> _openTripDetails(Trip trip) async {
     final tripsCubit = context.read<TripsCubit>();
 
-    // Repositories used by Trip Details.
-    final tripRepository = context.read<TripRepository>();
-    final tripAssociationRepository = context.read<TripAssociationRepository>();
+    await openTripDetails(context, tripId: trip.id);
 
-    // Repositories used when selecting visits to associate.
-    final countriesRepository = context.read<CountriesRepository>();
-    final cityVisitsRepository = context.read<CityVisitsRepository>();
-
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider<TripRepository>.value(value: tripRepository),
-            RepositoryProvider<TripAssociationRepository>.value(
-              value: tripAssociationRepository,
-            ),
-            RepositoryProvider<CountriesRepository>.value(
-              value: countriesRepository,
-            ),
-            RepositoryProvider<CityVisitsRepository>.value(
-              value: cityVisitsRepository,
-            ),
-          ],
-          child: TripDetailsPage(tripId: trip.id),
-        ),
-      ),
-    );
-
-    if (!mounted || tripsCubit.isClosed) return;
+    if (!mounted || tripsCubit.isClosed) {
+      return;
+    }
 
     await tripsCubit.refresh();
   }

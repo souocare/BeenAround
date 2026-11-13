@@ -7,6 +7,7 @@ import '../../../explore/domain/country_visit.dart';
 import '../../../geography/domain/city_visit.dart';
 
 import '../../domain/trip_association_repository.dart';
+import '../../../flights/domain/flight.dart';
 
 /// Authenticated REST implementation of TripAssociationRepository.
 ///
@@ -29,7 +30,7 @@ class ApiTripAssociationRepository implements TripAssociationRepository {
         'trips/$id/country-visits',
       );
 
-      return _parseVisitList(
+      return _parseAssociationList(
         response.data,
         description: 'Trip country visits',
         parser: CountryVisit.fromJson,
@@ -85,7 +86,7 @@ class ApiTripAssociationRepository implements TripAssociationRepository {
         'trips/$id/city-visits',
       );
 
-      return _parseVisitList(
+      return _parseAssociationList(
         response.data,
         description: 'Trip city visits',
         parser: CityVisit.fromJson,
@@ -129,6 +130,64 @@ class ApiTripAssociationRepository implements TripAssociationRepository {
   }
 
   // ---------------------------------------------------------
+  // Flights
+  // ---------------------------------------------------------
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) async {
+    final id = _validatedId(tripId, 'tripId');
+
+    try {
+      final response = await apiClient.dio.get<Map<String, dynamic>>(
+        'trips/$id/flights',
+      );
+
+      return _parseAssociationList(
+        response.data,
+        description: 'Trip flights',
+        parser: Flight.fromJson,
+      );
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<void> addFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    final id = _validatedId(tripId, 'tripId');
+    final flight = flightId.trim();
+
+    _validatedId(flight, 'flightId');
+
+    try {
+      await apiClient.dio.post<Map<String, dynamic>>(
+        'trips/$id/flights',
+        data: {'flight_id': flight},
+      );
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  @override
+  Future<void> removeFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    final id = _validatedId(tripId, 'tripId');
+    final flight = _validatedId(flightId, 'flightId');
+
+    try {
+      await apiClient.dio.delete<void>('trips/$id/flights/$flight');
+    } on DioException catch (error) {
+      throw ApiErrorMapper.fromDioException(error);
+    }
+  }
+
+  // ---------------------------------------------------------
   // Shared helpers
   // ---------------------------------------------------------
 
@@ -136,7 +195,8 @@ class ApiTripAssociationRepository implements TripAssociationRepository {
   ///
   /// The backend currently returns all Trip associations without
   /// pagination, using the same {items, total} structure as Explore.
-  static List<T> _parseVisitList<T>(
+  /// Parse the {items, total} association-list response.
+  static List<T> _parseAssociationList<T>(
     Map<String, dynamic>? data, {
     required String description,
     required T Function(Map<String, dynamic>) parser,

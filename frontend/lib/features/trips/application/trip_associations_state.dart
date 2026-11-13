@@ -1,11 +1,13 @@
 import '../../explore/domain/country_visit.dart';
 import '../../geography/domain/city_visit.dart';
+import '../../flights/domain/flight.dart';
 
 /// State of the visit associations belonging to one Trip.
 class TripAssociationsState {
   const TripAssociationsState({
     this.countryVisits = const [],
     this.cityVisits = const [],
+    this.flights = const [],
     this.hasLoaded = false,
     this.isLoading = false,
     this.isMutating = false,
@@ -15,6 +17,9 @@ class TripAssociationsState {
 
   final List<CountryVisit> countryVisits;
   final List<CityVisit> cityVisits;
+
+  /// Independent flights explicitly associated with this Trip.
+  final List<Flight> flights;
 
   /// Whether at least one complete load succeeded.
   final bool hasLoaded;
@@ -39,7 +44,8 @@ class TripAssociationsState {
 
   bool get isRefreshing => isLoading && hasLoaded;
 
-  bool get isEmpty => countryVisits.isEmpty && cityVisits.isEmpty;
+  bool get isEmpty =>
+      countryVisits.isEmpty && cityVisits.isEmpty && flights.isEmpty;
 
   bool get isReady => hasLoaded && !isLoading;
 
@@ -49,6 +55,7 @@ class TripAssociationsState {
     List<CountryVisit>? countryVisits,
     List<CityVisit>? cityVisits,
     bool? hasLoaded,
+    List<Flight>? flights,
     bool? isLoading,
     bool? isMutating,
     Object? loadError = _unchanged,
@@ -58,6 +65,7 @@ class TripAssociationsState {
       countryVisits: countryVisits ?? this.countryVisits,
       cityVisits: cityVisits ?? this.cityVisits,
       hasLoaded: hasLoaded ?? this.hasLoaded,
+      flights: flights ?? this.flights,
       isLoading: isLoading ?? this.isLoading,
       isMutating: isMutating ?? this.isMutating,
       loadError: identical(loadError, _unchanged)

@@ -9,6 +9,7 @@ import 'package:beenaround/features/trips/application/trip_associations_cubit.da
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:beenaround/features/flights/domain/flight.dart';
 
 const tripId = 'trip-1';
 
@@ -37,6 +38,25 @@ CityVisit sampleCityVisit({String id = 'city-visit-1'}) {
   );
 }
 
+Flight sampleFlight({
+  String id = 'flight-1',
+  String departureOn = '2026-10-10',
+}) {
+  return Flight(
+    id: id,
+    departureAirportId: 100,
+    arrivalAirportId: 200,
+    departureOn: departureOn,
+    departureTime: '19:20',
+    arrivalOn: departureOn,
+    arrivalTime: '22:15',
+    flightNumber: 'TP1234',
+    status: FlightStatus.flown,
+    createdAt: DateTime.utc(2026, 10, 10),
+    updatedAt: DateTime.utc(2026, 10, 10),
+  );
+}
+
 class FakeTripAssociationRepository implements TripAssociationRepository {
   List<CountryVisit> countries = [];
   List<CityVisit> cities = [];
@@ -49,6 +69,13 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
 
   int removeCountryCalls = 0;
   int removeCityCalls = 0;
+  List<Flight> flights = [];
+
+  int flightLoads = 0;
+  int addFlightCalls = 0;
+  int removeFlightCalls = 0;
+
+  Future<List<Flight>> Function()? onGetFlights;
 
   Future<List<CountryVisit>> Function()? onGetCountries;
   Future<List<CityVisit>> Function()? onGetCities;
@@ -58,6 +85,9 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
 
   Future<void> Function(String visitId)? onRemoveCountry;
   Future<void> Function(String visitId)? onRemoveCity;
+
+  Future<void> Function(String flightId)? onAddFlight;
+  Future<void> Function(String flightId)? onRemoveFlight;
 
   @override
   Future<List<CountryVisit>> getCountryVisits({required String tripId}) {
@@ -109,6 +139,30 @@ class FakeTripAssociationRepository implements TripAssociationRepository {
 
     return onRemoveCity?.call(visitId) ?? Future.value();
   }
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) {
+    flightLoads++;
+
+    return onGetFlights?.call() ?? Future.value(flights);
+  }
+
+  @override
+  Future<void> addFlight({required String tripId, required String flightId}) {
+    addFlightCalls++;
+
+    return onAddFlight?.call(flightId) ?? Future.value();
+  }
+
+  @override
+  Future<void> removeFlight({
+    required String tripId,
+    required String flightId,
+  }) {
+    removeFlightCalls++;
+
+    return onRemoveFlight?.call(flightId) ?? Future.value();
+  }
 }
 
 void main() {
@@ -125,27 +179,31 @@ void main() {
     await cubit.close();
   });
 
-  test('initial state has no associated visits', () {
+  test('initial state has no associated travel records', () {
     expect(cubit.state.hasLoaded, isFalse);
     expect(cubit.state.countryVisits, isEmpty);
     expect(cubit.state.cityVisits, isEmpty);
+    expect(cubit.state.flights, isEmpty);
     expect(cubit.state.isLoading, isFalse);
     expect(cubit.state.isMutating, isFalse);
   });
 
-  test('loads country and city visits', () async {
+  test('loads country visits, city visits and flights', () async {
     repository.countries = [sampleCountryVisit()];
-
     repository.cities = [sampleCityVisit()];
+    repository.flights = [sampleFlight()];
 
     await cubit.load();
 
     expect(cubit.state.hasLoaded, isTrue);
+
     expect(cubit.state.countryVisits, hasLength(1));
     expect(cubit.state.cityVisits, hasLength(1));
+    expect(cubit.state.flights, hasLength(1));
 
     expect(repository.countryLoads, 1);
     expect(repository.cityLoads, 1);
+    expect(repository.flightLoads, 1);
   });
 
   test('empty responses count as successful loading', () async {
@@ -521,7 +579,10 @@ void main() {
         'country-2',
       });
 
-      expect(cubit.state.mutationError, contains('Added 2 of 4 visits'));
+      expect(
+        cubit.state.mutationError,
+        'Added 2 of 4 country visits. Unable to associate this visit.',
+      );
 
       expect(
         cubit.state.mutationError,
@@ -612,5 +673,174 @@ void main() {
 
       expect(cubit.state.isMutating, isFalse);
     });
+    test('a Trip containing only flights is not empty', () async {
+      repository.flights = [sampleFlight()];
+
+      await cubit.load();
+
+      expect(cubit.state.countryVisits, isEmpty);
+      expect(cubit.state.cityVisits, isEmpty);
+      expect(cubit.state.flights, hasLength(1));
+      expect(cubit.state.isEmpty, isFalse);
+      expect(cubit.state.isReady, isTrue);
+    });
+    test('adding a flight refreshes Trip associations', () async {
+      repository.onAddFlight = (flightId) async {
+        expect(flightId, 'flight-1');
+
+        repository.flights = [sampleFlight(id: flightId)];
+      };
+
+      await cubit.addFlight(flightId: 'flight-1');
+
+      expect(repository.addFlightCalls, 1);
+      expect(cubit.state.flights, hasLength(1));
+      expect(cubit.state.flights.single.id, 'flight-1');
+      expect(cubit.state.isMutating, isFalse);
+      expect(cubit.state.mutationError, isNull);
+    });
+    test('removing a flight refreshes Trip associations', () async {
+      repository.flights = [sampleFlight()];
+
+      await cubit.load();
+
+      repository.onRemoveFlight = (flightId) async {
+        expect(flightId, 'flight-1');
+
+        repository.flights = [];
+      };
+
+      await cubit.removeFlight(flightId: 'flight-1');
+
+      expect(repository.removeFlightCalls, 1);
+      expect(cubit.state.flights, isEmpty);
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('flight association errors preserve existing data', () async {
+      repository.flights = [sampleFlight()];
+
+      await cubit.load();
+
+      repository.onRemoveFlight = (_) async {
+        throw const ApiException(
+          type: ApiErrorType.server,
+          message: 'Unable to remove flight association.',
+          statusCode: 500,
+        );
+      };
+
+      await cubit.removeFlight(flightId: 'flight-1');
+
+      expect(repository.removeFlightCalls, 1);
+
+      expect(cubit.state.flights, hasLength(1));
+
+      expect(cubit.state.mutationError, 'Unable to remove flight association.');
+
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('prevents concurrent flight association mutations', () async {
+      final pending = Completer<void>();
+
+      repository.onAddFlight = (_) => pending.future;
+
+      final first = cubit.addFlight(flightId: 'flight-1');
+
+      final second = cubit.addFlight(flightId: 'flight-2');
+
+      expect(repository.addFlightCalls, 1);
+      expect(cubit.state.isMutating, isTrue);
+
+      pending.complete();
+
+      await Future.wait([first, second]);
+
+      expect(repository.addFlightCalls, 1);
+      expect(cubit.state.isMutating, isFalse);
+    });
+    test('flight loading failure preserves existing associations', () async {
+      repository.countries = [sampleCountryVisit()];
+      repository.cities = [sampleCityVisit()];
+      repository.flights = [sampleFlight()];
+
+      await cubit.load();
+
+      repository.onGetFlights = () async {
+        throw const ApiException(
+          type: ApiErrorType.server,
+          message: 'Unable to load flights.',
+          statusCode: 500,
+        );
+      };
+
+      await cubit.refresh();
+
+      expect(cubit.state.hasLoaded, isTrue);
+
+      expect(cubit.state.countryVisits, hasLength(1));
+      expect(cubit.state.cityVisits, hasLength(1));
+      expect(cubit.state.flights, hasLength(1));
+
+      expect(cubit.state.loadError, 'Unable to load flights.');
+    });
+    test('adds multiple flights sequentially and refreshes', () async {
+      final addedIds = <String>[];
+
+      repository.onAddFlight = (flightId) async {
+        addedIds.add(flightId);
+
+        repository.flights = [for (final id in addedIds) sampleFlight(id: id)];
+      };
+
+      await cubit.addFlights(flightIds: ['flight-1', 'flight-2']);
+
+      expect(addedIds, ['flight-1', 'flight-2']);
+      expect(repository.addFlightCalls, 2);
+
+      expect(cubit.state.flights, hasLength(2));
+      expect(cubit.state.isMutating, isFalse);
+      expect(cubit.state.mutationError, isNull);
+    });
+    test('deduplicates flight IDs before associating', () async {
+      final addedIds = <String>[];
+
+      repository.onAddFlight = (flightId) async {
+        addedIds.add(flightId);
+      };
+
+      await cubit.addFlights(flightIds: ['flight-1', 'flight-1', 'flight-2']);
+
+      expect(addedIds, ['flight-1', 'flight-2']);
+      expect(repository.addFlightCalls, 2);
+    });
+    test(
+      'preserves successful flight associations after partial failure',
+      () async {
+        repository.onAddFlight = (flightId) async {
+          if (flightId == 'flight-2') {
+            throw const ApiException(
+              type: ApiErrorType.server,
+              message: 'Unable to associate flight.',
+              statusCode: 500,
+            );
+          }
+
+          repository.flights.add(sampleFlight(id: flightId));
+        };
+
+        await cubit.addFlights(flightIds: ['flight-1', 'flight-2', 'flight-3']);
+
+        expect(repository.addFlightCalls, 2);
+
+        expect(cubit.state.flights.map((flight) => flight.id), ['flight-1']);
+
+        expect(
+          cubit.state.mutationError,
+          'Added 1 of 3 flights. Unable to associate flight.',
+        );
+
+        expect(cubit.state.isMutating, isFalse);
+      },
+    );
   });
 }

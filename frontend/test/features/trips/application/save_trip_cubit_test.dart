@@ -12,7 +12,7 @@ import 'package:beenaround/features/trips/domain/trip_association_repository.dar
 
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
-
+import 'package:beenaround/features/flights/domain/flight.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeSaveTripRepository implements TripRepository {
@@ -152,6 +152,29 @@ class FakeSaveTripAssociationRepository implements TripAssociationRepository {
     required String visitId,
   }) async {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) async => [];
+
+  @override
+  Future<void> addFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    throw UnimplementedError(
+      'SaveTripCubit does not manage flight associations yet.',
+    );
+  }
+
+  @override
+  Future<void> removeFlight({
+    required String tripId,
+    required String flightId,
+  }) async {
+    throw UnimplementedError(
+      'SaveTripCubit does not manage flight associations yet.',
+    );
   }
 }
 

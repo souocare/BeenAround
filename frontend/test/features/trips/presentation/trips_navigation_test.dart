@@ -16,6 +16,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../application/trip_associations_cubit_test.dart';
 import '../fakes/fake_countries_repository.dart';
+import 'package:beenaround/features/flights/domain/flight_repository.dart';
+import 'package:beenaround/features/flights/domain/airport_repository.dart';
+import 'package:beenaround/features/flights/domain/airline_repository.dart';
 
 class InMemoryTripRepository implements TripRepository {
   InMemoryTripRepository({List<Trip> initialTrips = const []})
@@ -145,6 +148,14 @@ class EmptyTripNavigationCityVisitsRepository extends Fake
   }
 }
 
+class FakeNavigationFlightRepository extends Fake implements FlightRepository {}
+
+class FakeNavigationAirportRepository extends Fake
+    implements AirportRepository {}
+
+class FakeNavigationAirlineRepository extends Fake
+    implements AirlineRepository {}
+
 Trip sampleTrip({
   required String id,
   required String name,
@@ -173,6 +184,15 @@ Widget buildTestApp(TripRepository repository) {
       ),
       RepositoryProvider<CityVisitsRepository>(
         create: (_) => EmptyTripNavigationCityVisitsRepository(),
+      ),
+      RepositoryProvider<FlightRepository>(
+        create: (_) => FakeNavigationFlightRepository(),
+      ),
+      RepositoryProvider<AirportRepository>(
+        create: (_) => FakeNavigationAirportRepository(),
+      ),
+      RepositoryProvider<AirlineRepository>(
+        create: (_) => FakeNavigationAirlineRepository(),
       ),
     ],
     child: const MaterialApp(home: Scaffold(body: TripsPage())),
@@ -212,6 +232,17 @@ Widget buildRouteScopedTripsTestApp(TripRepository repository) {
         ),
         RepositoryProvider<CityVisitsRepository>(
           create: (_) => EmptyTripNavigationCityVisitsRepository(),
+        ),
+
+        // Flight dependencies required by Trip Details.
+        RepositoryProvider<FlightRepository>(
+          create: (_) => FakeNavigationFlightRepository(),
+        ),
+        RepositoryProvider<AirportRepository>(
+          create: (_) => FakeNavigationAirportRepository(),
+        ),
+        RepositoryProvider<AirlineRepository>(
+          create: (_) => FakeNavigationAirlineRepository(),
         ),
       ],
       child: const Scaffold(body: TripsPage()),
@@ -377,7 +408,7 @@ void main() {
         expect(find.text('Honeymoon'), findsOneWidget);
 
         // Open the country visit picker.
-        await tester.tap(find.text('Add').first);
+        await tester.tap(find.byKey(const Key('addTripCountriesVisitButton')));
 
         await tester.pumpAndSettle();
 
@@ -390,7 +421,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Open the city visit picker.
-        await tester.tap(find.text('Add').last);
+        await tester.tap(find.byKey(const Key('addTripCitiesVisitButton')));
 
         await tester.pumpAndSettle();
 

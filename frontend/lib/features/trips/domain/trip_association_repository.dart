@@ -1,10 +1,12 @@
 import '../../explore/domain/country_visit.dart';
 import '../../geography/domain/city_visit.dart';
+import '../../flights/domain/flight.dart';
 
 /// Operations for associating existing travel records with Trips.
 ///
-/// Visits remain independent of Trips. Removing an association
-/// must never delete the underlying visit.
+/// Country visits, city visits and flights remain independent
+/// of Trips. Removing an association never deletes the
+/// underlying travel record.
 ///
 /// All operations are scoped to the authenticated user.
 abstract interface class TripAssociationRepository {
@@ -40,4 +42,19 @@ abstract interface class TripAssociationRepository {
     required String tripId,
     required String visitId,
   });
+
+  /// Return flights explicitly associated with a Trip.
+  ///
+  /// Flights remain independent personal travel records.
+  Future<List<Flight>> getFlights({required String tripId});
+
+  /// Associate an existing personal flight with a Trip.
+  ///
+  /// Repeated associations are treated as successful by the backend.
+  Future<void> addFlight({required String tripId, required String flightId});
+
+  /// Remove a flight association without deleting the Flight.
+  ///
+  /// The original Flight remains available in Explore.
+  Future<void> removeFlight({required String tripId, required String flightId});
 }

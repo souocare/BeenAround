@@ -20,6 +20,8 @@ import '../../domain/trip_association_repository.dart';
 
 import '../widgets/trip_associated_visits_section.dart';
 
+import '../widgets/trip_associated_flights_section.dart';
+
 class TripDetailsPage extends StatelessWidget {
   const TripDetailsPage({required this.tripId, super.key});
 
@@ -221,6 +223,10 @@ class _TripDetailsView extends StatelessWidget {
             const SizedBox(height: AppSpacing.xxxl),
 
             const TripAssociatedVisitsSection(),
+
+            const SizedBox(height: AppSpacing.xxxl),
+
+            const TripAssociatedFlightsSection(),
           ],
         ),
       ),
