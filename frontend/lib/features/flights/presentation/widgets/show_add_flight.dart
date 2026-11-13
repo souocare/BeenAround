@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../application/save_flight_cubit.dart';
+import '../../application/save_flight_state.dart';
+
+import '../../domain/flight.dart';
 import '../../domain/flight_repository.dart';
 import '../../domain/airport_repository.dart';
 import '../../domain/airline_repository.dart';
@@ -13,10 +16,26 @@ import '../../../explore/data/countries_repository.dart';
 ///
 /// Returns true only after a flight has been persisted.
 ///
-/// Flight creation does not modify visits, wishlist entries
-/// or Trip associations.
+/// Preserved for callers that only need to know whether
+/// a flight was created.
 Future<bool> showAddFlight(BuildContext context) async {
-  // Capture the repositories before opening a Navigator route.
+  final flight = await showAddFlightWithResult(context);
+
+  return flight != null;
+}
+
+/// Opens the personal flight creation flow and returns
+/// the newly persisted Flight.
+///
+/// Returns null when the user cancels the form.
+///
+/// Flight creation remains independent of Trips, visits,
+/// and wishlist entries.
+///
+/// The caller decides whether to offer an explicit
+/// Trip association after creation.
+Future<Flight?> showAddFlightWithResult(BuildContext context) async {
+  // Capture repositories before opening a Navigator route.
   //
   // Dialogs and bottom sheets may not inherit providers
   // registered below the application's Navigator.
@@ -26,6 +45,8 @@ Future<bool> showAddFlight(BuildContext context) async {
   final countriesRepository = context.read<CountriesRepository>();
 
   final width = MediaQuery.sizeOf(context).width;
+
+  Flight? createdFlight;
 
   Widget buildContent() {
     return MultiRepositoryProvider(
@@ -38,7 +59,18 @@ Future<bool> showAddFlight(BuildContext context) async {
       ],
       child: BlocProvider<SaveFlightCubit>(
         create: (_) => SaveFlightCubit(repository: flightRepository),
-        child: const AddFlightForm(),
+        child: BlocListener<SaveFlightCubit, SaveFlightState>(
+          listenWhen: (previous, current) =>
+              !previous.isSuccess && current.isSuccess,
+
+          listener: (context, state) {
+            // Capture the persisted Flight before the
+            // form closes its modal route.
+            createdFlight = state.flight;
+          },
+
+          child: const AddFlightForm(),
+        ),
       ),
     );
   }
@@ -53,7 +85,7 @@ Future<bool> showAddFlight(BuildContext context) async {
       ),
     );
 
-    return result ?? false;
+    return result == true ? createdFlight : null;
   }
 
   final result = await showModalBottomSheet<bool>(
@@ -74,5 +106,5 @@ Future<bool> showAddFlight(BuildContext context) async {
     },
   );
 
-  return result ?? false;
+  return result == true ? createdFlight : null;
 }

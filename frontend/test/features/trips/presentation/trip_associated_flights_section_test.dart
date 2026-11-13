@@ -1,27 +1,33 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:beenaround/features/explore/data/countries_repository.dart';
+
 import 'package:beenaround/features/flights/domain/airline.dart';
 import 'package:beenaround/features/flights/domain/airline_repository.dart';
 import 'package:beenaround/features/flights/domain/airport.dart';
 import 'package:beenaround/features/flights/domain/airport_repository.dart';
 import 'package:beenaround/features/flights/domain/flight.dart';
+import 'package:beenaround/features/flights/domain/flight_detail.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
+import 'package:beenaround/features/flights/domain/flight_timing.dart';
 
 import 'package:beenaround/features/trips/application/trip_associations_cubit.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/presentation/widgets/trip_associated_flights_section.dart';
 
-import '../fakes/fake_trip_association_repository.dart';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:beenaround/features/flights/domain/flight_detail.dart';
-import 'package:beenaround/features/flights/domain/flight_timing.dart';
-
-import 'package:beenaround/features/explore/data/countries_repository.dart';
-
 import '../fakes/fake_countries_repository.dart';
+import '../fakes/fake_trip_association_repository.dart';
+import 'package:beenaround/features/flights/domain/flight_input.dart';
+import 'package:beenaround/features/explore/domain/country.dart';
+import 'package:beenaround/features/flights/domain/flight_input.dart';
 
 const tripId = 'trip-1';
+
+// ---------------------------------------------------------------------------
+// Test data
+// ---------------------------------------------------------------------------
 
 Flight sampleFlight({
   String id = 'flight-1',
@@ -40,7 +46,11 @@ Flight sampleFlight({
   );
 }
 
-/// Supplies personal flights to the picker without using HTTP.
+// ---------------------------------------------------------------------------
+// Flight repository
+// ---------------------------------------------------------------------------
+
+/// Supplies personal flights without using HTTP.
 class FakeSectionFlightRepository extends Fake implements FlightRepository {
   FakeSectionFlightRepository({List<Flight> flights = const []})
     : flights = List.of(flights);
@@ -48,12 +58,31 @@ class FakeSectionFlightRepository extends Fake implements FlightRepository {
   final List<Flight> flights;
 
   int getFlightsCalls = 0;
-
   int getFlightDetailCalls = 0;
   int deleteFlightCalls = 0;
 
   String? lastRequestedFlightId;
   String? lastDeletedFlightId;
+
+  int createFlightCalls = 0;
+
+  FlightCreateInput? lastCreateInput;
+
+  Future<Flight> Function(FlightCreateInput input)? onCreateFlight;
+
+  @override
+  Future<Flight> createFlight({required FlightCreateInput input}) async {
+    createFlightCalls++;
+    lastCreateInput = input;
+
+    final createdFlight = onCreateFlight != null
+        ? await onCreateFlight!(input)
+        : sampleFlight(id: 'created-flight-1');
+
+    flights.add(createdFlight);
+
+    return createdFlight;
+  }
 
   Future<void> Function(String flightId)? onDeleteFlight;
 
@@ -124,6 +153,10 @@ class FakeSectionFlightRepository extends Fake implements FlightRepository {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Aviation catalog repositories
+// ---------------------------------------------------------------------------
+
 /// Catalog failures must not prevent flight association management.
 class UnavailableAirportRepository extends Fake implements AirportRepository {
   @override
@@ -174,7 +207,96 @@ class AvailableAirportRepository extends Fake implements AirportRepository {
 
     throw StateError('Unknown airport.');
   }
+
+  @override
+  Future<AirportPage> search({
+    String? query,
+    String? countryCode,
+    bool scheduledOnly = false,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    const airports = [
+      Airport(
+        id: 100,
+        ident: 'LPPT',
+        iataCode: 'LIS',
+        icaoCode: 'LPPT',
+        name: 'Humberto Delgado Airport',
+        municipality: 'Lisbon',
+        countryName: 'Portugal',
+        countryCode: 'PT',
+        type: 'large_airport',
+        scheduledService: true,
+      ),
+      Airport(
+        id: 200,
+        ident: 'LEBL',
+        iataCode: 'BCN',
+        icaoCode: 'LEBL',
+        name: 'Barcelona-El Prat Airport',
+        municipality: 'Barcelona',
+        countryName: 'Spain',
+        countryCode: 'ES',
+        type: 'large_airport',
+        scheduledService: true,
+      ),
+    ];
+
+    final normalizedQuery = query?.trim().toLowerCase();
+
+    final matches = airports.where((airport) {
+      if (countryCode != null && airport.countryCode != countryCode) {
+        return false;
+      }
+
+      if (scheduledOnly && !airport.scheduledService) {
+        return false;
+      }
+
+      if (normalizedQuery != null && normalizedQuery.isNotEmpty) {
+        return airport.displayCode.toLowerCase().contains(normalizedQuery) ||
+            airport.name.toLowerCase().contains(normalizedQuery) ||
+            (airport.municipality?.toLowerCase().contains(normalizedQuery) ??
+                false);
+      }
+
+      return true;
+    }).toList();
+
+    return AirportPage(
+      items: matches.skip(offset).take(limit).toList(),
+      total: matches.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
 }
+
+class FlightCreationCountriesRepository extends Fake
+    implements CountriesRepository {
+  @override
+  Future<List<Country>> getCountries() async {
+    return const [
+      Country(
+        code: 'PT',
+        name: 'Portugal',
+        alpha3Code: 'PRT',
+        continent: 'Europe',
+      ),
+      Country(
+        code: 'ES',
+        name: 'Spain',
+        alpha3Code: 'ESP',
+        continent: 'Europe',
+      ),
+    ];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Test application
+// ---------------------------------------------------------------------------
 
 Widget buildTestApp({
   required FakeTripAssociationRepository associationRepository,
@@ -189,17 +311,14 @@ Widget buildTestApp({
       RepositoryProvider<FlightRepository>.value(
         value: flightRepository ?? FakeSectionFlightRepository(),
       ),
-      RepositoryProvider<AirportRepository>(
-        create: (_) => UnavailableAirportRepository(),
+      RepositoryProvider<AirportRepository>.value(
+        value: airportRepository ?? UnavailableAirportRepository(),
       ),
       RepositoryProvider<AirlineRepository>(
         create: (_) => UnavailableAirlineRepository(),
       ),
-      RepositoryProvider<AirportRepository>.value(
-        value: airportRepository ?? UnavailableAirportRepository(),
-      ),
       RepositoryProvider<CountriesRepository>(
-        create: (_) => FakeCountriesRepository(),
+        create: (_) => FlightCreationCountriesRepository(),
       ),
     ],
     child: MaterialApp(
@@ -218,8 +337,98 @@ Widget buildTestApp({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
+
+/// Opens the Add menu and selects the existing flights option.
+///
+/// The same flow is reused by all tests that need the Flight Picker.
+Future<void> openExistingFlightsPicker(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+
+  await tester.pumpAndSettle();
+
+  expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
+
+  await tester.tap(find.byKey(const Key('addExistingFlightsOption')));
+
+  await tester.pumpAndSettle();
+}
+
+Future<void> openCreateFlightForm(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(const Key('createNewFlightOption')));
+
+  await tester.pumpAndSettle();
+
+  expect(find.text('Add Flight'), findsOneWidget);
+
+  expect(find.byKey(const Key('saveFlightButton')), findsOneWidget);
+}
+
+Future<void> selectFlightAirport(
+  WidgetTester tester, {
+  required String fieldKey,
+  required String countryCode,
+  required int airportId,
+}) async {
+  final field = find.byKey(Key(fieldKey));
+
+  await tester.ensureVisible(field);
+  await tester.pumpAndSettle();
+
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(ValueKey('airport-country-$countryCode')));
+
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(ValueKey('airport-$airportId')));
+
+  await tester.pumpAndSettle();
+}
+
+Future<void> createTestFlight(WidgetTester tester) async {
+  await openCreateFlightForm(tester);
+
+  await selectFlightAirport(
+    tester,
+    fieldKey: 'departureAirportField',
+    countryCode: 'PT',
+    airportId: 100,
+  );
+
+  await selectFlightAirport(
+    tester,
+    fieldKey: 'arrivalAirportField',
+    countryCode: 'ES',
+    airportId: 200,
+  );
+
+  final saveButton = find.byKey(const Key('saveFlightButton'));
+
+  await tester.ensureVisible(saveButton);
+  await tester.pumpAndSettle();
+
+  await tester.tap(saveButton);
+  await tester.pumpAndSettle();
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 void main() {
   group('TripAssociatedFlightsSection', () {
+    // -----------------------------------------------------------------------
+    // Empty state
+    // -----------------------------------------------------------------------
+
     testWidgets('shows empty state and Add action', (tester) async {
       final repository = FakeTripAssociationRepository();
 
@@ -243,6 +452,52 @@ void main() {
       expect(find.byKey(const Key('addTripFlightsButton')), findsOneWidget);
     });
 
+    // -----------------------------------------------------------------------
+    // Add menu - NEW
+    // -----------------------------------------------------------------------
+
+    testWidgets('Add menu offers existing and new flights', (tester) async {
+      final associationRepository = FakeTripAssociationRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(associationRepository: associationRepository),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open the Add menu.
+      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+
+      await tester.pumpAndSettle();
+
+      // Both actions must be available.
+      expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
+
+      expect(find.byKey(const Key('createNewFlightOption')), findsOneWidget);
+
+      expect(find.text('Add existing flights'), findsOneWidget);
+
+      expect(find.text('Create new flight'), findsOneWidget);
+
+      // Opening the menu must not create associations.
+      expect(associationRepository.addFlightCalls, 0);
+
+      // Dismiss the popup menu without selecting an action.
+      await tester.tapAt(const Offset(10, 10));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addExistingFlightsOption')), findsNothing);
+
+      expect(find.byKey(const Key('createNewFlightOption')), findsNothing);
+
+      expect(associationRepository.addFlightCalls, 0);
+    });
+
+    // -----------------------------------------------------------------------
+    // Flight list
+    // -----------------------------------------------------------------------
+
     testWidgets('displays explicitly associated flights', (tester) async {
       final repository = FakeTripAssociationRepository(
         flights: [
@@ -264,9 +519,15 @@ void main() {
       expect(find.byKey(const Key('tripFlight-flight-2')), findsOneWidget);
 
       expect(find.text('TP1234'), findsOneWidget);
+
       expect(find.text('FR5678'), findsOneWidget);
+
       expect(find.text('2'), findsOneWidget);
     });
+
+    // -----------------------------------------------------------------------
+    // Catalog fallback
+    // -----------------------------------------------------------------------
 
     testWidgets(
       'catalog failure does not hide flights or association actions',
@@ -297,6 +558,10 @@ void main() {
       },
     );
 
+    // -----------------------------------------------------------------------
+    // Cancel removal
+    // -----------------------------------------------------------------------
+
     testWidgets('canceling removal preserves the association', (tester) async {
       final repository = FakeTripAssociationRepository(
         flights: [sampleFlight()],
@@ -321,6 +586,10 @@ void main() {
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
     });
 
+    // -----------------------------------------------------------------------
+    // Remove association
+    // -----------------------------------------------------------------------
+
     testWidgets('removing a flight updates Trip associations', (tester) async {
       final repository = FakeTripAssociationRepository(
         flights: [sampleFlight()],
@@ -344,12 +613,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.removeFlightCalls, 1);
+
       expect(repository.flights, isEmpty);
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsNothing);
 
       expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
     });
+
+    // -----------------------------------------------------------------------
+    // Existing flights picker - UPDATED
+    // -----------------------------------------------------------------------
 
     testWidgets('Add opens the existing flights picker', (tester) async {
       final associationRepository = FakeTripAssociationRepository();
@@ -367,9 +641,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
-
-      await tester.pumpAndSettle();
+      // Open Add menu and select "Add existing flights".
+      await openExistingFlightsPicker(tester);
 
       expect(find.text('Add flights'), findsOneWidget);
 
@@ -380,6 +653,10 @@ void main() {
 
       expect(flightRepository.getFlightsCalls, 1);
     });
+
+    // -----------------------------------------------------------------------
+    // Add existing flight - UPDATED
+    // -----------------------------------------------------------------------
 
     testWidgets('selecting a flight associates it with the Trip', (
       tester,
@@ -406,9 +683,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
-
-      await tester.pumpAndSettle();
+      // Open existing flights picker through the Add menu.
+      await openExistingFlightsPicker(tester);
 
       await tester.tap(find.byKey(const Key('tripFlightPicker-flight-1')));
 
@@ -424,6 +700,10 @@ void main() {
 
       expect(find.byKey(const Key('tripFlightsEmptyState')), findsNothing);
     });
+
+    // -----------------------------------------------------------------------
+    // Exclude already associated flights - UPDATED
+    // -----------------------------------------------------------------------
 
     testWidgets('already-associated flights are excluded from the picker', (
       tester,
@@ -448,9 +728,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
-
-      await tester.pumpAndSettle();
+      // Open existing flights picker through the Add menu.
+      await openExistingFlightsPicker(tester);
 
       expect(find.byKey(const Key('tripFlightPicker-flight-1')), findsNothing);
 
@@ -459,6 +738,11 @@ void main() {
         findsOneWidget,
       );
     });
+
+    // -----------------------------------------------------------------------
+    // Flight Details navigation
+    // -----------------------------------------------------------------------
+
     testWidgets('opens Flight Details for the selected associated flight', (
       tester,
     ) async {
@@ -491,10 +775,16 @@ void main() {
       expect(find.byKey(const Key('deleteFlightButton')), findsOneWidget);
 
       expect(flightRepository.getFlightDetailCalls, 1);
+
       expect(flightRepository.lastRequestedFlightId, 'flight-1');
 
       expect(flightRepository.deleteFlightCalls, 0);
     });
+
+    // -----------------------------------------------------------------------
+    // Return from Flight Details
+    // -----------------------------------------------------------------------
+
     testWidgets('returning from Flight Details preserves the association', (
       tester,
     ) async {
@@ -523,6 +813,7 @@ void main() {
       expect(find.text('Flight Details'), findsOneWidget);
 
       await tester.pageBack();
+
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
@@ -530,8 +821,14 @@ void main() {
       expect(associationRepository.flights, hasLength(1));
 
       expect(flightRepository.deleteFlightCalls, 0);
+
       expect(associationRepository.removeFlightCalls, 0);
     });
+
+    // -----------------------------------------------------------------------
+    // Global Flight deletion
+    // -----------------------------------------------------------------------
+
     testWidgets('deleting a Flight from details refreshes Trip associations', (
       tester,
     ) async {
@@ -543,7 +840,7 @@ void main() {
 
       final flightRepository = FakeSectionFlightRepository(flights: [flight]);
 
-      // Simulate the backend's ON DELETE CASCADE behavior:
+      // Simulate backend cascade deletion:
       // deleting a Flight removes its Trip associations.
       flightRepository.onDeleteFlight = (flightId) async {
         associationRepository.flights.removeWhere(
@@ -563,7 +860,7 @@ void main() {
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
-      // Open the associated Flight.
+      // Open Flight Details.
       await tester.tap(find.byKey(const Key('viewTripFlight-flight-1')));
 
       await tester.pumpAndSettle();
@@ -579,44 +876,315 @@ void main() {
 
       expect(find.textContaining('permanently removed'), findsOneWidget);
 
-      // Confirm global deletion.
+      // Confirm deletion.
       await tester.tap(find.text('Delete Flight'));
 
       await tester.pumpAndSettle();
 
-      // The Flight was deleted globally.
+      // Flight was deleted globally.
       expect(flightRepository.deleteFlightCalls, 1);
+
       expect(flightRepository.lastDeletedFlightId, 'flight-1');
 
       expect(flightRepository.flights, isEmpty);
 
-      // The associated Flight disappears after returning to the Trip.
+      // The Trip association disappears after refresh.
       expect(find.text('Flight Details'), findsNothing);
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsNothing);
 
       expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
 
-      // No explicit "remove from Trip" request was necessary.
+      // No explicit "Remove from Trip" request was made.
       expect(associationRepository.removeFlightCalls, 0);
     });
-  });
-  testWidgets('shows IATA airport codes when catalog is available', (
-    tester,
-  ) async {
-    final repository = FakeTripAssociationRepository(flights: [sampleFlight()]);
 
-    await tester.pumpWidget(
-      buildTestApp(
-        associationRepository: repository,
-        airportRepository: AvailableAirportRepository(),
-      ),
+    // -----------------------------------------------------------------------
+    // IATA codes
+    // -----------------------------------------------------------------------
+
+    testWidgets('shows IATA airport codes when catalog is available', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(
+        buildTestApp(
+          associationRepository: repository,
+          airportRepository: AvailableAirportRepository(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('LIS → BCN'), findsOneWidget);
+
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
+    });
+    testWidgets('Add menu fits a narrow mobile screen', (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        buildTestApp(associationRepository: FakeTripAssociationRepository()),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
+
+      expect(find.byKey(const Key('createNewFlightOption')), findsOneWidget);
+
+      // Any RenderFlex overflow would fail this test automatically.
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('Create new flight opens the existing flight form', (
+      tester,
+    ) async {
+      final associationRepository = FakeTripAssociationRepository();
+
+      final flightRepository = FakeSectionFlightRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          associationRepository: associationRepository,
+          flightRepository: flightRepository,
+          airportRepository: AvailableAirportRepository(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open the Add menu.
+      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+
+      await tester.pumpAndSettle();
+
+      // Choose to create a new Flight.
+      await tester.tap(find.byKey(const Key('createNewFlightOption')));
+
+      await tester.pumpAndSettle();
+
+      // The existing Flight creation form is reused.
+      expect(find.text('Add Flight'), findsOneWidget);
+
+      expect(find.byKey(const Key('saveFlightButton')), findsOneWidget);
+
+      // Simply opening the form must not associate anything.
+      expect(associationRepository.addFlightCalls, 0);
+
+      expect(associationRepository.flights, isEmpty);
+    });
+    testWidgets(
+      'canceling new flight creation does not create or associate a flight',
+      (tester) async {
+        final associationRepository = FakeTripAssociationRepository();
+
+        final flightRepository = FakeSectionFlightRepository();
+
+        await tester.pumpWidget(
+          buildTestApp(
+            associationRepository: associationRepository,
+            flightRepository: flightRepository,
+            airportRepository: AvailableAirportRepository(),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        await openCreateFlightForm(tester);
+
+        await tester.tap(find.byTooltip('Close'));
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add Flight'), findsNothing);
+
+        expect(flightRepository.createFlightCalls, 0);
+
+        expect(associationRepository.addFlightCalls, 0);
+
+        expect(associationRepository.flights, isEmpty);
+
+        expect(flightRepository.flights, isEmpty);
+
+        expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+      },
     );
+    testWidgets(
+      'creating a flight and choosing Not now preserves an independent flight',
+      (tester) async {
+        final associationRepository = FakeTripAssociationRepository();
 
-    await tester.pumpAndSettle();
+        final flightRepository = FakeSectionFlightRepository();
 
-    expect(find.text('LIS → BCN'), findsOneWidget);
+        await tester.pumpWidget(
+          buildTestApp(
+            associationRepository: associationRepository,
+            flightRepository: flightRepository,
+            airportRepository: AvailableAirportRepository(),
+          ),
+        );
 
-    expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
+        await tester.pumpAndSettle();
+
+        await createTestFlight(tester);
+
+        // Flight was persisted independently.
+        expect(flightRepository.createFlightCalls, 1);
+
+        expect(flightRepository.flights, hasLength(1));
+
+        expect(flightRepository.flights.single.id, 'created-flight-1');
+
+        // Association requires explicit confirmation.
+        expect(find.text('Add flight to this Trip?'), findsOneWidget);
+
+        expect(associationRepository.addFlightCalls, 0);
+
+        // User decides not to associate the Flight.
+        await tester.tap(
+          find.byKey(const Key('skipNewFlightAssociationButton')),
+        );
+
+        await tester.pumpAndSettle();
+
+        // Flight remains globally persisted.
+        expect(flightRepository.flights, hasLength(1));
+
+        // Trip remains unchanged.
+        expect(associationRepository.addFlightCalls, 0);
+
+        expect(associationRepository.flights, isEmpty);
+
+        expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+      },
+    );
+    testWidgets(
+      'creating a flight and confirming associates it with the Trip',
+      (tester) async {
+        final associationRepository = FakeTripAssociationRepository();
+
+        final flightRepository = FakeSectionFlightRepository();
+
+        associationRepository.onAddFlight = (receivedTripId, flightId) async {
+          expect(receivedTripId, tripId);
+          expect(flightId, 'created-flight-1');
+
+          final createdFlight = flightRepository.flights.singleWhere(
+            (flight) => flight.id == flightId,
+          );
+
+          associationRepository.flights.add(createdFlight);
+        };
+
+        await tester.pumpWidget(
+          buildTestApp(
+            associationRepository: associationRepository,
+            flightRepository: flightRepository,
+            airportRepository: AvailableAirportRepository(),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        await createTestFlight(tester);
+
+        expect(flightRepository.createFlightCalls, 1);
+
+        expect(find.text('Add flight to this Trip?'), findsOneWidget);
+
+        // No association before confirmation.
+        expect(associationRepository.addFlightCalls, 0);
+
+        await tester.tap(
+          find.byKey(const Key('confirmNewFlightAssociationButton')),
+        );
+
+        await tester.pumpAndSettle();
+
+        // Flight is persisted globally.
+        expect(flightRepository.flights, hasLength(1));
+
+        // Flight is explicitly associated.
+        expect(associationRepository.addFlightCalls, 1);
+
+        expect(associationRepository.flights, hasLength(1));
+
+        expect(associationRepository.flights.single.id, 'created-flight-1');
+
+        // Trip Details reflects the new association.
+        expect(
+          find.byKey(const Key('tripFlight-created-flight-1')),
+          findsOneWidget,
+        );
+
+        expect(find.byKey(const Key('tripFlightsEmptyState')), findsNothing);
+      },
+    );
+    testWidgets(
+      'association failure preserves the newly created independent flight',
+      (tester) async {
+        final associationRepository = FakeTripAssociationRepository();
+
+        final flightRepository = FakeSectionFlightRepository();
+
+        associationRepository.onAddFlight = (receivedTripId, flightId) async {
+          expect(receivedTripId, tripId);
+          expect(flightId, 'created-flight-1');
+
+          throw StateError('Simulated association failure');
+        };
+
+        await tester.pumpWidget(
+          buildTestApp(
+            associationRepository: associationRepository,
+            flightRepository: flightRepository,
+            airportRepository: AvailableAirportRepository(),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        await createTestFlight(tester);
+
+        expect(flightRepository.createFlightCalls, 1);
+
+        expect(flightRepository.flights, hasLength(1));
+
+        await tester.tap(
+          find.byKey(const Key('confirmNewFlightAssociationButton')),
+        );
+
+        await tester.pumpAndSettle();
+
+        // Association was attempted.
+        expect(associationRepository.addFlightCalls, 1);
+
+        // The Trip did not receive the Flight.
+        expect(associationRepository.flights, isEmpty);
+
+        // The original Flight still exists.
+        expect(flightRepository.flights, hasLength(1));
+
+        expect(flightRepository.flights.single.id, 'created-flight-1');
+
+        // No global deletion must occur.
+        expect(flightRepository.deleteFlightCalls, 0);
+
+        expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+      },
+    );
   });
 }

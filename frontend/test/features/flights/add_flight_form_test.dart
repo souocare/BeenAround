@@ -272,6 +272,7 @@ void main() {
     WidgetTester tester, {
     required RecordingFlightRepository flightRepository,
     required ValueChanged<bool> onResult,
+    ValueChanged<Flight?>? onCreatedFlight,
     TargetPlatform platform = TargetPlatform.iOS,
     AirlineRepository? airlineRepository,
   }) async {
@@ -306,6 +307,12 @@ void main() {
                 return Center(
                   child: FilledButton(
                     onPressed: () async {
+                      if (onCreatedFlight != null) {
+                        final flight = await showAddFlightWithResult(context);
+                        onCreatedFlight(flight);
+                        return;
+                      }
+
                       final result = await showAddFlight(context);
                       onResult(result);
                     },
@@ -917,6 +924,158 @@ void main() {
         expect(input.flightNumber, 'TP1019');
 
         expect(result, isTrue);
+      },
+    );
+    testWidgets('showAddFlightWithResult returns the created Flight', (
+      tester,
+    ) async {
+      final repository = RecordingFlightRepository();
+
+      Flight? createdFlight;
+      var callbackCalled = false;
+
+      await pumpIntegrationApp(
+        tester,
+        flightRepository: repository,
+        onResult: (_) {},
+        onCreatedFlight: (flight) {
+          callbackCalled = true;
+          createdFlight = flight;
+        },
+      );
+
+      // Select departure airport.
+      await selectAirport(
+        tester,
+        fieldKey: 'departureAirportField',
+        countryCode: 'PT',
+        airportId: 100,
+      );
+
+      // Select arrival airport.
+      await selectAirport(
+        tester,
+        fieldKey: 'arrivalAirportField',
+        countryCode: 'ES',
+        airportId: 200,
+      );
+
+      // Enter flight number.
+      await tester.enterText(
+        find.byKey(const Key('flightNumberField')),
+        'TP 1019',
+      );
+
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      // Persist the Flight.
+      await tester.tap(find.byKey(const Key('saveFlightButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(repository.createCalls, 1);
+
+      expect(callbackCalled, isTrue);
+      expect(createdFlight, isNotNull);
+
+      expect(createdFlight!.id, 'created-flight');
+      expect(createdFlight!.departureAirportId, 100);
+      expect(createdFlight!.arrivalAirportId, 200);
+
+      expect(createdFlight!.flightNumber, 'TP1019');
+
+      expect(find.text('Add Flight'), findsNothing);
+    });
+    testWidgets('showAddFlightWithResult returns null on cancellation', (
+      tester,
+    ) async {
+      final repository = RecordingFlightRepository();
+
+      Flight? createdFlight;
+      var callbackCalled = false;
+
+      await pumpIntegrationApp(
+        tester,
+        flightRepository: repository,
+        onResult: (_) {},
+        onCreatedFlight: (flight) {
+          callbackCalled = true;
+          createdFlight = flight;
+        },
+      );
+
+      expect(find.text('Add Flight'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Close'));
+
+      await tester.pumpAndSettle();
+
+      expect(callbackCalled, isTrue);
+      expect(createdFlight, isNull);
+
+      expect(repository.createCalls, 0);
+
+      expect(find.text('Add Flight'), findsNothing);
+    });
+    testWidgets(
+      'showAddFlightWithResult keeps form open after creation failure',
+      (tester) async {
+        final repository = FlakyFlightRepository();
+
+        Flight? createdFlight;
+        var callbackCalled = false;
+
+        await pumpIntegrationApp(
+          tester,
+          flightRepository: repository,
+          onResult: (_) {},
+          onCreatedFlight: (flight) {
+            callbackCalled = true;
+            createdFlight = flight;
+          },
+        );
+
+        await selectAirport(
+          tester,
+          fieldKey: 'departureAirportField',
+          countryCode: 'PT',
+          airportId: 100,
+        );
+
+        await selectAirport(
+          tester,
+          fieldKey: 'arrivalAirportField',
+          countryCode: 'ES',
+          airportId: 200,
+        );
+
+        await tester.tap(find.byKey(const Key('saveFlightButton')));
+
+        await tester.pumpAndSettle();
+
+        // First request failed.
+        expect(repository.createCalls, 1);
+
+        expect(find.text('Unable to save your flight.'), findsOneWidget);
+
+        // The form remains available for retry.
+        expect(find.text('Add Flight'), findsOneWidget);
+
+        expect(callbackCalled, isFalse);
+        expect(createdFlight, isNull);
+
+        // Retry.
+        await tester.tap(find.byKey(const Key('saveFlightButton')));
+
+        await tester.pumpAndSettle();
+
+        expect(repository.createCalls, 2);
+
+        expect(callbackCalled, isTrue);
+        expect(createdFlight?.id, 'created-flight');
+
+        expect(find.text('Add Flight'), findsNothing);
       },
     );
   });
