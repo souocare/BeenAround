@@ -9,6 +9,14 @@ import '../../application/flights_cubit.dart';
 import '../../application/flights_state.dart';
 
 import 'flight_card.dart';
+import '../../application/flight_catalog_resolver.dart';
+import '../../application/flight_details_cubit.dart';
+
+import '../../domain/flight_repository.dart';
+import '../../domain/airport_repository.dart';
+import '../../domain/airline_repository.dart';
+
+import '../pages/flight_details_page.dart';
 
 class FlightsList extends StatelessWidget {
   const FlightsList({super.key});
@@ -21,6 +29,35 @@ class FlightsList extends StatelessWidget {
 
 class _FlightsListContent extends StatelessWidget {
   const _FlightsListContent();
+
+  Future<void> _openFlightDetails(BuildContext context, String flightId) async {
+    // Capture dependencies before pushing a new route.
+    //
+    // The new route may not inherit repository providers
+    // registered below the application's Navigator.
+    final flightRepository = context.read<FlightRepository>();
+    final airportRepository = context.read<AirportRepository>();
+    final airlineRepository = context.read<AirlineRepository>();
+
+    final resolver = FlightCatalogResolver(
+      airportRepository: airportRepository,
+      airlineRepository: airlineRepository,
+    );
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) {
+          return BlocProvider<FlightDetailsCubit>(
+            create: (_) => FlightDetailsCubit(
+              repository: flightRepository,
+              catalogResolver: resolver,
+            )..load(flightId),
+            child: FlightDetailsPage(flightId: flightId),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,18 +94,30 @@ class _FlightsListContent extends StatelessWidget {
             for (final flight in state.flights)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: FlightCard(
-                  flight: flight,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    key: ValueKey('open-flight-${flight.id}'),
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => _openFlightDetails(context, flight.id),
+                    child: FlightCard(
+                      flight: flight,
 
-                  departureAirport: state.airportFor(flight.departureAirportId),
+                      departureAirport: state.airportFor(
+                        flight.departureAirportId,
+                      ),
 
-                  arrivalAirport: state.airportFor(flight.arrivalAirportId),
+                      arrivalAirport: state.airportFor(flight.arrivalAirportId),
 
-                  airline: flight.airlineId == null
-                      ? null
-                      : state.airlineFor(flight.airlineId!),
+                      airline: flight.airlineId == null
+                          ? null
+                          : state.airlineFor(flight.airlineId!),
 
-                  airlineName: state.airlineNameFor(flight),
+                      airlineName: state.airlineNameFor(flight),
+                    ),
+                  ),
                 ),
               ),
 

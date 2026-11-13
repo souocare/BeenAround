@@ -73,8 +73,15 @@ class FlightCatalogResolver {
     }
 
     await Future.wait<void>([
-      for (final id in airportIds) _resolveAirport(id).then((_) {}),
-      for (final id in airlineIds) _resolveAirline(id).then((_) {}),
+      for (final id in airportIds)
+        _resolveAirport(
+          id,
+        ).then((_) {}, onError: (Object error, StackTrace stackTrace) {}),
+
+      for (final id in airlineIds)
+        _resolveAirline(
+          id,
+        ).then((_) {}, onError: (Object error, StackTrace stackTrace) {}),
     ]);
 
     return ResolvedFlightCatalog(

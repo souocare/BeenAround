@@ -226,14 +226,27 @@ void main() {
       arrivalAirportId: 200,
     );
 
-    await expectLater(resolver.resolve([targetFlight]), throwsStateError);
+    // First resolution: one airport request fails.
+    //
+    // The resolver must return the successful metadata
+    // instead of failing the entire operation.
+    final firstCatalog = await resolver.resolve([targetFlight]);
 
-    final catalog = await resolver.resolve([targetFlight]);
+    expect(firstCatalog.airportFor(100), isNull);
+    expect(firstCatalog.airportFor(200), isNotNull);
 
-    expect(catalog.airportFor(100), isNotNull);
-    expect(catalog.airportFor(200), isNotNull);
+    expect(airportRepository.requests[100], 1);
+    expect(airportRepository.requests[200], 1);
+
+    // Second resolution: only the failed request
+    // should be retried.
+    final secondCatalog = await resolver.resolve([targetFlight]);
+
+    expect(secondCatalog.airportFor(100), isNotNull);
+    expect(secondCatalog.airportFor(200), isNotNull);
 
     expect(airportRepository.requests[100], 2);
+    expect(airportRepository.requests[200], 1);
   });
 
   test('clear removes successful cache entries', () async {
