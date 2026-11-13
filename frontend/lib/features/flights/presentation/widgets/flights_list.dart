@@ -17,6 +17,7 @@ import '../../domain/airport_repository.dart';
 import '../../domain/airline_repository.dart';
 
 import '../pages/flight_details_page.dart';
+import '../../../explore/data/countries_repository.dart';
 
 class FlightsList extends StatelessWidget {
   const FlightsList({super.key});
@@ -31,32 +32,68 @@ class _FlightsListContent extends StatelessWidget {
   const _FlightsListContent();
 
   Future<void> _openFlightDetails(BuildContext context, String flightId) async {
-    // Capture dependencies before pushing a new route.
+    // Capture dependencies before opening a Navigator route.
     //
-    // The new route may not inherit repository providers
-    // registered below the application's Navigator.
+    // Providers registered below the Navigator are not
+    // necessarily inherited by the new route.
     final flightRepository = context.read<FlightRepository>();
     final airportRepository = context.read<AirportRepository>();
     final airlineRepository = context.read<AirlineRepository>();
+    final countriesRepository = context.read<CountriesRepository>();
+
+    final flightsCubit = context.read<FlightsCubit>();
 
     final resolver = FlightCatalogResolver(
       airportRepository: airportRepository,
       airlineRepository: airlineRepository,
     );
 
+    // Track successful edits without refreshing the list
+    // when the user only views a flight.
+    var flightWasUpdated = false;
+
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) {
-          return BlocProvider<FlightDetailsCubit>(
-            create: (_) => FlightDetailsCubit(
-              repository: flightRepository,
-              catalogResolver: resolver,
-            )..load(flightId),
-            child: FlightDetailsPage(flightId: flightId),
+          return MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<FlightRepository>.value(
+                value: flightRepository,
+              ),
+              RepositoryProvider<AirportRepository>.value(
+                value: airportRepository,
+              ),
+              RepositoryProvider<AirlineRepository>.value(
+                value: airlineRepository,
+              ),
+              RepositoryProvider<CountriesRepository>.value(
+                value: countriesRepository,
+              ),
+            ],
+            child: BlocProvider<FlightDetailsCubit>(
+              create: (_) => FlightDetailsCubit(
+                repository: flightRepository,
+                catalogResolver: resolver,
+              )..load(flightId),
+              child: FlightDetailsPage(
+                flightId: flightId,
+                onFlightUpdated: () {
+                  flightWasUpdated = true;
+                },
+              ),
+            ),
           );
         },
       ),
     );
+
+    if (!context.mounted || flightsCubit.isClosed) {
+      return;
+    }
+
+    if (flightWasUpdated) {
+      await flightsCubit.refresh();
+    }
   }
 
   @override

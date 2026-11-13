@@ -1,3 +1,4 @@
+import 'package:beenaround/app/widgets/adaptive_confirmation_dialog.dart';
 import 'package:beenaround/features/explore/presentation/widgets/adaptive_visit_date_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -22,13 +23,39 @@ import '../../domain/flight_number.dart';
 import 'airline_avatar.dart';
 import 'adaptive_flight_time_picker.dart';
 import 'flight_input_decoration.dart';
+import '../../domain/airline.dart';
+import '../../domain/flight_patch_builder.dart';
 
-/// Form for creating an independent personal flight record.
+/// Shared form for creating or editing an independent personal flight.
 ///
-/// Flight creation does not modify visits, countries, cities,
-/// Wishlist entries or Trip associations.
+/// In create mode, fields start empty.
+///
+/// In edit mode, the existing flight and resolved aviation
+/// metadata are used to populate the form.
+///
+/// Neither operation creates visits or Trip associations.
 class AddFlightForm extends StatefulWidget {
-  const AddFlightForm({super.key});
+  const AddFlightForm({
+    this.initialFlight,
+    this.initialDepartureAirport,
+    this.initialArrivalAirport,
+    this.initialAirline,
+    super.key,
+  }) : assert(
+         initialFlight != null ||
+             (initialDepartureAirport == null &&
+                 initialArrivalAirport == null &&
+                 initialAirline == null),
+       );
+
+  final Flight? initialFlight;
+
+  final Airport? initialDepartureAirport;
+  final Airport? initialArrivalAirport;
+
+  final Airline? initialAirline;
+
+  bool get isEditing => initialFlight != null;
 
   @override
   State<AddFlightForm> createState() => _AddFlightFormState();
@@ -67,11 +94,86 @@ class _AddFlightFormState extends State<AddFlightForm> {
 
   bool _isDetectingAirline = false;
 
+  bool _allowPop = false;
+  bool _closing = false;
+
   @override
   void initState() {
     super.initState();
 
-    _departureDate = DateUtils.dateOnly(DateTime.now());
+    final flight = widget.initialFlight;
+
+    if (flight == null) {
+      _departureDate = DateUtils.dateOnly(DateTime.now());
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // Route
+    // ---------------------------------------------------------
+
+    _departureAirport = widget.initialDepartureAirport;
+    _arrivalAirport = widget.initialArrivalAirport;
+
+    // ---------------------------------------------------------
+    // Airline
+    // ---------------------------------------------------------
+
+    if (flight.airlineId != null && widget.initialAirline != null) {
+      _airlineSelection = AirlineSelection.catalog(widget.initialAirline!);
+    } else if (flight.airlineName != null &&
+        flight.airlineName!.trim().isNotEmpty) {
+      _airlineSelection = AirlineSelection.manual(flight.airlineName!);
+    }
+
+    // ---------------------------------------------------------
+    // Schedule
+    // ---------------------------------------------------------
+
+    _departureDate = DateUtils.dateOnly(DateTime.parse(flight.departureOn));
+
+    _arrivalDate = flight.arrivalOn == null
+        ? null
+        : DateUtils.dateOnly(DateTime.parse(flight.arrivalOn!));
+
+    _departureTime = _parseLocalTime(flight.departureTime);
+    _arrivalTime = _parseLocalTime(flight.arrivalTime);
+
+    // ---------------------------------------------------------
+    // Flight information
+    // ---------------------------------------------------------
+
+    _status = flight.status;
+    _cabinClass = flight.cabinClass;
+
+    _flightNumberController.text = flight.flightNumber ?? '';
+
+    _aircraftTypeController.text = flight.aircraftType ?? '';
+
+    _aircraftRegistrationController.text = flight.aircraftRegistration ?? '';
+
+    _seatController.text = flight.seat ?? '';
+
+    _notesController.text = flight.notes ?? '';
+
+    // ---------------------------------------------------------
+    // Additional details
+    // ---------------------------------------------------------
+
+    _showAdditionalDetails =
+        flight.cabinClass != null ||
+        flight.aircraftType?.isNotEmpty == true ||
+        flight.aircraftRegistration?.isNotEmpty == true ||
+        flight.seat?.isNotEmpty == true ||
+        flight.notes?.isNotEmpty == true;
+
+    // Initializing the flight number must not trigger
+    // automatic airline detection.
+    //
+    // Only subsequent user edits may trigger detection.
+    _lastAirlineCodeSignature = FlightNumber.airlineCodeCandidates(
+      _flightNumberController.text,
+    ).join('|');
   }
 
   @override
@@ -99,6 +201,27 @@ class _AddFlightFormState extends State<AddFlightForm> {
     return '$year-$month-$day';
   }
 
+  TimeOfDay? _parseLocalTime(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    final components = value.split(':');
+
+    if (components.length < 2) {
+      throw FormatException('Invalid flight time: $value');
+    }
+
+    final hour = int.parse(components[0]);
+    final minute = int.parse(components[1]);
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      throw FormatException('Invalid flight time: $value');
+    }
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
   String _formatApiTime(TimeOfDay time) {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
@@ -114,6 +237,43 @@ class _AddFlightFormState extends State<AddFlightForm> {
     return MaterialLocalizations.of(
       context,
     ).formatTimeOfDay(time, alwaysUse24HourFormat: true);
+  }
+
+  bool get _hasUnsavedChanges {
+    final original = widget.initialFlight;
+
+    // For now, unsaved-change confirmation applies
+    // only to editing existing flights.
+    if (original == null) {
+      return false;
+    }
+
+    // Edit mode requires resolved airport metadata.
+    //
+    // The entry point already guarantees this, but
+    // avoid building an invalid input defensively.
+    if (_departureAirport == null || _arrivalAirport == null) {
+      return true;
+    }
+
+    final edited = _buildInput();
+
+    final patch = FlightPatchBuilder.build(original: original, edited: edited);
+
+    return patch != null;
+  }
+
+  Future<bool> _confirmDiscardChanges() {
+    return showAdaptiveConfirmationDialog(
+      context,
+      title: 'Discard changes?',
+      message:
+          'You have unsaved changes to this flight. '
+          'Are you sure you want to discard them?',
+      cancelLabel: 'Keep Editing',
+      confirmLabel: 'Discard Changes',
+      isDestructive: true,
+    );
   }
 
   String? _optionalText(TextEditingController controller) {
@@ -339,6 +499,30 @@ class _AddFlightFormState extends State<AddFlightForm> {
     }
   }
 
+  FlightCreateInput _buildInput() {
+    return FlightCreateInput(
+      departureAirportId: _departureAirport!.id,
+      arrivalAirportId: _arrivalAirport!.id,
+      departureOn: _formatApiDate(_departureDate),
+      status: _status,
+      airlineId: _airlineSelection?.airlineId,
+      airlineName: _airlineSelection?.airlineName,
+      flightNumber: _flightNumberController.text.trim().isEmpty
+          ? null
+          : FlightNumber.normalize(_flightNumberController.text),
+      departureTime: _departureTime == null
+          ? null
+          : _formatApiTime(_departureTime!),
+      arrivalOn: _arrivalDate == null ? null : _formatApiDate(_arrivalDate!),
+      arrivalTime: _arrivalTime == null ? null : _formatApiTime(_arrivalTime!),
+      cabinClass: _cabinClass,
+      aircraftType: _optionalText(_aircraftTypeController),
+      aircraftRegistration: _optionalText(_aircraftRegistrationController),
+      seat: _optionalText(_seatController),
+      notes: _optionalText(_notesController),
+    );
+  }
+
   Future<void> _save() async {
     final cubit = context.read<SaveFlightCubit>();
 
@@ -362,33 +546,68 @@ class _AddFlightFormState extends State<AddFlightForm> {
       return;
     }
 
-    final input = FlightCreateInput(
-      departureAirportId: _departureAirport!.id,
-      arrivalAirportId: _arrivalAirport!.id,
-      departureOn: _formatApiDate(_departureDate),
-      status: _status,
-      airlineId: _airlineSelection?.airlineId,
-      airlineName: _airlineSelection?.airlineName,
-      flightNumber: _flightNumberController.text.trim().isEmpty
-          ? null
-          : FlightNumber.normalize(_flightNumberController.text),
-      departureTime: _departureTime == null
-          ? null
-          : _formatApiTime(_departureTime!),
-      arrivalOn: _arrivalDate == null ? null : _formatApiDate(_arrivalDate!),
-      arrivalTime: _arrivalTime == null ? null : _formatApiTime(_arrivalTime!),
-      cabinClass: _cabinClass,
-      aircraftType: _optionalText(_aircraftTypeController),
-      aircraftRegistration: _optionalText(_aircraftRegistrationController),
-      seat: _optionalText(_seatController),
-      notes: _optionalText(_notesController),
-    );
+    final input = _buildInput();
 
-    final success = await cubit.save(input);
+    final original = widget.initialFlight;
+
+    bool success;
+
+    if (original == null) {
+      // Create a new flight.
+      success = await cubit.save(input);
+    } else {
+      // Update only modified fields.
+      final patch = FlightPatchBuilder.build(original: original, edited: input);
+
+      if (patch == null) {
+        // No changes: close without an HTTP request.
+        _closeWithResult(false);
+        return;
+      }
+
+      success = await cubit.update(flightId: original.id, patch: patch);
+    }
 
     if (!mounted || !success) return;
 
-    Navigator.of(context).pop(true);
+    _closeWithResult(true);
+  }
+
+  void _closeWithResult(bool result) {
+    if (!mounted || _closing) return;
+
+    _closing = true;
+
+    setState(() {
+      _allowPop = true;
+    });
+
+    // PopScope must rebuild with canPop=true before
+    // the route is programmatically dismissed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      Navigator.of(context).pop(result);
+    });
+  }
+
+  Future<void> _requestClose() async {
+    if (!mounted || _closing || _isSaving) {
+      return;
+    }
+
+    if (!_hasUnsavedChanges) {
+      _closeWithResult(false);
+      return;
+    }
+
+    final shouldDiscard = await _confirmDiscardChanges();
+
+    if (!mounted || _closing || !shouldDiscard) {
+      return;
+    }
+
+    _closeWithResult(false);
   }
 
   Widget _buildInputLabel(String label) {
@@ -411,115 +630,133 @@ class _AddFlightFormState extends State<AddFlightForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return BlocBuilder<SaveFlightCubit, SaveFlightState>(
-      builder: (context, state) {
-        return Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Add Flight',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Record a flight in your travel history.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: state.isSaving
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
+    return PopScope<bool>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || _closing) {
+          return;
+        }
 
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+        _requestClose();
+      },
+      child: BlocBuilder<SaveFlightCubit, SaveFlightState>(
+        builder: (context, state) {
+          return Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Row(
                     children: [
-                      _buildFlightInformationSection(context),
-
-                      const SizedBox(height: 20),
-
-                      _buildRouteSection(context),
-
-                      const SizedBox(height: 20),
-
-                      _buildDateSection(context),
-
-                      const SizedBox(height: 20),
-
-                      _buildStatusSection(context),
-
-                      const SizedBox(height: 16),
-
-                      _buildAdditionalDetailsSection(context),
-
-                      if (_showValidationErrors &&
-                          _arrivalTime != null &&
-                          _arrivalDate == null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            'Select an arrival date when an arrival '
-                            'time is provided.',
-                            style: TextStyle(color: theme.colorScheme.error),
-                          ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.isEditing ? 'Edit Flight' : 'Add Flight',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.isEditing
+                                  ? 'Update the details of your flight.'
+                                  : 'Record a flight in your travel history.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
-
-                      if (state.hasError) ...[
-                        const SizedBox(height: 16),
-                        _buildSaveError(context, state),
-                      ],
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: state.isSaving || _closing
+                            ? null
+                            : _requestClose,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                     ],
                   ),
                 ),
-              ),
 
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: FilledButton.icon(
-                    key: const Key('saveFlightButton'),
-                    onPressed: state.isSaving ? null : _save,
-                    icon: state.isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check_rounded),
-                    label: Text(state.isSaving ? 'Saving...' : 'Save Flight'),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildFlightInformationSection(context),
+
+                        const SizedBox(height: 20),
+
+                        _buildRouteSection(context),
+
+                        const SizedBox(height: 20),
+
+                        _buildDateSection(context),
+
+                        const SizedBox(height: 20),
+
+                        _buildStatusSection(context),
+
+                        const SizedBox(height: 16),
+
+                        _buildAdditionalDetailsSection(context),
+
+                        if (_showValidationErrors &&
+                            _arrivalTime != null &&
+                            _arrivalDate == null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              'Select an arrival date when an arrival '
+                              'time is provided.',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                          ),
+
+                        if (state.hasError) ...[
+                          const SizedBox(height: 16),
+                          _buildSaveError(context, state),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: FilledButton.icon(
+                      key: const Key('saveFlightButton'),
+                      onPressed: state.isSaving ? null : _save,
+                      icon: state.isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check_rounded),
+                      label: Text(
+                        state.isSaving
+                            ? 'Saving...'
+                            : widget.isEditing
+                            ? 'Save Changes'
+                            : 'Save Flight',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

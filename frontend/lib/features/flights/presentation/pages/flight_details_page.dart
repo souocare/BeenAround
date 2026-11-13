@@ -15,6 +15,7 @@ import '../../domain/flight_distance.dart';
 import '../widgets/airline_avatar.dart';
 import '../widgets/flight_route_map.dart';
 import '../../domain/flight_timing.dart';
+import '../widgets/show_edit_flight.dart';
 
 /// Read-only details of an authenticated user's flight.
 ///
@@ -23,9 +24,69 @@ import '../../domain/flight_timing.dart';
 ///
 /// This page does not create or modify visits or Trips.
 class FlightDetailsPage extends StatelessWidget {
-  const FlightDetailsPage({required this.flightId, super.key});
+  const FlightDetailsPage({
+    required this.flightId,
+    this.onFlightUpdated,
+    super.key,
+  });
 
   final String flightId;
+
+  /// Called after the user successfully updates this flight.
+  ///
+  /// The parent decides how to refresh its own data.
+  final VoidCallback? onFlightUpdated;
+
+  Future<void> _editFlight(
+    BuildContext context,
+    FlightDetailsState state,
+  ) async {
+    final flight = state.flight;
+    final departure = state.departureAirport;
+    final arrival = state.arrivalAirport;
+    final airline = state.airline;
+
+    // The edit flow requires resolved catalog metadata.
+    //
+    // Never initialize an editable form with missing or
+    // mismatched airport / catalog airline information.
+    if (flight == null ||
+        departure?.id != flight.departureAirportId ||
+        arrival?.id != flight.arrivalAirportId ||
+        (flight.airlineId != null && airline?.id != flight.airlineId)) {
+      return;
+    }
+
+    // Capture the Cubit before opening the modal route.
+    final detailsCubit = context.read<FlightDetailsCubit>();
+
+    final updated = await showEditFlight(
+      context,
+      flight: flight,
+      departureAirport: departure!,
+      arrivalAirport: arrival!,
+      airline: airline,
+    );
+
+    if (!updated || !context.mounted || detailsCubit.isClosed) {
+      return;
+    }
+
+    // Notify the parent that the persisted flight changed.
+    //
+    // The Flight History will refresh when the user returns.
+    onFlightUpdated?.call();
+
+    // Reload the detail from the backend.
+    //
+    // This refreshes:
+    // - Flight fields.
+    // - UTC offsets and duration.
+    // - Airport metadata.
+    // - Airline metadata.
+    // - Route map and geographic distance.
+    await detailsCubit.load(flightId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +97,31 @@ class FlightDetailsPage extends StatelessWidget {
         title: const Text('Flight Details'),
         centerTitle: false,
         backgroundColor: colors.surface,
+        actions: [
+          BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
+            builder: (context, state) {
+              final flight = state.flight;
+
+              final canEdit =
+                  state.isReady &&
+                  flight != null &&
+                  state.departureAirport?.id == flight.departureAirportId &&
+                  state.arrivalAirport?.id == flight.arrivalAirportId &&
+                  (flight.airlineId == null ||
+                      state.airline?.id == flight.airlineId);
+
+              return IconButton(
+                key: const Key('editFlightButton'),
+                tooltip: canEdit
+                    ? 'Edit flight'
+                    : 'Flight information must finish loading before editing',
+                onPressed: canEdit ? () => _editFlight(context, state) : null,
+                icon: const Icon(Icons.edit_outlined),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
         builder: (context, state) {
