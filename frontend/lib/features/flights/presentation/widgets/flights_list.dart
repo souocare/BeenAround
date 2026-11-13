@@ -18,6 +18,7 @@ import '../../domain/airline_repository.dart';
 
 import '../pages/flight_details_page.dart';
 import '../../../explore/data/countries_repository.dart';
+import '../../application/delete_flight_cubit.dart';
 
 class FlightsList extends StatelessWidget {
   const FlightsList({super.key});
@@ -52,8 +53,8 @@ class _FlightsListContent extends StatelessWidget {
     // when the user only views a flight.
     var flightWasUpdated = false;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final deleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) {
           return MultiRepositoryProvider(
             providers: [
@@ -70,11 +71,19 @@ class _FlightsListContent extends StatelessWidget {
                 value: countriesRepository,
               ),
             ],
-            child: BlocProvider<FlightDetailsCubit>(
-              create: (_) => FlightDetailsCubit(
-                repository: flightRepository,
-                catalogResolver: resolver,
-              )..load(flightId),
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<FlightDetailsCubit>(
+                  create: (_) => FlightDetailsCubit(
+                    repository: flightRepository,
+                    catalogResolver: resolver,
+                  )..load(flightId),
+                ),
+                BlocProvider<DeleteFlightCubit>(
+                  create: (_) =>
+                      DeleteFlightCubit(repository: flightRepository),
+                ),
+              ],
               child: FlightDetailsPage(
                 flightId: flightId,
                 onFlightUpdated: () {
@@ -91,7 +100,7 @@ class _FlightsListContent extends StatelessWidget {
       return;
     }
 
-    if (flightWasUpdated) {
+    if (flightWasUpdated || deleted == true) {
       await flightsCubit.refresh();
     }
   }

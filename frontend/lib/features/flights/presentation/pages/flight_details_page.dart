@@ -17,12 +17,16 @@ import '../widgets/flight_route_map.dart';
 import '../../domain/flight_timing.dart';
 import '../widgets/show_edit_flight.dart';
 
-/// Read-only details of an authenticated user's flight.
+import '../../../../app/widgets/adaptive_confirmation_dialog.dart';
+
+import '../../application/delete_flight_cubit.dart';
+import '../../application/delete_flight_state.dart';
+import '../../domain/flight_repository.dart';
+
+/// Details of an authenticated user's personal flight.
 ///
-/// Editing and deletion will be introduced in later M6.5
-/// increments.
-///
-/// This page does not create or modify visits or Trips.
+/// Supports editing and deleting a flight without modifying
+/// visits, countries, cities or Trip associations.
 class FlightDetailsPage extends StatelessWidget {
   const FlightDetailsPage({
     required this.flightId,
@@ -36,6 +40,50 @@ class FlightDetailsPage extends StatelessWidget {
   ///
   /// The parent decides how to refresh its own data.
   final VoidCallback? onFlightUpdated;
+
+  Future<void> _deleteFlight(BuildContext context) async {
+    final deleteCubit = context.read<DeleteFlightCubit>();
+    final detailsState = context.read<FlightDetailsCubit>().state;
+
+    if (deleteCubit.state.isDeleting ||
+        deleteCubit.state.isSuccess ||
+        !detailsState.isReady ||
+        detailsState.flight?.id != flightId) {
+      return;
+    }
+
+    final confirmed = await showAdaptiveConfirmationDialog(
+      context,
+      title: 'Delete flight?',
+      message:
+          'This flight will be permanently removed from your '
+          'travel history. This action cannot be undone.',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Delete Flight',
+      isDestructive: true,
+    );
+
+    if (!context.mounted || !confirmed) {
+      return;
+    }
+
+    // The state might have changed while the confirmation
+    // dialog was open.
+    if (deleteCubit.isClosed ||
+        deleteCubit.state.isDeleting ||
+        deleteCubit.state.isSuccess) {
+      return;
+    }
+
+    final deleted = await deleteCubit.deleteFlight(flightId);
+
+    if (!context.mounted || !deleted) {
+      return;
+    }
+
+    // Return a deletion result to the Flight History.
+    Navigator.of(context).pop(true);
+  }
 
   Future<void> _editFlight(
     BuildContext context,
@@ -92,62 +140,128 @@ class FlightDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Flight Details'),
-        centerTitle: false,
-        backgroundColor: colors.surface,
-        actions: [
-          BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
-            builder: (context, state) {
-              final flight = state.flight;
+    return BlocListener<DeleteFlightCubit, DeleteFlightState>(
+      listenWhen: (previous, current) =>
+          previous.phase != current.phase && current.hasError,
 
-              final canEdit =
-                  state.isReady &&
-                  flight != null &&
-                  state.departureAirport?.id == flight.departureAirportId &&
-                  state.arrivalAirport?.id == flight.arrivalAirportId &&
-                  (flight.airlineId == null ||
-                      state.airline?.id == flight.airlineId);
-
-              return IconButton(
-                key: const Key('editFlightButton'),
-                tooltip: canEdit
-                    ? 'Edit flight'
-                    : 'Flight information must finish loading before editing',
-                onPressed: canEdit ? () => _editFlight(context, state) : null,
-                icon: const Icon(Icons.edit_outlined),
-              );
-            },
+      listener: (context, state) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              state.errorMessage ?? 'Unable to delete your flight.',
+            ),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
-        builder: (context, state) {
-          if (state.isLoading || state.phase == FlightDetailsPhase.initial) {
-            return const AppLoadingState(message: 'Loading flight details...');
-          }
+        );
+      },
 
-          if (state.hasError) {
-            return AppErrorState(
-              title: 'Unable to load flight',
-              message:
-                  state.errorMessage ??
-                  'Something went wrong while loading this flight.',
-              onRetry: () {
-                context.read<FlightDetailsCubit>().load(flightId);
-              },
-            );
-          }
+      child: BlocBuilder<DeleteFlightCubit, DeleteFlightState>(
+        builder: (context, deleteState) {
+          return PopScope<bool>(
+            canPop: !deleteState.isDeleting,
 
-          final flight = state.flight;
+            child: Scaffold(
+              appBar: AppBar(
+                title: const Text('Flight Details'),
+                centerTitle: false,
+                backgroundColor: colors.surface,
+                actions: [
+                  BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
+                    builder: (context, state) {
+                      final flight = state.flight;
+                      final isDeleting = context.select(
+                        (DeleteFlightCubit cubit) => cubit.state.isDeleting,
+                      );
 
-          if (flight == null) {
-            return const Center(child: Text('Flight unavailable'));
-          }
+                      final canEdit =
+                          !isDeleting &&
+                          state.isReady &&
+                          flight != null &&
+                          state.departureAirport?.id ==
+                              flight.departureAirportId &&
+                          state.arrivalAirport?.id == flight.arrivalAirportId &&
+                          (flight.airlineId == null ||
+                              state.airline?.id == flight.airlineId);
 
-          return _FlightDetailsContent(flight: flight, state: state);
+                      return IconButton(
+                        key: const Key('editFlightButton'),
+                        tooltip: canEdit
+                            ? 'Edit flight'
+                            : 'Flight information must finish loading before editing',
+                        onPressed: canEdit
+                            ? () => _editFlight(context, state)
+                            : null,
+                        icon: const Icon(Icons.edit_outlined),
+                      );
+                    },
+                  ),
+                  BlocBuilder<DeleteFlightCubit, DeleteFlightState>(
+                    builder: (context, deleteState) {
+                      final detailsState = context
+                          .watch<FlightDetailsCubit>()
+                          .state;
+
+                      final canDelete =
+                          detailsState.isReady &&
+                          detailsState.flight?.id == flightId &&
+                          !deleteState.isDeleting &&
+                          !deleteState.isSuccess;
+
+                      return IconButton(
+                        key: const Key('deleteFlightButton'),
+                        tooltip: 'Delete flight',
+                        onPressed: canDelete
+                            ? () => _deleteFlight(context)
+                            : null,
+                        icon: deleteState.isDeleting
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              )
+                            : Icon(
+                                Icons.delete_outline_rounded,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              body: BlocBuilder<FlightDetailsCubit, FlightDetailsState>(
+                builder: (context, state) {
+                  if (state.isLoading ||
+                      state.phase == FlightDetailsPhase.initial) {
+                    return const AppLoadingState(
+                      message: 'Loading flight details...',
+                    );
+                  }
+
+                  if (state.hasError) {
+                    return AppErrorState(
+                      title: 'Unable to load flight',
+                      message:
+                          state.errorMessage ??
+                          'Something went wrong while loading this flight.',
+                      onRetry: () {
+                        context.read<FlightDetailsCubit>().load(flightId);
+                      },
+                    );
+                  }
+
+                  final flight = state.flight;
+
+                  if (flight == null) {
+                    return const Center(child: Text('Flight unavailable'));
+                  }
+
+                  return _FlightDetailsContent(flight: flight, state: state);
+                },
+              ),
+            ),
+          );
         },
       ),
     );
