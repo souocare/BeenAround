@@ -21,7 +21,7 @@ import '../fakes/fake_countries_repository.dart';
 import '../fakes/fake_trip_association_repository.dart';
 import 'package:beenaround/features/flights/domain/flight_input.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
-import 'package:beenaround/features/flights/domain/flight_input.dart';
+import 'package:beenaround/features/flights/presentation/widgets/flight_card.dart';
 
 const tripId = 'trip-1';
 
@@ -542,7 +542,38 @@ void main() {
 
         expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
-        expect(find.text('Airport 100 → Airport 200'), findsOneWidget);
+        final flightCard = find.byKey(const ValueKey('flight-card-flight-1'));
+
+        expect(flightCard, findsOneWidget);
+
+        expect(
+          find.descendant(of: flightCard, matching: find.text('100')),
+          findsOneWidget,
+        );
+
+        expect(
+          find.descendant(of: flightCard, matching: find.text('200')),
+          findsOneWidget,
+        );
+
+        expect(
+          find.descendant(
+            of: flightCard,
+            matching: find.text('Unknown airport'),
+          ),
+          findsNWidgets(2),
+        );
+
+        // Catalog failures must not hide Trip association actions.
+        expect(
+          find.byKey(const Key('viewTripFlight-flight-1')),
+          findsOneWidget,
+        );
+
+        expect(
+          find.byKey(const Key('removeTripFlight-flight-1')),
+          findsOneWidget,
+        );
 
         expect(
           find.byKey(const Key('viewTripFlight-flight-1')),
@@ -606,7 +637,19 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Remove'));
+      final confirmationDialog = find.byType(AlertDialog);
+
+      expect(confirmationDialog, findsOneWidget);
+
+      final confirmRemoveButton = find.descendant(
+        of: confirmationDialog,
+        matching: find.widgetWithText(TextButton, 'Remove'),
+      );
+
+      expect(confirmRemoveButton, findsOneWidget);
+
+      await tester.tap(confirmRemoveButton);
+      await tester.pumpAndSettle();
 
       await tester.pumpAndSettle();
 
@@ -917,7 +960,19 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('LIS → BCN'), findsOneWidget);
+      final flightCard = find.byKey(const ValueKey('flight-card-flight-1'));
+
+      expect(flightCard, findsOneWidget);
+
+      expect(
+        find.descendant(of: flightCard, matching: find.text('LIS')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.descendant(of: flightCard, matching: find.text('BCN')),
+        findsOneWidget,
+      );
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
     });
@@ -1242,6 +1297,80 @@ void main() {
       expect(find.text('NEW'), findsOneWidget);
 
       expect(associationRepository.addFlightCalls, 0);
+    });
+    testWidgets('renders associated flights using the shared FlightCard', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final tripFlight = find.byKey(const Key('tripFlight-flight-1'));
+
+      expect(tripFlight, findsOneWidget);
+
+      // The exact widget used by Flight History.
+      expect(
+        find.descendant(of: tripFlight, matching: find.byType(FlightCard)),
+        findsOneWidget,
+      );
+
+      // The FlightCard preserves its existing identity.
+      expect(
+        find.byKey(const ValueKey('flight-card-flight-1')),
+        findsOneWidget,
+      );
+
+      // Trip-specific actions are outside FlightCard.
+      expect(find.byKey(const Key('viewTripFlight-flight-1')), findsOneWidget);
+
+      expect(
+        find.byKey(const Key('removeTripFlight-flight-1')),
+        findsOneWidget,
+      );
+
+      final sharedCard = find.byType(FlightCard);
+
+      expect(
+        find.descendant(
+          of: sharedCard,
+          matching: find.byKey(const Key('removeTripFlight-flight-1')),
+        ),
+        findsNothing,
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('shared FlightCard preserves flight number and status', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight(id: 'flight-1', flightNumber: 'TP1234')],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final card = find.byType(FlightCard);
+
+      expect(card, findsOneWidget);
+
+      expect(
+        find.descendant(of: card, matching: find.text('TP1234')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.descendant(of: card, matching: find.text('Completed')),
+        findsOneWidget,
+      );
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

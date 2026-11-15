@@ -19,37 +19,43 @@ import 'package:beenaround/features/geography/domain/city_visits_repository.dart
 import 'package:beenaround/features/explore/presentation/widgets/add_destination_sheet.dart';
 
 import '../helpers/contextual_visit_test_helpers.dart';
+import 'package:beenaround/core/models/visit_date_precision.dart';
 
 const tripId = 'trip-1';
 
-class FakeSectionCityRepository extends Fake implements CityRepository {}
-
-class FakeSectionCityVisitsRepository extends Fake
-    implements CityVisitsRepository {
-  @override
-  Future<List<CityVisit>> getCityVisits() async => const [];
-}
-
-CountryVisit countryVisit() {
+CountryVisit countryVisit({
+  String id = 'country-1',
+  String countryCode = 'JP',
+  DateTime? startedOn,
+  DateTime? endedOn,
+}) {
   return CountryVisit(
-    id: 'country-1',
-    countryCode: 'JP',
-    startedOn: DateTime(2027, 4, 1),
-    endedOn: DateTime(2027, 4, 25),
+    id: id,
+    countryCode: countryCode,
+    startedOn: startedOn ?? DateTime(2027, 4, 1),
+    endedOn: endedOn ?? DateTime(2027, 4, 25),
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
   );
 }
 
-CityVisit cityVisit() {
+CityVisit cityVisit({
+  String id = 'city-1',
+  int cityId = 1850147,
+  String cityName = 'Tokyo',
+  String countryCode = 'JP',
+  String countryName = 'Japan',
+  DateTime? startedOn,
+  DateTime? endedOn,
+}) {
   return CityVisit(
-    id: 'city-1',
-    cityId: 1850147,
-    cityName: 'Tokyo',
-    countryCode: 'JP',
-    countryName: 'Japan',
-    startedOn: DateTime(2027, 4, 10),
-    endedOn: DateTime(2027, 4, 15),
+    id: id,
+    cityId: cityId,
+    cityName: cityName,
+    countryCode: countryCode,
+    countryName: countryName,
+    startedOn: startedOn ?? DateTime(2027, 4, 10),
+    endedOn: endedOn ?? DateTime(2027, 4, 15),
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
   );
@@ -66,16 +72,9 @@ Widget buildTestApp(
       RepositoryProvider<CountriesRepository>.value(
         value: countriesRepository ?? FakeCountriesRepository(),
       ),
-      RepositoryProvider<CityRepository>(
-        create: (_) => FakeSectionCityRepository(),
-      ),
-      RepositoryProvider<CityVisitsRepository>(
-        create: (_) => FakeSectionCityVisitsRepository(),
-      ),
       RepositoryProvider<CityRepository>.value(
         value: cityRepository ?? FakeCityRepository(),
       ),
-
       RepositoryProvider<CityVisitsRepository>.value(
         value: cityVisitsRepository ?? FakeCityVisitsRepository(),
       ),
@@ -1050,6 +1049,232 @@ void main() {
     expect(find.byType(AddDestinationSheet), findsNothing);
 
     expect(find.text('Add country visits'), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('displays repeated country visits as separate cards', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      countryVisits: [
+        countryVisit(
+          id: 'japan-2023',
+          startedOn: DateTime(2023, 9, 3),
+          endedOn: DateTime(2023, 9, 14),
+        ),
+        countryVisit(
+          id: 'japan-2025',
+          startedOn: DateTime(2025, 5, 12),
+          endedOn: DateTime(2025, 5, 26),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final firstVisit = find.byKey(const Key('tripCountryVisit-japan-2023'));
+
+    final secondVisit = find.byKey(const Key('tripCountryVisit-japan-2025'));
+
+    expect(firstVisit, findsOneWidget);
+    expect(secondVisit, findsOneWidget);
+
+    expect(
+      find.descendant(of: firstVisit, matching: find.text('Japan')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: secondVisit, matching: find.text('Japan')),
+      findsOneWidget,
+    );
+
+    // Each independently persisted visit has its own removal action.
+    expect(
+      find.byKey(const Key('removeTripCountryVisit-japan-2023')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.byKey(const Key('removeTripCountryVisit-japan-2025')),
+      findsOneWidget,
+    );
+
+    expect(repository.countryVisits, hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('city visit card displays city, country and visit dates', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      cityVisits: [
+        cityVisit(
+          id: 'tokyo-2025',
+          startedOn: DateTime(2025, 5, 13),
+          endedOn: DateTime(2025, 5, 17),
+        ),
+      ],
+    );
+    final visit = repository.cityVisits.single;
+
+    expect(visit.startedOn?.year, 2025);
+    expect(visit.endedOn?.year, 2025);
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final cityCard = find.byKey(const Key('tripCityVisit-tokyo-2025'));
+
+    expect(cityCard, findsOneWidget);
+
+    expect(
+      find.descendant(of: cityCard, matching: find.text('Tokyo')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: cityCard, matching: find.text('Japan')),
+      findsOneWidget,
+    );
+
+    final dates = find.descendant(
+      of: cityCard,
+      matching: find.textContaining('May 13'),
+    );
+
+    expect(dates, findsOneWidget);
+
+    expect(
+      find.descendant(of: cityCard, matching: find.textContaining('May 17')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: cityCard, matching: find.textContaining('2025')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.byKey(const Key('removeTripCityVisit-tokyo-2025')),
+      findsOneWidget,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('displays repeated city visits independently', (tester) async {
+    final repository = FakeTripAssociationRepository(
+      cityVisits: [
+        cityVisit(
+          id: 'tokyo-2023',
+          startedOn: DateTime(2023, 4, 1),
+          endedOn: DateTime(2023, 4, 8),
+        ),
+        cityVisit(
+          id: 'tokyo-2025',
+          startedOn: DateTime(2025, 5, 13),
+          endedOn: DateTime(2025, 5, 17),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final firstVisit = find.byKey(const Key('tripCityVisit-tokyo-2023'));
+
+    final secondVisit = find.byKey(const Key('tripCityVisit-tokyo-2025'));
+
+    expect(firstVisit, findsOneWidget);
+    expect(secondVisit, findsOneWidget);
+
+    expect(
+      find.descendant(of: firstVisit, matching: find.text('Tokyo')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: secondVisit, matching: find.text('Tokyo')),
+      findsOneWidget,
+    );
+
+    expect(repository.cityVisits, hasLength(2));
+    expect(
+      find.descendant(of: firstVisit, matching: find.textContaining('2023')),
+      findsOneWidget,
+    );
+
+    expect(
+      find.descendant(of: secondVisit, matching: find.textContaining('2025')),
+      findsOneWidget,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+  for (final width in [320.0, 390.0]) {
+    testWidgets('visit cards render without overflow at ${width.toInt()}px', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 700);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final repository = FakeTripAssociationRepository(
+        countryVisits: [countryVisit(id: 'country-mobile')],
+        cityVisits: [cityVisit(id: 'city-mobile')],
+      );
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('tripCountryVisit-country-mobile')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byKey(const Key('tripCityVisit-city-mobile')),
+        findsOneWidget,
+      );
+
+      // Catch any Flutter layout exceptions, including RenderFlex overflow.
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('displays month precision without inventing exact days', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      countryVisits: [
+        CountryVisit(
+          id: 'japan-month-precision',
+          countryCode: 'JP',
+          startedOn: DateTime(2025, 5, 1),
+          endedOn: DateTime(2025, 6, 1),
+          startedOnPrecision: VisitDatePrecision.month,
+          endedOnPrecision: VisitDatePrecision.month,
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(
+      const Key('tripCountryVisit-japan-month-precision'),
+    );
+
+    expect(card, findsOneWidget);
+
+    expect(
+      find.descendant(of: card, matching: find.text('May 2025 – June 2025')),
+      findsOneWidget,
+    );
 
     expect(tester.takeException(), isNull);
   });

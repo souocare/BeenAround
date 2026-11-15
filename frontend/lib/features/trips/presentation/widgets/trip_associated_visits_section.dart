@@ -68,7 +68,8 @@ class _TripAssociatedVisitsSectionState
     final localization = MaterialLocalizations.of(context);
 
     return switch (precision ?? VisitDatePrecision.day) {
-      VisitDatePrecision.day => localization.formatMediumDate(date),
+      VisitDatePrecision.day =>
+        '${localization.formatMediumDate(date)}, ${date.year}',
       VisitDatePrecision.month => localization.formatMonthYear(date),
       VisitDatePrecision.year => '${date.year}',
     };
@@ -237,66 +238,78 @@ class _TripAssociatedVisitsSectionState
     required String title,
     String? subtitle,
     required String dates,
+    required IconData icon,
     required Key key,
     required Key removeButtonKey,
     VoidCallback? onRemove,
   }) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return Card(
       key: key,
       margin: const EdgeInsets.only(top: AppSpacing.sm),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Icon(icon, color: colors.onPrimaryContainer, size: 20),
+            ),
+
+            const SizedBox(width: AppSpacing.md),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  if (subtitle != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: AppSpacing.xs),
+
+                  Text(
+                    dates,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            if (subtitle != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+            const SizedBox(width: AppSpacing.sm),
 
-            const SizedBox(height: AppSpacing.sm),
-
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 15,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-
-                const SizedBox(width: AppSpacing.sm),
-
-                Expanded(
-                  child: Text(
-                    dates,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-
-                IconButton(
-                  key: removeButtonKey,
-                  tooltip: 'Remove from Trip',
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: theme.colorScheme.error,
-                ),
-              ],
+            IconButton(
+              key: removeButtonKey,
+              tooltip: 'Remove from Trip',
+              onPressed: onRemove,
+              icon: const Icon(Icons.remove_circle_outline),
+              color: colors.error,
             ),
           ],
         ),
@@ -435,6 +448,7 @@ class _TripAssociatedVisitsSectionState
                             'removeTripCountryVisit-${visit.id}',
                           ),
                           title: _countryName(countryNames, visit.countryCode),
+                          icon: Icons.public_outlined,
                           dates: _formatRange(
                             context,
                             start: visit.startedOn,
@@ -484,6 +498,7 @@ class _TripAssociatedVisitsSectionState
                   removeButtonKey: Key('removeTripCityVisit-${visit.id}'),
                   title: visit.cityName,
                   subtitle: visit.countryName,
+                  icon: Icons.location_city_outlined,
                   dates: _formatRange(
                     context,
                     start: visit.startedOn,

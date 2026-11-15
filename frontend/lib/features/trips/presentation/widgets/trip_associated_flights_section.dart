@@ -4,19 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../app/theme/app_tokens.dart';
 
 import '../../../flights/application/flight_catalog_resolver.dart';
-
 import '../../../flights/domain/airline_repository.dart';
 import '../../../flights/domain/airport_repository.dart';
 import '../../../flights/domain/flight.dart';
 
 import '../../../flights/presentation/navigation/open_flight_details.dart';
-import '../../../flights/presentation/widgets/show_add_flight.dart';
-
-import '../../application/trip_associations_cubit.dart';
-import '../../application/trip_associations_state.dart';
-
-import 'trip_flight_picker_dialog.dart';
-import '../../../flights/presentation/navigation/open_flight_details.dart';
+import '../../../flights/presentation/widgets/flight_card.dart';
 import '../../../flights/presentation/widgets/show_add_flight.dart';
 
 import '../../application/trip_associations_cubit.dart';
@@ -49,16 +42,6 @@ class _TripAssociatedFlightsSectionState
       airportRepository: context.read<AirportRepository>(),
       airlineRepository: context.read<AirlineRepository>(),
     );
-  }
-
-  String _formatDate(BuildContext context, Flight flight) {
-    final date = DateTime.tryParse(flight.departureOn);
-
-    if (date == null) {
-      return flight.departureOn;
-    }
-
-    return MaterialLocalizations.of(context).formatMediumDate(date);
   }
 
   Future<ResolvedFlightCatalog> _resolveCatalog(List<Flight> flights) {
@@ -109,12 +92,6 @@ class _TripAssociatedFlightsSectionState
     }
 
     await cubit.addFlights(flightIds: selectedIds);
-  }
-
-  String _airportLabel(ResolvedFlightCatalog catalog, int airportId) {
-    final airport = catalog.airportFor(airportId);
-
-    return airport?.displayCode ?? 'Airport $airportId';
   }
 
   Future<void> _removeFlight(BuildContext context, Flight flight) async {
@@ -177,78 +154,71 @@ class _TripAssociatedFlightsSectionState
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final departure = _airportLabel(catalog, flight.departureAirportId);
-
-    final arrival = _airportLabel(catalog, flight.arrivalAirportId);
-
-    return Card(
+    return Padding(
       key: Key('tripFlight-${flight.id}'),
-      margin: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Reuse the exact FlightCard displayed in Flight History.
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: Key('openTripFlight-${flight.id}'),
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _openFlightDetails(context, flight),
+              child: FlightCard(
+                flight: flight,
+                departureAirport: catalog.airportFor(flight.departureAirportId),
+                arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
+                airline: flight.airlineId == null
+                    ? null
+                    : catalog.airlineFor(flight.airlineId!),
+                airlineName: catalog.airlineNameFor(flight),
+              ),
+            ),
+          ),
+
+          // Trip-specific actions remain outside FlightCard.
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Icon(Icons.flight_takeoff_outlined, color: colors.primary),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(
-                    '$departure → $arrival',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                TextButton.icon(
+                  key: Key('viewTripFlight-${flight.id}'),
+                  onPressed: () => _openFlightDetails(context, flight),
+                  icon: const Icon(Icons.open_in_new_outlined, size: 18),
+                  label: const Text('View'),
+                ),
+
+                const SizedBox(width: AppSpacing.sm),
+
+                TextButton.icon(
+                  key: Key('removeTripFlight-${flight.id}'),
+                  onPressed: isMutating
+                      ? null
+                      : () => _removeFlight(context, flight),
+                  icon: Icon(
+                    Icons.remove_circle_outline,
+                    size: 18,
+                    color: isMutating ? colors.onSurfaceVariant : colors.error,
+                  ),
+                  label: Text(
+                    'Remove',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: isMutating
+                          ? colors.onSurfaceVariant
+                          : colors.error,
                     ),
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: AppSpacing.sm),
-
-            Text(
-              _formatDate(context, flight),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-
-            if (flight.flightNumber != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(flight.flightNumber!, style: theme.textTheme.bodySmall),
-            ],
-
-            const SizedBox(height: AppSpacing.sm),
-
-            Row(
-              children: [
-                Text(
-                  flight.isFlown ? 'Flown' : 'Planned',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colors.primary,
-                  ),
-                ),
-
-                const Spacer(),
-
-                TextButton(
-                  key: Key('viewTripFlight-${flight.id}'),
-                  onPressed: () => _openFlightDetails(context, flight),
-                  child: const Text('View'),
-                ),
-
-                IconButton(
-                  key: Key('removeTripFlight-${flight.id}'),
-                  tooltip: 'Remove from Trip',
-                  onPressed: isMutating
-                      ? null
-                      : () => _removeFlight(context, flight),
-                  icon: Icon(Icons.remove_circle_outline, color: colors.error),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
