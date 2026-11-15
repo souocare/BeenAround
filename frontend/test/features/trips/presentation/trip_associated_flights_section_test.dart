@@ -349,19 +349,13 @@ Future<void> openExistingFlightsPicker(WidgetTester tester) async {
 
   await tester.pumpAndSettle();
 
-  expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
-
-  await tester.tap(find.byKey(const Key('addExistingFlightsOption')));
-
-  await tester.pumpAndSettle();
+  expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
 }
 
 Future<void> openCreateFlightForm(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+  await openExistingFlightsPicker(tester);
 
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.byKey(const Key('createNewFlightOption')));
+  await tester.tap(find.byKey(const Key('createFlightFromPickerButton')));
 
   await tester.pumpAndSettle();
 
@@ -456,7 +450,9 @@ void main() {
     // Add menu - NEW
     // -----------------------------------------------------------------------
 
-    testWidgets('Add menu offers existing and new flights', (tester) async {
+    testWidgets('Add opens the Flight Picker directly with a create action', (
+      tester,
+    ) async {
       final associationRepository = FakeTripAssociationRepository();
 
       await tester.pumpWidget(
@@ -465,31 +461,33 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Open the Add menu.
       await tester.tap(find.byKey(const Key('addTripFlightsButton')));
 
       await tester.pumpAndSettle();
 
-      // Both actions must be available.
-      expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
+      // The picker opens directly.
+      expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
 
-      expect(find.byKey(const Key('createNewFlightOption')), findsOneWidget);
+      // Creating a new flight is available inside the picker.
+      expect(
+        find.byKey(const Key('createFlightFromPickerButton')),
+        findsOneWidget,
+      );
 
-      expect(find.text('Add existing flights'), findsOneWidget);
-
-      expect(find.text('Create new flight'), findsOneWidget);
-
-      // Opening the menu must not create associations.
-      expect(associationRepository.addFlightCalls, 0);
-
-      // Dismiss the popup menu without selecting an action.
-      await tester.tapAt(const Offset(10, 10));
-
-      await tester.pumpAndSettle();
-
+      // The old popup menu must not exist.
       expect(find.byKey(const Key('addExistingFlightsOption')), findsNothing);
 
       expect(find.byKey(const Key('createNewFlightOption')), findsNothing);
+
+      // Opening the picker does not associate anything.
+      expect(associationRepository.addFlightCalls, 0);
+
+      // Cancel without selecting anything.
+      await tester.tap(find.text('Cancel'));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tripFlightPickerSearch')), findsNothing);
 
       expect(associationRepository.addFlightCalls, 0);
     });
@@ -923,7 +921,7 @@ void main() {
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
     });
-    testWidgets('Add menu fits a narrow mobile screen', (tester) async {
+    testWidgets('Flight Picker works on narrow mobile screens', (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1;
 
@@ -942,18 +940,24 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('addExistingFlightsOption')), findsOneWidget);
+      expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
 
-      expect(find.byKey(const Key('createNewFlightOption')), findsOneWidget);
+      expect(
+        find.byKey(const Key('createFlightFromPickerButton')),
+        findsOneWidget,
+      );
 
-      // Any RenderFlex overflow would fail this test automatically.
+      expect(
+        find.byKey(const Key('confirmTripFlightSelection')),
+        findsOneWidget,
+      );
+
       expect(tester.takeException(), isNull);
     });
-    testWidgets('Create new flight opens the existing flight form', (
+    testWidgets('Create new flight opens the form from the picker', (
       tester,
     ) async {
       final associationRepository = FakeTripAssociationRepository();
-
       final flightRepository = FakeSectionFlightRepository();
 
       await tester.pumpWidget(
@@ -966,31 +970,21 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Open the Add menu.
-      await tester.tap(find.byKey(const Key('addTripFlightsButton')));
+      await openCreateFlightForm(tester);
 
-      await tester.pumpAndSettle();
-
-      // Choose to create a new Flight.
-      await tester.tap(find.byKey(const Key('createNewFlightOption')));
-
-      await tester.pumpAndSettle();
-
-      // The existing Flight creation form is reused.
       expect(find.text('Add Flight'), findsOneWidget);
 
       expect(find.byKey(const Key('saveFlightButton')), findsOneWidget);
 
-      // Simply opening the form must not associate anything.
+      // Opening the form must not create or associate anything.
+      expect(flightRepository.createFlightCalls, 0);
       expect(associationRepository.addFlightCalls, 0);
-
       expect(associationRepository.flights, isEmpty);
     });
     testWidgets(
-      'canceling new flight creation does not create or associate a flight',
+      'canceling flight creation returns to picker without creating anything',
       (tester) async {
         final associationRepository = FakeTripAssociationRepository();
-
         final flightRepository = FakeSectionFlightRepository();
 
         await tester.pumpWidget(
@@ -1005,28 +999,44 @@ void main() {
 
         await openCreateFlightForm(tester);
 
+        // Cancel the creation form.
         await tester.tap(find.byTooltip('Close'));
 
         await tester.pumpAndSettle();
 
+        // The form closes.
         expect(find.text('Add Flight'), findsNothing);
 
+        // The picker remains open.
+        expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
+
+        expect(
+          find.byKey(const Key('createFlightFromPickerButton')),
+          findsOneWidget,
+        );
+
+        // No Flight was created.
         expect(flightRepository.createFlightCalls, 0);
+        expect(flightRepository.flights, isEmpty);
 
+        // No association was created.
         expect(associationRepository.addFlightCalls, 0);
-
         expect(associationRepository.flights, isEmpty);
 
-        expect(flightRepository.flights, isEmpty);
+        // Cancel the picker too.
+        await tester.tap(find.text('Cancel'));
+
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('tripFlightPickerSearch')), findsNothing);
 
         expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
       },
     );
     testWidgets(
-      'creating a flight and choosing Not now preserves an independent flight',
+      'creating a flight and canceling the picker preserves an independent flight',
       (tester) async {
         final associationRepository = FakeTripAssociationRepository();
-
         final flightRepository = FakeSectionFlightRepository();
 
         await tester.pumpWidget(
@@ -1043,39 +1053,52 @@ void main() {
 
         // Flight was persisted independently.
         expect(flightRepository.createFlightCalls, 1);
-
         expect(flightRepository.flights, hasLength(1));
-
         expect(flightRepository.flights.single.id, 'created-flight-1');
 
-        // Association requires explicit confirmation.
-        expect(find.text('Add flight to this Trip?'), findsOneWidget);
+        // After creation, the user returns to the picker.
+        expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
 
+        expect(find.text('Add Flight'), findsNothing);
+
+        // The newly created Flight is visible.
+        final createdFlightFinder = find.byKey(
+          const Key('tripFlightPicker-created-flight-1'),
+        );
+
+        expect(createdFlightFinder, findsOneWidget);
+
+        // It is automatically selected.
+        final tile = tester.widget<CheckboxListTile>(createdFlightFinder);
+
+        expect(tile.value, isTrue);
+
+        // But it has not been associated with the Trip.
         expect(associationRepository.addFlightCalls, 0);
 
-        // User decides not to associate the Flight.
-        await tester.tap(
-          find.byKey(const Key('skipNewFlightAssociationButton')),
-        );
+        // Cancel the picker.
+        await tester.tap(find.text('Cancel'));
 
         await tester.pumpAndSettle();
 
-        // Flight remains globally persisted.
+        // The picker closes.
+        expect(find.byKey(const Key('tripFlightPickerSearch')), findsNothing);
+
+        // The Flight remains globally persisted.
         expect(flightRepository.flights, hasLength(1));
+        expect(flightRepository.flights.single.id, 'created-flight-1');
 
-        // Trip remains unchanged.
+        // No association was created.
         expect(associationRepository.addFlightCalls, 0);
-
         expect(associationRepository.flights, isEmpty);
 
         expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
       },
     );
     testWidgets(
-      'creating a flight and confirming associates it with the Trip',
+      'creating a flight auto-selects it and confirms association only on Add',
       (tester) async {
         final associationRepository = FakeTripAssociationRepository();
-
         final flightRepository = FakeSectionFlightRepository();
 
         associationRepository.onAddFlight = (receivedTripId, flightId) async {
@@ -1103,28 +1126,34 @@ void main() {
 
         expect(flightRepository.createFlightCalls, 1);
 
-        expect(find.text('Add flight to this Trip?'), findsOneWidget);
+        // The created Flight is automatically selected.
+        final tile = tester.widget<CheckboxListTile>(
+          find.byKey(const Key('tripFlightPicker-created-flight-1')),
+        );
 
-        // No association before confirmation.
+        expect(tile.value, isTrue);
+
+        // No association exists before confirmation.
         expect(associationRepository.addFlightCalls, 0);
 
-        await tester.tap(
-          find.byKey(const Key('confirmNewFlightAssociationButton')),
-        );
+        expect(associationRepository.flights, isEmpty);
+
+        // Explicit confirmation.
+        await tester.tap(find.byKey(const Key('confirmTripFlightSelection')));
 
         await tester.pumpAndSettle();
 
-        // Flight is persisted globally.
+        // The Flight remains independently persisted.
         expect(flightRepository.flights, hasLength(1));
 
-        // Flight is explicitly associated.
+        // The association was created only after confirmation.
         expect(associationRepository.addFlightCalls, 1);
 
         expect(associationRepository.flights, hasLength(1));
 
         expect(associationRepository.flights.single.id, 'created-flight-1');
 
-        // Trip Details reflects the new association.
+        // Trip Details now displays the Flight.
         expect(
           find.byKey(const Key('tripFlight-created-flight-1')),
           findsOneWidget,
@@ -1134,10 +1163,9 @@ void main() {
       },
     );
     testWidgets(
-      'association failure preserves the newly created independent flight',
+      'association failure after picker confirmation preserves created flight',
       (tester) async {
         final associationRepository = FakeTripAssociationRepository();
-
         final flightRepository = FakeSectionFlightRepository();
 
         associationRepository.onAddFlight = (receivedTripId, flightId) async {
@@ -1163,9 +1191,11 @@ void main() {
 
         expect(flightRepository.flights, hasLength(1));
 
-        await tester.tap(
-          find.byKey(const Key('confirmNewFlightAssociationButton')),
-        );
+        // No association before confirmation.
+        expect(associationRepository.addFlightCalls, 0);
+
+        // Explicitly attempt association.
+        await tester.tap(find.byKey(const Key('confirmTripFlightSelection')));
 
         await tester.pumpAndSettle();
 
@@ -1175,16 +1205,43 @@ void main() {
         // The Trip did not receive the Flight.
         expect(associationRepository.flights, isEmpty);
 
-        // The original Flight still exists.
+        // The Flight still exists globally.
         expect(flightRepository.flights, hasLength(1));
 
         expect(flightRepository.flights.single.id, 'created-flight-1');
 
-        // No global deletion must occur.
+        // No global deletion occurred.
         expect(flightRepository.deleteFlightCalls, 0);
 
         expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
       },
     );
+    testWidgets('newly created flight is highlighted as NEW in the picker', (
+      tester,
+    ) async {
+      final associationRepository = FakeTripAssociationRepository();
+      final flightRepository = FakeSectionFlightRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          associationRepository: associationRepository,
+          flightRepository: flightRepository,
+          airportRepository: AvailableAirportRepository(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await createTestFlight(tester);
+
+      expect(
+        find.byKey(const Key('tripFlightPicker-created-flight-1')),
+        findsOneWidget,
+      );
+
+      expect(find.text('NEW'), findsOneWidget);
+
+      expect(associationRepository.addFlightCalls, 0);
+    });
   });
 }

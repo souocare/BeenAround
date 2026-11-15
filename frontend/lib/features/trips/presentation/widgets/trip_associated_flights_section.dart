@@ -16,8 +16,13 @@ import '../../application/trip_associations_cubit.dart';
 import '../../application/trip_associations_state.dart';
 
 import 'trip_flight_picker_dialog.dart';
+import '../../../flights/presentation/navigation/open_flight_details.dart';
+import '../../../flights/presentation/widgets/show_add_flight.dart';
 
-enum _FlightAddAction { existing, create }
+import '../../application/trip_associations_cubit.dart';
+import '../../application/trip_associations_state.dart';
+
+import 'trip_flight_picker_dialog.dart';
 
 /// Displays independent flights explicitly associated with a Trip.
 ///
@@ -93,6 +98,7 @@ class _TripAssociatedFlightsSectionState
     final selectedIds = await showTripFlightPicker(
       context: context,
       excludedFlightIds: state.flights.map((flight) => flight.id).toSet(),
+      createFlight: () => showAddFlightWithResult(context),
     );
 
     if (!context.mounted ||
@@ -159,83 +165,6 @@ class _TripAssociatedFlightsSectionState
 
     if (result != FlightDetailsNavigationResult.viewed) {
       await associationsCubit.refresh();
-    }
-  }
-
-  Future<void> _createFlight(BuildContext context) async {
-    final cubit = context.read<TripAssociationsCubit>();
-
-    if (cubit.isClosed || cubit.state.isMutating || cubit.state.isLoading) {
-      return;
-    }
-
-    // Creates an independent personal Flight.
-    //
-    // The creation flow does not modify Trip associations.
-    final createdFlight = await showAddFlightWithResult(context);
-
-    if (!context.mounted || cubit.isClosed || createdFlight == null) {
-      return;
-    }
-
-    // The Flight now exists globally, regardless of what
-    // the user decides in the following confirmation.
-    final confirmed = await showAdaptiveDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Add flight to this Trip?'),
-          content: const Text(
-            'Your flight has been created successfully.\n\n'
-            'Would you also like to associate it with this Trip?\n\n'
-            'If you choose Not now, the flight will remain available '
-            'in Explore.',
-          ),
-          actions: [
-            TextButton(
-              key: const Key('skipNewFlightAssociationButton'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Not now'),
-            ),
-            FilledButton(
-              key: const Key('confirmNewFlightAssociationButton'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('Add to Trip'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!context.mounted ||
-        cubit.isClosed ||
-        confirmed != true ||
-        cubit.state.isMutating ||
-        cubit.state.isLoading) {
-      return;
-    }
-
-    // Explicitly associate the already persisted Flight.
-    //
-    // A failure here must never delete the Flight.
-    await cubit.addFlight(flightId: createdFlight.id);
-  }
-
-  Future<void> _handleAddAction(
-    BuildContext context,
-    TripAssociationsState state,
-    _FlightAddAction action,
-  ) async {
-    switch (action) {
-      case _FlightAddAction.existing:
-        await _addFlights(context, state);
-
-      case _FlightAddAction.create:
-        await _createFlight(context);
     }
   }
 
@@ -355,77 +284,13 @@ class _TripAssociatedFlightsSectionState
                     ),
                   ),
                 ),
-                PopupMenuButton<_FlightAddAction>(
+                TextButton.icon(
                   key: const Key('addTripFlightsButton'),
-                  enabled: !state.isMutating && !state.isLoading,
-                  tooltip: 'Add flights',
-
-                  // Allow enough space for the menu labels while
-                  // respecting the available screen width.
-                  constraints: const BoxConstraints(
-                    minWidth: 240,
-                    maxWidth: 320,
-                  ),
-
-                  onSelected: (action) {
-                    _handleAddAction(context, state, action);
-                  },
-
-                  itemBuilder: (context) => const [
-                    PopupMenuItem<_FlightAddAction>(
-                      key: Key('addExistingFlightsOption'),
-                      value: _FlightAddAction.existing,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.playlist_add_rounded),
-                          SizedBox(width: AppSpacing.sm),
-                          Flexible(
-                            child: Text(
-                              'Add existing flights',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<_FlightAddAction>(
-                      key: Key('createNewFlightOption'),
-                      value: _FlightAddAction.create,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add_circle_outline_rounded),
-                          SizedBox(width: AppSpacing.sm),
-                          Flexible(
-                            child: Text(
-                              'Create new flight',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.sm,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add),
-                        SizedBox(width: AppSpacing.xs),
-                        Text('Add'),
-                        SizedBox(width: AppSpacing.xs),
-                        Icon(Icons.arrow_drop_down),
-                      ],
-                    ),
-                  ),
+                  onPressed: state.isMutating || state.isLoading
+                      ? null
+                      : () => _addFlights(context, state),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add'),
                 ),
 
                 const SizedBox(width: AppSpacing.sm),

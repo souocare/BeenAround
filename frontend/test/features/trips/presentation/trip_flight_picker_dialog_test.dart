@@ -89,6 +89,7 @@ Widget buildTestApp({
   required AirlineRepository airlineRepository,
   Set<String> excludedFlightIds = const {},
   ValueChanged<List<String>?>? onSelection,
+  Future<Flight?> Function()? createFlight,
 }) {
   return MultiRepositoryProvider(
     providers: [
@@ -107,6 +108,7 @@ Widget buildTestApp({
                   final selectedIds = await showTripFlightPicker(
                     context: context,
                     excludedFlightIds: excludedFlightIds,
+                    createFlight: createFlight,
                   );
 
                   onSelection?.call(selectedIds);
@@ -219,7 +221,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('2 selected'), findsOneWidget);
+    expect(find.text('2 flights selected'), findsOneWidget);
 
     expect(find.text('Add 2 flights'), findsOneWidget);
   });
@@ -289,7 +291,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('1 selected'), findsOneWidget);
+    expect(find.text('1 flight selected'), findsOneWidget);
 
     await tester.tap(find.text('Cancel'));
 
@@ -327,14 +329,25 @@ void main() {
 
     final loadMore = find.byKey(const Key('tripFlightPickerLoadMore'));
 
-    await tester.scrollUntilVisible(
-      loadMore,
-      300,
-      scrollable: find.byType(Scrollable).last,
+    // Scroll specifically inside the Flight Picker list.
+    final pickerScrollable = find.descendant(
+      of: find.byType(ListView),
+      matching: find.byType(Scrollable),
     );
 
-    await tester.tap(loadMore);
+    await tester.scrollUntilVisible(
+      loadMore,
+      250,
+      scrollable: pickerScrollable,
+    );
 
+    await tester.pumpAndSettle();
+
+    // Ensure the button is positioned inside the visible viewport.
+    await tester.ensureVisible(loadMore);
+    await tester.pumpAndSettle();
+
+    await tester.tap(loadMore);
     await tester.pumpAndSettle();
 
     expect(repository.loadCalls, 2);
@@ -435,5 +448,250 @@ void main() {
 
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.text('Add flights'), findsOneWidget);
+  });
+  testWidgets('creating a flight preserves existing selections', (
+    tester,
+  ) async {
+    final flights = [
+      sampleFlight(id: 'flight-1'),
+      sampleFlight(id: 'flight-2'),
+    ];
+
+    final createdFlight = sampleFlight(
+      id: 'created-flight',
+      flightNumber: 'TP9999',
+    );
+
+    List<String>? selectedIds;
+
+    var createCalls = 0;
+
+    await tester.pumpWidget(
+      buildTestApp(
+        flightRepository: FakePickerFlightRepository(flights),
+        airportRepository: FakePickerAirportRepository(),
+        airlineRepository: FakePickerAirlineRepository(),
+        createFlight: () async {
+          createCalls++;
+          return createdFlight;
+        },
+        onSelection: (ids) {
+          selectedIds = ids;
+        },
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('openTripFlightPicker')));
+
+    await tester.pumpAndSettle();
+
+    // Select an existing Flight.
+    await tester.tap(find.byKey(const Key('tripFlightPicker-flight-1')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 flight selected'), findsOneWidget);
+
+    // Create another Flight.
+    await tester.tap(find.byKey(const Key('createFlightFromPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(createCalls, 1);
+
+    // The new Flight is visible and automatically selected.
+    final createdTile = tester.widget<CheckboxListTile>(
+      find.byKey(const Key('tripFlightPicker-created-flight')),
+    );
+
+    expect(createdTile.value, isTrue);
+
+    // The existing selection was preserved.
+    final existingTile = tester.widget<CheckboxListTile>(
+      find.byKey(const Key('tripFlightPicker-flight-1')),
+    );
+
+    expect(existingTile.value, isTrue);
+
+    expect(find.text('2 flights selected'), findsOneWidget);
+
+    expect(find.text('NEW'), findsOneWidget);
+
+    // Confirm the selection.
+    await tester.tap(find.byKey(const Key('confirmTripFlightSelection')));
+
+    await tester.pumpAndSettle();
+
+    expect(selectedIds, containsAll(['flight-1', 'created-flight']));
+
+    expect(selectedIds, hasLength(2));
+  });
+  testWidgets(
+    'newly created flight is not duplicated when loading another page',
+    (tester) async {
+      final flights = [
+        for (var index = 0; index < 55; index++)
+          sampleFlight(id: 'flight-$index', flightNumber: 'TP${1000 + index}'),
+      ];
+
+      final repository = FakePickerFlightRepository(flights);
+
+      // Simulate a newly created Flight that will also be returned
+      // by the backend when the second page is loaded.
+      final createdFlight = flights[54];
+
+      await tester.pumpWidget(
+        buildTestApp(
+          flightRepository: repository,
+          airportRepository: FakePickerAirportRepository(),
+          airlineRepository: FakePickerAirlineRepository(),
+          createFlight: () async => createdFlight,
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('openTripFlightPicker')));
+
+      await tester.pumpAndSettle();
+
+      expect(repository.loadCalls, 1);
+
+      // Create the Flight before loading page 2.
+      await tester.tap(find.byKey(const Key('createFlightFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      // The new Flight is immediately visible.
+      expect(
+        find.byKey(const Key('tripFlightPicker-flight-54')),
+        findsOneWidget,
+      );
+
+      expect(find.text('NEW'), findsOneWidget);
+
+      // Load the next page.
+      final loadMore = find.byKey(const Key('tripFlightPickerLoadMore'));
+
+      // Scroll specifically inside the Flight Picker list.
+      final pickerScrollable = find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      );
+
+      await tester.scrollUntilVisible(
+        loadMore,
+        250,
+        scrollable: pickerScrollable,
+      );
+
+      await tester.pumpAndSettle();
+
+      // Ensure the button is positioned inside the visible viewport.
+      await tester.ensureVisible(loadMore);
+      await tester.pumpAndSettle();
+
+      await tester.tap(loadMore);
+      await tester.pumpAndSettle();
+
+      expect(repository.loadCalls, 2);
+
+      // Search isolates the Flight so we can verify that only
+      // one item with this ID is present.
+      await tester.enterText(
+        find.byKey(const Key('tripFlightPickerSearch')),
+        'TP1054',
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('tripFlightPicker-flight-54')),
+        findsOneWidget,
+      );
+
+      // It remains selected after pagination.
+      final tile = tester.widget<CheckboxListTile>(
+        find.byKey(const Key('tripFlightPicker-flight-54')),
+      );
+
+      expect(tile.value, isTrue);
+
+      expect(find.text('NEW'), findsOneWidget);
+    },
+  );
+  testWidgets('newly created flight can be deselected without deleting it', (
+    tester,
+  ) async {
+    final repository = FakePickerFlightRepository([]);
+
+    final createdFlight = sampleFlight(
+      id: 'created-flight',
+      flightNumber: 'TP9999',
+    );
+
+    List<String>? selectedIds;
+    var callbackCalled = false;
+
+    await tester.pumpWidget(
+      buildTestApp(
+        flightRepository: repository,
+        airportRepository: FakePickerAirportRepository(),
+        airlineRepository: FakePickerAirlineRepository(),
+        createFlight: () async => createdFlight,
+        onSelection: (ids) {
+          callbackCalled = true;
+          selectedIds = ids;
+        },
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('openTripFlightPicker')));
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('createFlightFromPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    final createdFlightFinder = find.byKey(
+      const Key('tripFlightPicker-created-flight'),
+    );
+
+    expect(createdFlightFinder, findsOneWidget);
+
+    var tile = tester.widget<CheckboxListTile>(createdFlightFinder);
+
+    expect(tile.value, isTrue);
+
+    expect(find.text('1 flight selected'), findsOneWidget);
+
+    // Deselect the created Flight.
+    await tester.tap(createdFlightFinder);
+
+    await tester.pumpAndSettle();
+
+    tile = tester.widget<CheckboxListTile>(createdFlightFinder);
+
+    expect(tile.value, isFalse);
+
+    expect(find.text('No flights selected'), findsOneWidget);
+
+    // Nothing can be associated without a selection.
+    final confirmButton = tester.widget<FilledButton>(
+      find.byKey(const Key('confirmTripFlightSelection')),
+    );
+
+    expect(confirmButton.onPressed, isNull);
+
+    // Cancel the picker.
+    await tester.tap(find.text('Cancel'));
+
+    await tester.pumpAndSettle();
+
+    expect(callbackCalled, isTrue);
+    expect(selectedIds, isNull);
+
+    // The picker did not delete the created Flight.
+    // Persistence is owned by the creation flow, not the picker.
+    expect(repository.loadCalls, 1);
   });
 }

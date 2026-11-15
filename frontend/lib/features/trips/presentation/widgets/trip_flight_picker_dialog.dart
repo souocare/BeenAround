@@ -19,6 +19,7 @@ import '../../../flights/domain/flight_repository.dart';
 Future<List<String>?> showTripFlightPicker({
   required BuildContext context,
   required Set<String> excludedFlightIds,
+  Future<Flight?> Function()? createFlight,
 }) {
   // Capture dependencies before opening a new route.
   final flightRepository = context.read<FlightRepository>();
@@ -33,6 +34,7 @@ Future<List<String>?> showTripFlightPicker({
         airlineRepository: airlineRepository,
       ),
       excludedFlightIds: excludedFlightIds,
+      createFlight: createFlight,
     );
   }
 
@@ -66,11 +68,13 @@ class _TripFlightPickerDialog extends StatefulWidget {
     required this.flightRepository,
     required this.catalogResolver,
     required this.excludedFlightIds,
+    required this.createFlight,
   });
 
   final FlightRepository flightRepository;
   final FlightCatalogResolver catalogResolver;
   final Set<String> excludedFlightIds;
+  final Future<Flight?> Function()? createFlight;
 
   @override
   State<_TripFlightPickerDialog> createState() =>
@@ -84,6 +88,8 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
 
   final List<Flight> _flights = [];
   final Set<String> _selectedIds = {};
+  final Set<String> _newlyCreatedIds = {};
+  bool _isCreatingFlight = false;
 
   ResolvedFlightCatalog _catalog = ResolvedFlightCatalog(
     airports: const {},
@@ -133,6 +139,63 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
 
   String? _airportLocation(int airportId) {
     return _catalog.airportFor(airportId)?.displayLocation;
+  }
+
+  Future<void> _createFlight() async {
+    final createFlight = widget.createFlight;
+
+    if (createFlight == null || _isCreatingFlight) {
+      return;
+    }
+
+    setState(() {
+      _isCreatingFlight = true;
+    });
+
+    try {
+      final createdFlight = await createFlight();
+
+      if (!mounted || createdFlight == null) {
+        return;
+      }
+
+      // A newly created Flight is independent of the Trip.
+      //
+      // Creating it only updates the picker's local selection.
+      // The association is created later, after explicit confirmation.
+      setState(() {
+        _flights.removeWhere((flight) => flight.id == createdFlight.id);
+
+        _flights.insert(0, createdFlight);
+
+        _selectedIds.add(createdFlight.id);
+        _newlyCreatedIds.add(createdFlight.id);
+
+        // Ensure the newly created record is visible.
+        _searchController.clear();
+      });
+
+      // Catalog resolution is optional presentation metadata.
+      // A failure must not discard the new Flight.
+      try {
+        final catalog = await widget.catalogResolver.resolve(_flights);
+
+        if (!mounted) return;
+
+        setState(() {
+          _catalog = catalog;
+        });
+      } catch (_) {
+        // Keep the created Flight selected even if
+        // aviation metadata cannot be resolved.
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingFlight = false;
+        });
+      }
+    }
   }
 
   String _flightTitle(Flight flight) {
@@ -271,15 +334,26 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
 
   Widget _buildFlightTile(Flight flight) {
     final selected = _selectedIds.contains(flight.id);
+    final isNew = _newlyCreatedIds.contains(flight.id);
 
     return CheckboxListTile(
       key: Key('tripFlightPicker-${flight.id}'),
       value: selected,
       onChanged: (_) => _toggleFlight(flight.id),
-      title: Text(
-        _flightTitle(flight),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _flightTitle(flight),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (isNew) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const Badge(label: Text('NEW')),
+          ],
+        ],
       ),
       subtitle: Text(_flightSubtitle(flight)),
       secondary: const Icon(Icons.flight_outlined),
@@ -406,31 +480,77 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
 
         Expanded(child: _buildList()),
 
+        if (widget.createFlight != null) ...[
+          const Divider(height: 1),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: OutlinedButton.icon(
+              key: const Key('createFlightFromPickerButton'),
+              onPressed: _isCreatingFlight ? null : _createFlight,
+              icon: Icon(
+                _isCreatingFlight
+                    ? Icons.hourglass_top_rounded
+                    : Icons.add_circle_outline_rounded,
+              ),
+              label: Text(
+                _isCreatingFlight ? 'Creating flight...' : 'Create new flight',
+              ),
+            ),
+          ),
+        ],
+
         const Divider(height: 1),
 
         Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Text(
-                  count == 0 ? 'No flights selected' : '$count selected',
-                  key: const Key('tripFlightPickerSelectionCount'),
-                  style: theme.textTheme.bodyMedium,
+              Text(
+                count == 0
+                    ? 'No flights selected'
+                    : '$count ${count == 1 ? 'flight' : 'flights'} selected',
+                key: const Key('tripFlightPickerSelectionCount'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
                 ),
               ),
 
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
+              const SizedBox(height: AppSpacing.md),
 
-              const SizedBox(width: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _isCreatingFlight
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
 
-              FilledButton(
-                key: const Key('confirmTripFlightSelection'),
-                onPressed: count == 0 ? null : _confirm,
-                child: Text(count == 1 ? 'Add 1 flight' : 'Add $count flights'),
+                  const SizedBox(width: AppSpacing.sm),
+
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      key: const Key('confirmTripFlightSelection'),
+                      onPressed: count == 0 || _isCreatingFlight
+                          ? null
+                          : _confirm,
+                      child: Text(
+                        count == 1 ? 'Add 1 flight' : 'Add $count flights',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
