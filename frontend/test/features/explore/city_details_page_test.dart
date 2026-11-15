@@ -27,6 +27,7 @@ import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
 import 'package:beenaround/features/flights/domain/airport_repository.dart';
 import 'package:beenaround/features/flights/domain/airline_repository.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
 
 class FakeCityVisitsRepository implements CityVisitsRepository {
   FakeCityVisitsRepository({required this.visits});
@@ -233,6 +234,12 @@ class FakeCityDetailsTripAssociationRepository extends Fake
   }
 }
 
+/// Provides the CityRepository dependency required when navigating
+/// from City Details to Trip Details.
+///
+/// These navigation tests do not exercise city search or creation.
+class FakeNavigationCityRepository extends Fake implements CityRepository {}
+
 CityVisit cityVisit({
   required String id,
   int cityId = 2267057,
@@ -337,6 +344,9 @@ void main() {
           RepositoryProvider<CityVisitsRepository>.value(value: repository),
           RepositoryProvider<CountriesRepository>.value(
             value: countriesRepository,
+          ),
+          RepositoryProvider<CityRepository>(
+            create: (_) => FakeNavigationCityRepository(),
           ),
           RepositoryProvider<TripRepository>.value(
             value: tripRepository ?? FakeCityDetailsTripRepository(),

@@ -9,10 +9,6 @@ import '../../../../core/models/visit_date_precision.dart';
 import '../../../explore/data/countries_repository.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 
-/// Opens a picker for an existing country visit.
-///
-/// Returns the selected visit ID, or null when dismissed.
-///
 /// Opens a picker for existing country visits.
 ///
 /// Returns selected visit IDs, or null when dismissed.
@@ -20,6 +16,7 @@ Future<List<String>?> showTripCountryVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
   Set<String> initiallySelectedVisitIds = const {},
+  Future<String?> Function()? createVisit,
 }) {
   final repository = context.read<CountriesRepository>();
 
@@ -30,6 +27,8 @@ Future<List<String>?> showTripCountryVisitPicker({
     emptyMessage: 'No country visits available.',
     initiallySelectedVisitIds: initiallySelectedVisitIds,
     excludedVisitIds: excludedVisitIds,
+    createVisit: createVisit,
+    createLabel: 'Create new country visit',
     loadVisits: () async {
       final results = await Future.wait<Object>([
         repository.getCountries(),
@@ -76,6 +75,7 @@ Future<List<String>?> showTripCityVisitPicker({
   required BuildContext context,
   required Set<String> excludedVisitIds,
   Set<String> initiallySelectedVisitIds = const {},
+  Future<String?> Function()? createVisit,
 }) {
   final repository = context.read<CityVisitsRepository>();
 
@@ -86,6 +86,8 @@ Future<List<String>?> showTripCityVisitPicker({
     emptyMessage: 'No city visits available.',
     excludedVisitIds: excludedVisitIds,
     initiallySelectedVisitIds: initiallySelectedVisitIds,
+    createVisit: createVisit,
+    createLabel: 'Create new city visit',
     loadVisits: () async {
       final visits = await repository.getCityVisits();
 
@@ -117,6 +119,8 @@ Future<List<String>?> _showTripVisitPicker({
   required Set<String> excludedVisitIds,
   required Set<String> initiallySelectedVisitIds,
   required Future<List<_VisitOption>> Function() loadVisits,
+  required Future<String?> Function()? createVisit,
+  required String createLabel,
 }) {
   Widget buildPicker() {
     return _TripVisitPickerDialog(
@@ -126,6 +130,8 @@ Future<List<String>?> _showTripVisitPicker({
       excludedVisitIds: excludedVisitIds,
       initiallySelectedVisitIds: initiallySelectedVisitIds,
       loadVisits: loadVisits,
+      createVisit: createVisit,
+      createLabel: createLabel,
     );
   }
 
@@ -193,6 +199,8 @@ class _TripVisitPickerDialog extends StatefulWidget {
     required this.excludedVisitIds,
     required this.initiallySelectedVisitIds,
     required this.loadVisits,
+    required this.createVisit,
+    required this.createLabel,
   });
 
   final String title;
@@ -201,6 +209,8 @@ class _TripVisitPickerDialog extends StatefulWidget {
 
   final Set<String> excludedVisitIds;
   final Set<String> initiallySelectedVisitIds;
+  final Future<String?> Function()? createVisit;
+  final String createLabel;
 
   final Future<List<_VisitOption>> Function() loadVisits;
 
@@ -214,10 +224,21 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
   List<_VisitOption> _visits = const [];
 
   bool _isLoading = true;
+  bool _isCreatingVisit = false;
+
   String? _errorMessage;
 
   int _loadGeneration = 0;
+
   late final Set<String> _selectedVisitIds;
+
+  final Set<String> _newlyCreatedIds = {};
+
+  /// Persisted visits awaiting confirmation from the repository.
+  ///
+  /// A pending visit is never selectable until it appears in a
+  /// successful repository response.
+  final Set<String> _pendingCreatedVisitIds = {};
 
   @override
   void initState() {
@@ -253,28 +274,150 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
     });
 
     try {
-      final visits = await widget.loadVisits();
+      final loadedVisits = await widget.loadVisits();
 
-      if (!mounted || generation != _loadGeneration) return;
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+
+      // Excluded visits cannot be selected or associated again.
+      final availableVisits = loadedVisits
+          .where((visit) => !widget.excludedVisitIds.contains(visit.id))
+          .toList(growable: false);
+
+      final availableById = <String, _VisitOption>{
+        for (final visit in availableVisits) visit.id: visit,
+      };
+
+      final availableIds = availableById.keys.toSet();
+
+      // A newly created visit must be confirmed by a successful
+      // repository response before becoming selectable.
+      final resolvedPendingIds = _pendingCreatedVisitIds
+          .where(availableIds.contains)
+          .toSet();
+
+      final unresolvedPendingIds = _pendingCreatedVisitIds.difference(
+        resolvedPendingIds,
+      );
+
+      // Do not silently lose a successfully persisted visit.
+      //
+      // Keep its ID pending so Retry can recover it without
+      // creating another record.
+      if (unresolvedPendingIds.isNotEmpty) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Your visit was created, but could not be found '
+              'in the refreshed list. Please retry.';
+        });
+
+        return;
+      }
 
       setState(() {
-        _visits = List.unmodifiable(
-          visits.where((visit) => !widget.excludedVisitIds.contains(visit.id)),
-        );
-
-        final availableIds = _visits.map((visit) => visit.id).toSet();
-
+        // Reconcile selections with the repository.
+        //
+        // Stale or excluded IDs must never be returned to the caller.
         _selectedVisitIds.removeWhere((id) => !availableIds.contains(id));
 
+        // Resolve newly created visits only after verifying that
+        // they exist in the repository response.
+        for (final visitId in resolvedPendingIds) {
+          _pendingCreatedVisitIds.remove(visitId);
+          _newlyCreatedIds.add(visitId);
+          _selectedVisitIds.add(visitId);
+        }
+
+        // Display newly created visits first, newest first.
+        final newVisits = _newlyCreatedIds
+            .toList()
+            .reversed
+            .where(availableById.containsKey)
+            .map((id) => availableById[id]!)
+            .toList(growable: false);
+
+        final existingVisits = availableById.values
+            .where((visit) => !_newlyCreatedIds.contains(visit.id))
+            .toList(growable: false);
+
+        _visits = List.unmodifiable([...newVisits, ...existingVisits]);
+
+        // A search should not hide the visit that was just created.
+        if (resolvedPendingIds.isNotEmpty) {
+          _searchController.clear();
+        }
+
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (_) {
-      if (!mounted || generation != _loadGeneration) return;
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
 
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Unable to load your visits.';
+
+        _errorMessage = _pendingCreatedVisitIds.isNotEmpty
+            ? 'Your visit was created, but the list could not '
+                  'be refreshed. Please retry.'
+            : 'Unable to load your visits.';
       });
+    }
+  }
+
+  Future<void> _createVisit() async {
+    final createVisit = widget.createVisit;
+
+    if (createVisit == null ||
+        _isCreatingVisit ||
+        _isLoading ||
+        _pendingCreatedVisitIds.isNotEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isCreatingVisit = true;
+    });
+
+    try {
+      final createdVisitId = await createVisit();
+
+      if (!mounted) {
+        return;
+      }
+
+      // Canceling the creation form changes nothing.
+      if (createdVisitId == null) {
+        return;
+      }
+
+      // The record already exists independently of any Trip.
+      //
+      // Keep the ID until the repository confirms it.
+      _pendingCreatedVisitIds.add(createdVisitId);
+
+      // Reload and reconcile all selections.
+      //
+      // If loading fails, the ID remains pending and can be
+      // recovered through Retry.
+      await _load();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _errorMessage = 'Unable to complete visit creation. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingVisit = false;
+        });
+      }
     }
   }
 
@@ -391,9 +534,23 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
               horizontal: 16,
               vertical: 8,
             ),
-            title: Text(
-              visit.title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    visit.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+
+                if (_newlyCreatedIds.contains(visit.id)) ...[
+                  const SizedBox(width: 8),
+
+                  Badge(label: const Text('NEW')),
+                ],
+              ],
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,7 +598,9 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Select existing visits to add to this Trip.',
+                widget.createVisit == null
+                    ? 'Select existing visits to add to this Trip.'
+                    : 'Select existing visits or create a new one.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -475,6 +634,31 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
           ),
         ),
 
+        if (widget.createVisit != null) ...[
+          const Divider(height: 1),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: OutlinedButton.icon(
+              key: const Key('createVisitFromPickerButton'),
+              onPressed:
+                  _isCreatingVisit ||
+                      _isLoading ||
+                      _pendingCreatedVisitIds.isNotEmpty
+                  ? null
+                  : _createVisit,
+              icon: Icon(
+                _isCreatingVisit
+                    ? Icons.hourglass_top_rounded
+                    : Icons.add_circle_outline_rounded,
+              ),
+              label: Text(
+                _isCreatingVisit ? 'Creating visit...' : widget.createLabel,
+              ),
+            ),
+          ),
+        ],
+
         const Divider(height: 1),
 
         Padding(
@@ -498,7 +682,9 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
                   Expanded(
                     child: TextButton(
                       key: const Key('cancelTripVisitPickerButton'),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _isCreatingVisit
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -509,7 +695,12 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
                     flex: 2,
                     child: FilledButton(
                       key: const Key('confirmTripVisitPickerButton'),
-                      onPressed: selectedCount == 0
+                      onPressed:
+                          selectedCount == 0 ||
+                              _isCreatingVisit ||
+                              _isLoading ||
+                              _errorMessage != null ||
+                              _pendingCreatedVisitIds.isNotEmpty
                           ? null
                           : () {
                               Navigator.of(

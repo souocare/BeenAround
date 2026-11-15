@@ -50,10 +50,13 @@ enum _CityCountryAssociationMode { none, existing, createNew }
 
 enum AddDestinationType { country, city }
 
+enum AddDestinationMode { standard, tripPicker }
+
 class AddDestinationSheet extends StatefulWidget {
   const AddDestinationSheet({
     this.initialCountry,
     this.initialDestinationType = AddDestinationType.country,
+    this.mode = AddDestinationMode.standard,
     this.onTravelRecorded,
     this.onVisitCreated,
     super.key,
@@ -61,6 +64,7 @@ class AddDestinationSheet extends StatefulWidget {
 
   final Country? initialCountry;
   final AddDestinationType initialDestinationType;
+  final AddDestinationMode mode;
 
   final void Function({
     required String countryCode,
@@ -174,6 +178,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   /// during this registration.
   bool _inlineTripSuggestionsShown = false;
 
+  bool get _isTripPickerMode => widget.mode == AddDestinationMode.tripPicker;
+
   @override
   void initState() {
     super.initState();
@@ -261,7 +267,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
     _wishlistNote = value;
 
-    context.read<AddWishlistEntryCubit>().clearError();
+    if (!_isTripPickerMode) {
+      context.read<AddWishlistEntryCubit>().clearError();
+    }
   }
 
   void _onWishlistIncludeCountryChanged(bool value) {
@@ -271,7 +279,9 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       _wishlistIncludeCountry = value;
     });
 
-    context.read<AddWishlistEntryCubit>().clearError();
+    if (!_isTripPickerMode) {
+      context.read<AddWishlistEntryCubit>().clearError();
+    }
   }
 
   Future<void> _retryCountryTripAssociation() async {
@@ -330,6 +340,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   void _selectStatus(DestinationStatus status) {
+    if (_isTripPickerMode) return;
     if (_isAnySubmissionInProgress ||
         _hasPendingTripAssociation ||
         _selectedStatus == status) {
@@ -688,7 +699,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   void _ensureTripSuggestionsLoaded() {
-    if (!_isBeen || _tripsForSuggestionsFuture != null) {
+    if (_isTripPickerMode || !_isBeen || _tripsForSuggestionsFuture != null) {
       return;
     }
 
@@ -714,7 +725,8 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   Widget _buildInlineTripSuggestions() {
     final future = _tripsForSuggestionsFuture;
 
-    if (!_isBeen ||
+    if (_isTripPickerMode ||
+        !_isBeen ||
         future == null ||
         _startedOn == null ||
         _endedOn == null ||
@@ -1172,7 +1184,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
       if (country == null) return;
 
-      if (!_isSelectedTripValid) {
+      if (!_isTripPickerMode && !_isSelectedTripValid) {
         return;
       }
 
@@ -1182,7 +1194,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
         endedOn: _endedOn,
         startedOnPrecision: _startedOnPrecision,
         endedOnPrecision: _endedOnPrecision,
-        tripId: _selectedTripId,
+        tripId: _isTripPickerMode ? null : _selectedTripId,
       );
 
       if (!mounted || !success) return;
@@ -1196,7 +1208,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
     if (city == null) return;
 
-    if (!_isSelectedCityTripValid) {
+    if (!_isTripPickerMode && !_isSelectedCityTripValid) {
       return;
     }
 
@@ -1260,7 +1272,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
     final startedOnPrecision = _startedOnPrecision;
     final endedOnPrecision = _endedOnPrecision;
 
-    final selectedCityTripId = _selectedCityTripId;
+    final selectedCityTripId = _isTripPickerMode ? null : _selectedCityTripId;
 
     var success = await cityCubit.submit(
       cityId: city.id,
@@ -1356,6 +1368,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   void _selectDestinationType(int index) {
+    if (_isTripPickerMode) return;
     if (_isAnySubmissionInProgress) return;
 
     if (_selectedDestinationType == index) return;
@@ -1574,6 +1587,16 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                                 countryState.isSubmitting ||
                                 cityState.isSubmitting;
 
+                            if (_isTripPickerMode) {
+                              return IconButton(
+                                tooltip: 'Close',
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(false),
+                                icon: const Icon(Icons.close),
+                              );
+                            }
+
                             return BlocBuilder<
                               AddWishlistEntryCubit,
                               AddWishlistEntryState
@@ -1631,11 +1654,13 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
-          switch (_selectedStatus) {
-            DestinationStatus.been => 'Where have you been?',
-            DestinationStatus.lived => 'Where have you lived?',
-            DestinationStatus.wish => 'Where do you want to go?',
-          },
+          _isTripPickerMode
+              ? (_isCountry ? 'Create country visit' : 'Create city visit')
+              : switch (_selectedStatus) {
+                  DestinationStatus.been => 'Where have you been?',
+                  DestinationStatus.lived => 'Where have you lived?',
+                  DestinationStatus.wish => 'Where do you want to go?',
+                },
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -1654,16 +1679,18 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
           ),
         ),
         const SizedBox(height: 24),
-        _DestinationTypeSelector(
-          selectedIndex: _selectedDestinationType,
-          onSelected: _selectDestinationType,
-        ),
-        const SizedBox(height: 16),
-        _DestinationStatusSelector(
-          selectedStatus: _selectedStatus,
-          onSelected: _selectStatus,
-        ),
-        const SizedBox(height: 24),
+        if (!_isTripPickerMode) ...[
+          _DestinationTypeSelector(
+            selectedIndex: _selectedDestinationType,
+            onSelected: _selectDestinationType,
+          ),
+          const SizedBox(height: 16),
+          _DestinationStatusSelector(
+            selectedStatus: _selectedStatus,
+            onSelected: _selectStatus,
+          ),
+          const SizedBox(height: 24),
+        ],
         Text(
           'DESTINATION',
           style: theme.textTheme.labelSmall?.copyWith(
@@ -1736,16 +1763,17 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
           const SizedBox(height: 16),
 
-          _buildInlineTripSuggestions(),
-
-          const SizedBox(height: 24),
+          if (!_isTripPickerMode) ...[
+            _buildInlineTripSuggestions(),
+            const SizedBox(height: 24),
+          ],
 
           if (!_isCountry && _selectedCity != null) ...[
             _buildCountryVisitAssociation(context, theme, colors),
             const SizedBox(height: 24),
           ],
 
-          if (_isCountry)
+          if (!_isTripPickerMode && _isCountry)
             TripSelectionField(
               key: const Key('countryVisitTripSelection'),
               repository: context.read<TripRepository>(),
@@ -1778,7 +1806,7 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
                 });
               },
             )
-          else
+          else if (!_isTripPickerMode)
             TripSelectionField(
               key: const Key('cityVisitTripSelection'),
               repository: context.read<TripRepository>(),
@@ -2012,11 +2040,11 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
   }
 
   Widget _buildFooter(BuildContext context) {
-    if (_isWish) {
+    if (!_isTripPickerMode && _isWish) {
       return _buildWishFooter(context);
     }
 
-    if (_isLived) {
+    if (!_isTripPickerMode && _isLived) {
       return _buildResidenceFooter(context);
     }
 
@@ -2154,17 +2182,22 @@ class _AddDestinationSheetState extends State<AddDestinationSheet> {
 
   bool get _isAnySubmissionInProgress {
     final countryState = context.read<AddCountryVisitCubit>().state;
-
     final cityState = context.read<AddCityVisitCubit>().state;
 
-    final wishlistState = context.read<AddWishlistEntryCubit>().state;
+    final isVisitSubmitting =
+        countryState.isSubmitting ||
+        cityState.isSubmitting ||
+        cityState.phase == AddCityVisitPhase.expansionRequired;
 
+    if (_isTripPickerMode) {
+      return isVisitSubmitting;
+    }
+
+    final wishlistState = context.read<AddWishlistEntryCubit>().state;
     final residenceState = context.read<SaveResidenceCubit>().state;
 
     return _overlapDialogOpen ||
-        countryState.isSubmitting ||
-        cityState.isSubmitting ||
-        cityState.phase == AddCityVisitPhase.expansionRequired ||
+        isVisitSubmitting ||
         wishlistState.isSubmitting ||
         residenceState.isSubmitting;
   }

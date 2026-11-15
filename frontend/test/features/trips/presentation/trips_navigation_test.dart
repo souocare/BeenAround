@@ -19,6 +19,9 @@ import '../fakes/fake_countries_repository.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
 import 'package:beenaround/features/flights/domain/airport_repository.dart';
 import 'package:beenaround/features/flights/domain/airline_repository.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/residences/domain/residence_repository.dart';
+import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 
 class InMemoryTripRepository implements TripRepository {
   InMemoryTripRepository({List<Trip> initialTrips = const []})
@@ -156,6 +159,14 @@ class FakeNavigationAirportRepository extends Fake
 class FakeNavigationAirlineRepository extends Fake
     implements AirlineRepository {}
 
+class FakeNavigationCityRepository extends Fake implements CityRepository {}
+
+class FakeNavigationResidenceRepository extends Fake
+    implements ResidenceRepository {}
+
+class FakeNavigationWishlistRepository extends Fake
+    implements WishlistRepository {}
+
 Trip sampleTrip({
   required String id,
   required String name,
@@ -184,6 +195,15 @@ Widget buildTestApp(TripRepository repository) {
       ),
       RepositoryProvider<CityVisitsRepository>(
         create: (_) => EmptyTripNavigationCityVisitsRepository(),
+      ),
+      RepositoryProvider<CityRepository>(
+        create: (_) => FakeNavigationCityRepository(),
+      ),
+      RepositoryProvider<ResidenceRepository>(
+        create: (_) => FakeNavigationResidenceRepository(),
+      ),
+      RepositoryProvider<WishlistRepository>(
+        create: (_) => FakeNavigationWishlistRepository(),
       ),
       RepositoryProvider<FlightRepository>(
         create: (_) => FakeNavigationFlightRepository(),
@@ -233,8 +253,15 @@ Widget buildRouteScopedTripsTestApp(TripRepository repository) {
         RepositoryProvider<CityVisitsRepository>(
           create: (_) => EmptyTripNavigationCityVisitsRepository(),
         ),
-
-        // Flight dependencies required by Trip Details.
+        RepositoryProvider<CityRepository>(
+          create: (_) => FakeNavigationCityRepository(),
+        ),
+        RepositoryProvider<ResidenceRepository>(
+          create: (_) => FakeNavigationResidenceRepository(),
+        ),
+        RepositoryProvider<WishlistRepository>(
+          create: (_) => FakeNavigationWishlistRepository(),
+        ),
         RepositoryProvider<FlightRepository>(
           create: (_) => FakeNavigationFlightRepository(),
         ),

@@ -13,7 +13,13 @@ import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
+import 'package:beenaround/features/geography/domain/city_repository.dart';
+import 'package:beenaround/features/explore/presentation/widgets/add_destination_sheet.dart';
 
+import '../fakes/fake_countries_repository.dart' as shared_fakes;
+import '../fakes/fake_city_repositories.dart';
+
+import '../helpers/contextual_visit_test_helpers.dart';
 import 'trip_visit_picker_dialog_test.dart'
     show
         FakePickerCountriesRepository,
@@ -146,9 +152,10 @@ Trip _trip({
 Widget buildTestApp(
   TripRepository repository, {
   Trip? existingTrip,
-  FakePickerCountriesRepository? countriesRepository,
-  FakePickerCityVisitsRepository? cityVisitsRepository,
+  CountriesRepository? countriesRepository,
+  CityVisitsRepository? cityVisitsRepository,
   FakeTripFormAssociationRepository? associationRepository,
+  CityRepository? cityRepository,
   ValueChanged<bool>? onResult,
 }) {
   final fakeCountriesRepository =
@@ -168,6 +175,9 @@ Widget buildTestApp(
       ),
       RepositoryProvider<CityVisitsRepository>.value(
         value: fakeCityVisitsRepository,
+      ),
+      RepositoryProvider<CityRepository>.value(
+        value: cityRepository ?? FakeCityRepository(),
       ),
       RepositoryProvider<TripAssociationRepository>.value(
         value: fakeAssociationRepository,
@@ -895,4 +905,679 @@ void main() {
 
     expect(repository.createCalls, 0);
   });
+  testWidgets(
+    'creates a country visit during Trip creation and associates it only after saving',
+    (tester) async {
+      final tripRepository = FakeTripFormRepository();
+
+      final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+      final cityVisitsRepository = FakePickerCityVisitsRepository();
+
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          tripRepository,
+          countriesRepository: countriesRepository,
+          cityVisitsRepository: cityVisitsRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('tripNameField')),
+        'Portugal 2024',
+      );
+
+      // ---------------------------------------------------------
+      // 1. Open Country Visit Picker.
+      // ---------------------------------------------------------
+
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('tripFormAddCountriesButton')),
+      );
+
+      expect(find.text('Add country visits'), findsOneWidget);
+
+      // ---------------------------------------------------------
+      // 2. Open contextual creation form.
+      // ---------------------------------------------------------
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AddDestinationSheet), findsOneWidget);
+
+      // ---------------------------------------------------------
+      // 3. Create independent country visit.
+      // ---------------------------------------------------------
+
+      await createContextualCountryVisit(tester);
+
+      expect(countriesRepository.createCountryVisitCalls, 1);
+
+      expect(countriesRepository.availableVisits, hasLength(1));
+
+      final createdVisit = countriesRepository.availableVisits.single;
+
+      expect(createdVisit.countryCode, 'PT');
+
+      // Neither the Trip nor its association exists yet.
+      expect(tripRepository.createCalls, 0);
+      expect(associationRepository.addedCountries, isEmpty);
+      expect(associationRepository.attemptedCountries, isEmpty);
+
+      // ---------------------------------------------------------
+      // 4. Verify picker state.
+      // ---------------------------------------------------------
+
+      expect(find.byType(AddDestinationSheet), findsNothing);
+
+      expect(
+        find.byKey(Key('tripVisitOption-${createdVisit.id}')),
+        findsOneWidget,
+      );
+
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      // ---------------------------------------------------------
+      // 5. Confirm picker.
+      // ---------------------------------------------------------
+
+      await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      // Confirming the picker must not persist the Trip.
+      expect(tripRepository.createCalls, 0);
+
+      // And must not create associations.
+      expect(associationRepository.addedCountries, isEmpty);
+      expect(associationRepository.attemptedCountries, isEmpty);
+
+      // ---------------------------------------------------------
+      // 6. Save Trip.
+      // ---------------------------------------------------------
+
+      await tapSaveTrip(tester);
+
+      expect(tripRepository.createCalls, 1);
+
+      expect(tripRepository.lastInput?.name, 'Portugal 2024');
+
+      // The newly created visit is now associated.
+      expect(associationRepository.addedCountries, [createdVisit.id]);
+
+      expect(associationRepository.attemptedCountries, [createdVisit.id]);
+
+      // The global record was created exactly once.
+      expect(countriesRepository.createCountryVisitCalls, 1);
+
+      expect(countriesRepository.availableVisits, hasLength(1));
+
+      expect(countriesRepository.availableVisits.single.id, createdVisit.id);
+
+      expect(find.text('New Trip'), findsNothing);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('canceling Trip creation preserves newly created global visits', (
+    tester,
+  ) async {
+    final tripRepository = FakeTripFormRepository();
+
+    final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+    final associationRepository = FakeTripFormAssociationRepository();
+
+    await tester.pumpWidget(
+      buildTestApp(
+        tripRepository,
+        countriesRepository: countriesRepository,
+        associationRepository: associationRepository,
+      ),
+    );
+
+    await tester.tap(find.text('Open Form'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('tripNameField')),
+      'Portugal 2024',
+    );
+
+    // Open country picker.
+    await tapVisibleTripFormButton(
+      tester,
+      find.byKey(const Key('tripFormAddCountriesButton')),
+    );
+
+    // Open contextual creation.
+    await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    // Persist visit globally.
+    await createContextualCountryVisit(tester);
+
+    expect(countriesRepository.availableVisits, hasLength(1));
+
+    final createdVisit = countriesRepository.availableVisits.single;
+
+    // Confirm picker.
+    await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(tripRepository.createCalls, 0);
+    expect(associationRepository.addedCountries, isEmpty);
+
+    // Cancel the entire Trip form.
+    await tapCancelTrip(tester);
+
+    // Trip creation was canceled.
+    expect(tripRepository.createCalls, 0);
+
+    // No association was created.
+    expect(associationRepository.addedCountries, isEmpty);
+    expect(associationRepository.attemptedCountries, isEmpty);
+
+    // But the independent visit survives.
+    expect(countriesRepository.availableVisits, hasLength(1));
+
+    expect(countriesRepository.availableVisits.single.id, createdVisit.id);
+
+    expect(countriesRepository.createCountryVisitCalls, 1);
+
+    expect(find.text('New Trip'), findsNothing);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('canceling the visit picker does not discard the created visit', (
+    tester,
+  ) async {
+    final tripRepository = FakeTripFormRepository();
+
+    final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+    final associationRepository = FakeTripFormAssociationRepository();
+
+    await tester.pumpWidget(
+      buildTestApp(
+        tripRepository,
+        countriesRepository: countriesRepository,
+        associationRepository: associationRepository,
+      ),
+    );
+
+    await tester.tap(find.text('Open Form'));
+    await tester.pumpAndSettle();
+
+    // Open picker.
+    await tapVisibleTripFormButton(
+      tester,
+      find.byKey(const Key('tripFormAddCountriesButton')),
+    );
+
+    // Open contextual form.
+    await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    // Create a real visit through the form.
+    await createContextualCountryVisit(tester);
+
+    expect(countriesRepository.availableVisits, hasLength(1));
+
+    final createdVisit = countriesRepository.availableVisits.single;
+
+    expect(find.text('NEW'), findsOneWidget);
+
+    // Cancel picker instead of confirming selection.
+    await tester.tap(find.byKey(const Key('cancelTripVisitPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    // Trip form is still open.
+    expect(find.text('New Trip'), findsOneWidget);
+
+    // The global visit survives.
+    expect(countriesRepository.availableVisits, hasLength(1));
+
+    expect(countriesRepository.availableVisits.single.id, createdVisit.id);
+
+    // No Trip has been created.
+    expect(tripRepository.createCalls, 0);
+
+    // No association has been requested.
+    expect(associationRepository.addedCountries, isEmpty);
+    expect(associationRepository.attemptedCountries, isEmpty);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'reopening the picker shows a previously created visit without NEW badge',
+    (tester) async {
+      final tripRepository = FakeTripFormRepository();
+
+      final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(tripRepository, countriesRepository: countriesRepository),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      final addCountriesButton = find.byKey(
+        const Key('tripFormAddCountriesButton'),
+      );
+
+      await tapVisibleTripFormButton(tester, addCountriesButton);
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      await createContextualCountryVisit(tester);
+
+      final createdVisit = countriesRepository.availableVisits.single;
+
+      expect(find.text('NEW'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('cancelTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      // Reopen the picker from the same Trip form.
+      await tapVisibleTripFormButton(tester, addCountriesButton);
+
+      expect(
+        find.byKey(Key('tripVisitOption-${createdVisit.id}')),
+        findsOneWidget,
+      );
+
+      // NEW is session-specific, not persisted metadata.
+      expect(find.text('NEW'), findsNothing);
+
+      // Canceling the previous picker did not commit its selection.
+      expect(find.text('0 visits selected'), findsOneWidget);
+
+      // The visit remains globally available.
+      expect(countriesRepository.availableVisits, hasLength(1));
+
+      expect(tripRepository.createCalls, 0);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('contextual creation preserves an existing Trip form selection', (
+    tester,
+  ) async {
+    final tripRepository = FakeTripFormRepository();
+
+    final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+    final associationRepository = FakeTripFormAssociationRepository();
+
+    // An existing independent visit.
+    final existingVisit = countryVisit(id: 'existing-country-visit');
+
+    countriesRepository.availableVisits.add(existingVisit);
+
+    await tester.pumpWidget(
+      buildTestApp(
+        tripRepository,
+        countriesRepository: countriesRepository,
+        associationRepository: associationRepository,
+      ),
+    );
+
+    await tester.tap(find.text('Open Form'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('tripNameField')),
+      'Japan and Portugal',
+    );
+
+    await tapVisibleTripFormButton(
+      tester,
+      find.byKey(const Key('tripFormAddCountriesButton')),
+    );
+
+    // Select an existing visit.
+    await tester.tap(
+      find.byKey(const Key('tripVisitOption-existing-country-visit')),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 visit selected'), findsOneWidget);
+
+    // Create another independent visit.
+    await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    await createContextualCountryVisit(tester);
+
+    expect(countriesRepository.availableVisits, hasLength(2));
+
+    final createdVisit = countriesRepository.availableVisits.last;
+
+    expect(find.text('2 visits selected'), findsOneWidget);
+
+    // Confirm both selections.
+    await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+    await tester.pumpAndSettle();
+
+    expect(associationRepository.addedCountries, isEmpty);
+
+    // Associations happen only when the Trip is saved.
+    await tapSaveTrip(tester);
+
+    expect(tripRepository.createCalls, 1);
+
+    expect(
+      associationRepository.addedCountries,
+      containsAll([existingVisit.id, createdVisit.id]),
+    );
+
+    expect(associationRepository.addedCountries, hasLength(2));
+
+    expect(countriesRepository.createCountryVisitCalls, 1);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'creates a city visit during Trip creation and associates it only after saving',
+    (tester) async {
+      final tripRepository = FakeTripFormRepository();
+
+      final cityRepository = FakeCityRepository();
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          tripRepository,
+          cityRepository: cityRepository,
+          cityVisitsRepository: cityVisitsRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('tripNameField')),
+        'Portugal 2024',
+      );
+
+      // Open City Visit Picker.
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('tripFormAddCitiesButton')),
+      );
+
+      expect(find.text('Add city visits'), findsOneWidget);
+
+      // Open contextual City creation.
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AddDestinationSheet), findsOneWidget);
+
+      // Create Lisbon Visit.
+      await createContextualCityVisit(tester);
+
+      expect(cityVisitsRepository.createCalls, 1);
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      final createdVisit = cityVisitsRepository.createdVisits.single;
+
+      expect(createdVisit.cityId, 2267057);
+      expect(createdVisit.countryCode, 'PT');
+
+      // No implicit Country Visit.
+      expect(cityVisitsRepository.lastCountryVisitId, isNull);
+      expect(cityVisitsRepository.lastNewCountryVisit, isNull);
+
+      // Trip has not been created.
+      expect(tripRepository.createCalls, 0);
+
+      // No association before picker confirmation.
+      expect(associationRepository.addedCities, isEmpty);
+      expect(associationRepository.attemptedCities, isEmpty);
+
+      expect(
+        find.byKey(Key('tripVisitOption-${createdVisit.id}')),
+        findsOneWidget,
+      );
+
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      // Confirm selection.
+      await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      // Still no Trip or association.
+      expect(tripRepository.createCalls, 0);
+      expect(associationRepository.addedCities, isEmpty);
+      expect(associationRepository.attemptedCities, isEmpty);
+
+      // Persist Trip.
+      await tapSaveTrip(tester);
+
+      expect(tripRepository.createCalls, 1);
+
+      // Association is now persisted.
+      expect(associationRepository.addedCities, [createdVisit.id]);
+
+      expect(associationRepository.attemptedCities, [createdVisit.id]);
+
+      // City Visit was not recreated.
+      expect(cityVisitsRepository.createCalls, 1);
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      expect(find.text('New Trip'), findsNothing);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'canceling Trip creation preserves an independently created city visit',
+    (tester) async {
+      final tripRepository = FakeTripFormRepository();
+
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          tripRepository,
+          cityRepository: FakeCityRepository(),
+          cityVisitsRepository: cityVisitsRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('tripNameField')),
+        'Portugal 2024',
+      );
+
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('tripFormAddCitiesButton')),
+      );
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      await createContextualCityVisit(tester);
+
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      final createdVisit = cityVisitsRepository.createdVisits.single;
+
+      // Confirm the picker selection.
+      await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(tripRepository.createCalls, 0);
+      expect(associationRepository.addedCities, isEmpty);
+
+      // Cancel the whole Trip form.
+      await tapCancelTrip(tester);
+
+      expect(tripRepository.createCalls, 0);
+
+      expect(associationRepository.addedCities, isEmpty);
+      expect(associationRepository.attemptedCities, isEmpty);
+
+      // The City Visit remains independent and persisted.
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      expect(cityVisitsRepository.createdVisits.single.id, createdVisit.id);
+
+      expect(cityVisitsRepository.createCalls, 1);
+
+      expect(find.text('New Trip'), findsNothing);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'creates country and city visits independently before saving the Trip',
+    (tester) async {
+      final tripRepository = FakeTripFormRepository();
+
+      final countriesRepository = shared_fakes.FakeCountriesRepository();
+
+      final cityRepository = FakeCityRepository();
+      final cityVisitsRepository = FakeCityVisitsRepository();
+
+      final associationRepository = FakeTripFormAssociationRepository();
+
+      await tester.pumpWidget(
+        buildTestApp(
+          tripRepository,
+          countriesRepository: countriesRepository,
+          cityRepository: cityRepository,
+          cityVisitsRepository: cityVisitsRepository,
+          associationRepository: associationRepository,
+        ),
+      );
+
+      await tester.tap(find.text('Open Form'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('tripNameField')),
+        'Portugal 2024',
+      );
+
+      // ---------------------------------------------------------
+      // Create Country Visit.
+      // ---------------------------------------------------------
+
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('tripFormAddCountriesButton')),
+      );
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      await createContextualCountryVisit(tester);
+
+      final countryVisit = countriesRepository.availableVisits.single;
+
+      await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(countriesRepository.createCountryVisitCalls, 1);
+
+      expect(associationRepository.addedCountries, isEmpty);
+
+      // ---------------------------------------------------------
+      // Create City Visit.
+      // ---------------------------------------------------------
+
+      await tapVisibleTripFormButton(
+        tester,
+        find.byKey(const Key('tripFormAddCitiesButton')),
+      );
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      await createContextualCityVisit(tester);
+
+      final cityVisit = cityVisitsRepository.createdVisits.single;
+
+      await tester.tap(find.byKey(const Key('confirmTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(cityVisitsRepository.createCalls, 1);
+
+      // The records exist globally.
+      expect(countriesRepository.availableVisits, hasLength(1));
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      // But the Trip still does not exist.
+      expect(tripRepository.createCalls, 0);
+
+      // And no associations were persisted.
+      expect(associationRepository.addedCountries, isEmpty);
+      expect(associationRepository.addedCities, isEmpty);
+
+      // ---------------------------------------------------------
+      // Save Trip.
+      // ---------------------------------------------------------
+
+      await tapSaveTrip(tester);
+
+      expect(tripRepository.createCalls, 1);
+
+      expect(associationRepository.addedCountries, [countryVisit.id]);
+
+      expect(associationRepository.addedCities, [cityVisit.id]);
+
+      // Nothing was duplicated.
+      expect(countriesRepository.createCountryVisitCalls, 1);
+      expect(cityVisitsRepository.createCalls, 1);
+
+      expect(countriesRepository.availableVisits, hasLength(1));
+      expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

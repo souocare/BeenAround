@@ -131,6 +131,7 @@ Widget buildPickerTestApp({
   required Set<String> excludedVisitIds,
   required ValueChanged<List<String>?> onSelected,
   Set<String> initiallySelectedVisitIds = const {},
+  Future<String?> Function()? createVisit,
 }) {
   return MultiRepositoryProvider(
     providers: [
@@ -152,11 +153,13 @@ Widget buildPickerTestApp({
                           context: context,
                           excludedVisitIds: excludedVisitIds,
                           initiallySelectedVisitIds: initiallySelectedVisitIds,
+                          createVisit: createVisit,
                         )
                       : await showTripCityVisitPicker(
                           context: context,
                           excludedVisitIds: excludedVisitIds,
                           initiallySelectedVisitIds: initiallySelectedVisitIds,
+                          createVisit: createVisit,
                         );
 
                   onSelected(selected);
@@ -191,6 +194,7 @@ void main() {
     required bool isCountryPicker,
     Set<String> excludedVisitIds = const {},
     Set<String> initiallySelectedVisitIds = const {},
+    Future<String?> Function()? createVisit,
   }) async {
     await tester.pumpWidget(
       buildPickerTestApp(
@@ -199,6 +203,7 @@ void main() {
         isCountryPicker: isCountryPicker,
         excludedVisitIds: excludedVisitIds,
         initiallySelectedVisitIds: initiallySelectedVisitIds,
+        createVisit: createVisit,
         onSelected: (value) {
           selectedVisitIds = value;
           selectionCompleted = true;
@@ -579,6 +584,226 @@ void main() {
 
       expect(selectedVisitIds, [secondCountryVisitId]);
     });
+    testWidgets('creates a country visit and selects it automatically', (
+      tester,
+    ) async {
+      const createdId = 'country-visit-new';
+
+      var createCalls = 0;
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        createVisit: () async {
+          createCalls++;
+
+          // Simulate a successfully persisted independent visit.
+          countriesRepository.visits.add(
+            countryVisit(id: createdId, countryCode: 'PT'),
+          );
+
+          return createdId;
+        },
+      );
+
+      expect(
+        find.byKey(const Key('createVisitFromPickerButton')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(createCalls, 1);
+
+      expect(
+        find.byKey(const Key('tripVisitOption-country-visit-new')),
+        findsOneWidget,
+      );
+
+      expect(find.text('Portugal'), findsOneWidget);
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      // Creating the visit does not close the picker.
+      expect(selectionCompleted, isFalse);
+
+      await confirmSelection(tester);
+
+      expect(selectionCompleted, isTrue);
+      expect(selectedVisitIds, [createdId]);
+    });
+    testWidgets('preserves existing selections when creating a country visit', (
+      tester,
+    ) async {
+      const createdId = 'country-visit-new';
+
+      countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        createVisit: () async {
+          countriesRepository.visits.add(
+            countryVisit(id: createdId, countryCode: 'PT'),
+          );
+
+          return createdId;
+        },
+      );
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 visits selected'), findsOneWidget);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [firstCountryVisitId, createdId]);
+    });
+    testWidgets(
+      'supports creating multiple country visits in one picker session',
+      (tester) async {
+        var creationNumber = 0;
+
+        await openPicker(
+          tester,
+          isCountryPicker: true,
+          createVisit: () async {
+            creationNumber++;
+
+            final id = 'country-visit-new-$creationNumber';
+
+            countriesRepository.visits.add(
+              countryVisit(
+                id: id,
+                countryCode: creationNumber == 1 ? 'JP' : 'PT',
+              ),
+            );
+
+            return id;
+          },
+        );
+
+        final createButton = find.byKey(
+          const Key('createVisitFromPickerButton'),
+        );
+
+        await tester.tap(createButton);
+        await tester.pumpAndSettle();
+
+        await tester.tap(createButton);
+        await tester.pumpAndSettle();
+
+        expect(creationNumber, 2);
+
+        expect(find.text('2 visits selected'), findsOneWidget);
+
+        expect(find.text('NEW'), findsNWidgets(2));
+
+        await confirmSelection(tester);
+
+        expect(selectedVisitIds, [
+          'country-visit-new-1',
+          'country-visit-new-2',
+        ]);
+      },
+    );
+    testWidgets('recovers a created country visit after refresh failure', (
+      tester,
+    ) async {
+      const createdId = 'country-visit-new';
+
+      countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+
+      await openPicker(
+        tester,
+        isCountryPicker: true,
+        createVisit: () async {
+          countriesRepository.visits.add(
+            countryVisit(id: createdId, countryCode: 'PT'),
+          );
+
+          // The visit is persisted, but the next read fails.
+          countriesRepository.failNextLoad = true;
+
+          return createdId;
+        },
+      );
+
+      await selectVisit(tester, firstCountryVisitId);
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      // The picker must not report the creation as lost.
+      expect(find.byKey(const Key('tripVisitPickerError')), findsOneWidget);
+
+      expect(
+        find.byKey(const Key('retryTripVisitPickerButton')),
+        findsOneWidget,
+      );
+
+      // Confirmation is blocked until pending IDs are verified.
+      final confirmButton = tester.widget<FilledButton>(
+        find.byKey(const Key('confirmTripVisitPickerButton')),
+      );
+
+      expect(confirmButton.onPressed, isNull);
+
+      expect(selectionCompleted, isFalse);
+
+      // Retry only reloads data; it does not create a second visit.
+      await tester.tap(find.byKey(const Key('retryTripVisitPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(countriesRepository.loadCount, 3);
+
+      expect(find.byKey(Key('tripVisitOption-$createdId')), findsOneWidget);
+
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.text('2 visits selected'), findsOneWidget);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [firstCountryVisitId, createdId]);
+    });
+    testWidgets(
+      'canceling country visit creation preserves the current selection',
+      (tester) async {
+        countriesRepository.visits.add(countryVisit(id: firstCountryVisitId));
+
+        await openPicker(
+          tester,
+          isCountryPicker: true,
+          createVisit: () async => null,
+        );
+
+        await selectVisit(tester, firstCountryVisitId);
+
+        await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('1 visit selected'), findsOneWidget);
+
+        expect(find.text('NEW'), findsNothing);
+
+        expect(selectionCompleted, isFalse);
+
+        await confirmSelection(tester);
+
+        expect(selectedVisitIds, [firstCountryVisitId]);
+      },
+    );
   });
 
   group('Trip city visit picker', () {
@@ -710,6 +935,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No matching visits.'), findsOneWidget);
+    });
+    testWidgets('creates a city visit and selects it automatically', (
+      tester,
+    ) async {
+      const createdId = 'city-visit-new';
+
+      await openPicker(
+        tester,
+        isCountryPicker: false,
+        createVisit: () async {
+          cityVisitsRepository.visits.add(
+            cityVisit(id: createdId, cityName: 'Kyoto'),
+          );
+
+          return createdId;
+        },
+      );
+
+      await tester.tap(find.byKey(const Key('createVisitFromPickerButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(Key('tripVisitOption-$createdId')), findsOneWidget);
+
+      expect(find.text('Kyoto'), findsOneWidget);
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.text('1 visit selected'), findsOneWidget);
+
+      await confirmSelection(tester);
+
+      expect(selectedVisitIds, [createdId]);
     });
   });
 

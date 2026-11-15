@@ -31,6 +31,10 @@ import 'package:beenaround/features/explore/presentation/widgets/add_destination
 import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
+import 'package:beenaround/features/explore/presentation/widgets/show_add_destination.dart';
+import 'package:beenaround/features/wishlist/application/wishlist_cubit.dart';
+
+import '../trips/fakes/fake_city_repositories.dart';
 
 // -----------------------------------------------------------------------------
 // Finders
@@ -129,171 +133,6 @@ class FakeCountriesRepository implements CountriesRepository {
     throw UnimplementedError(
       'Country visit deletion is not used by this test.',
     );
-  }
-}
-
-class FakeCityRepository implements CityRepository {
-  int searchCalls = 0;
-
-  @override
-  Future<CitySearchResult> search({
-    String? query,
-    String? countryCode,
-    int limit = 20,
-    int offset = 0,
-    CitySort sort = CitySort.population,
-  }) async {
-    searchCalls++;
-
-    const cities = [
-      City(
-        id: 2267057,
-        name: 'Lisbon',
-        asciiName: 'Lisbon',
-        countryCode: 'PT',
-        countryName: 'Portugal',
-        latitude: 38.7167,
-        longitude: -9.1333,
-        population: 517802,
-        featureCode: 'PPLC',
-      ),
-      City(
-        id: 3117735,
-        name: 'Madrid',
-        asciiName: 'Madrid',
-        countryCode: 'ES',
-        countryName: 'Spain',
-        latitude: 40.4165,
-        longitude: -3.7026,
-        population: 3255944,
-        featureCode: 'PPLC',
-      ),
-    ];
-
-    final normalizedQuery = query?.trim().toLowerCase() ?? '';
-
-    final matches = cities
-        .where((city) {
-          final matchesName =
-              normalizedQuery.isEmpty ||
-              city.name.toLowerCase().contains(normalizedQuery);
-
-          final matchesCountry =
-              countryCode == null ||
-              city.countryCode == countryCode.toUpperCase();
-
-          return matchesName && matchesCountry;
-        })
-        .toList(growable: false);
-
-    return CitySearchResult(
-      items: matches,
-      total: matches.length,
-      limit: limit,
-      offset: offset,
-    );
-  }
-
-  @override
-  Future<List<City>> resolveByIds({required List<int> cityIds}) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<CountryCityCount>> listCountryCityCounts() async {
-    return const [
-      CountryCityCount(
-        countryCode: 'PT',
-        countryName: 'Portugal',
-        cityCount: 1,
-      ),
-      CountryCityCount(countryCode: 'ES', countryName: 'Spain', cityCount: 1),
-    ];
-  }
-}
-
-class FakeCityVisitsRepository implements CityVisitsRepository {
-  int createCalls = 0;
-  int? lastCreatedCityId;
-
-  DateTime? lastStartedOn;
-  DateTime? lastEndedOn;
-  String? lastCountryVisitId;
-  NewCountryVisitInput? lastNewCountryVisit;
-  CountryVisitDateExpansion? lastCountryDateExpansion;
-
-  VisitDatePrecision? lastStartedOnPrecision;
-  VisitDatePrecision? lastEndedOnPrecision;
-  CountryVisitDateExpansion? expansionOnFirstCreate;
-
-  final List<CityVisit> createdVisits = [];
-
-  @override
-  Future<List<CityVisit>> getCityVisits() async {
-    return List.unmodifiable(createdVisits);
-  }
-
-  @override
-  Future<CityVisit> createCityVisit({
-    required int cityId,
-    required DateTime startedOn,
-    required DateTime endedOn,
-    VisitDatePrecision startedOnPrecision = VisitDatePrecision.day,
-    VisitDatePrecision endedOnPrecision = VisitDatePrecision.day,
-    String? countryVisitId,
-    NewCountryVisitInput? newCountryVisit,
-    CountryVisitDateExpansion? countryDateExpansion,
-  }) async {
-    createCalls++;
-
-    lastCreatedCityId = cityId;
-
-    lastStartedOn = startedOn;
-    lastEndedOn = endedOn;
-
-    lastStartedOnPrecision = startedOnPrecision;
-    lastEndedOnPrecision = endedOnPrecision;
-
-    lastCountryVisitId = countryVisitId;
-    lastNewCountryVisit = newCountryVisit;
-    lastCountryDateExpansion = countryDateExpansion;
-    // Simulate a backend proposal on the first request only.
-    // No city visit is persisted until confirmation succeeds.
-    if (createCalls == 1 && expansionOnFirstCreate != null) {
-      throw CountryVisitDateExpansionRequired(expansionOnFirstCreate!);
-    }
-
-    final visit = CityVisit(
-      id: 'city-visit-$createCalls',
-      cityId: cityId,
-      cityName: cityId == 2267057 ? 'Lisbon' : 'Madrid',
-      countryCode: cityId == 2267057 ? 'PT' : 'ES',
-      countryName: cityId == 2267057 ? 'Portugal' : 'Spain',
-      startedOn: startedOn,
-      endedOn: endedOn,
-      startedOnPrecision: startedOnPrecision,
-      endedOnPrecision: endedOnPrecision,
-      createdAt: DateTime(2026, 10, 24),
-      updatedAt: DateTime(2026, 10, 24),
-      countryVisitId: countryVisitId,
-    );
-
-    createdVisits.add(visit);
-
-    return visit;
-  }
-
-  @override
-  Future<CityVisit> updateCityVisit({
-    required String visitId,
-    required Map<String, dynamic> changes,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> deleteCityVisit({required String visitId}) {
-    throw UnimplementedError();
   }
 }
 
@@ -850,6 +689,94 @@ void main() {
         child: BlocProvider.value(
           value: cubit,
           child: const MaterialApp(home: Scaffold(body: ExplorePage())),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpContextualVisitForm(
+    WidgetTester tester, {
+    required AddDestinationType destinationType,
+    required ValueChanged<CreatedVisitResult?> onResult,
+    FakeCountriesRepository? repository,
+    FakeCityRepository? cityRepository,
+    FakeCityVisitsRepository? cityVisitsRepository,
+    TripAssociationRepository? tripAssociationRepository,
+  }) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final countriesRepository = repository ?? FakeCountriesRepository();
+    final wishlistRepository = FakeWishlistRepository();
+
+    final exploreCubit = ExploreCubit(repository: countriesRepository);
+
+    final wishlistCubit = WishlistCubit(repository: wishlistRepository);
+
+    addTearDown(exploreCubit.close);
+    addTearDown(wishlistCubit.close);
+
+    await exploreCubit.load();
+
+    await tester.pumpWidget(
+      MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<CountriesRepository>.value(
+            value: countriesRepository,
+          ),
+          RepositoryProvider<CityRepository>.value(
+            value: cityRepository ?? FakeCityRepository(),
+          ),
+          RepositoryProvider<CityVisitsRepository>.value(
+            value: cityVisitsRepository ?? FakeCityVisitsRepository(),
+          ),
+          RepositoryProvider<ResidenceRepository>.value(
+            value: FakeResidenceRepository(),
+          ),
+          RepositoryProvider<WishlistRepository>.value(
+            value: wishlistRepository,
+          ),
+          RepositoryProvider<TripRepository>.value(
+            value: FakeExploreTripRepository(),
+          ),
+          RepositoryProvider<TripAssociationRepository>.value(
+            value:
+                tripAssociationRepository ??
+                FakeExploreTripAssociationRepository(),
+          ),
+        ],
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<ExploreCubit>.value(value: exploreCubit),
+            BlocProvider<WishlistCubit>.value(value: wishlistCubit),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) {
+                  return Center(
+                    child: FilledButton(
+                      key: const Key('openContextualVisitForm'),
+                      onPressed: () async {
+                        final result = await showAddDestinationWithResult(
+                          context,
+                          destinationType: destinationType,
+                        );
+
+                        onResult(result);
+                      },
+                      child: const Text('Create visit'),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -3809,4 +3736,217 @@ void main() {
 
     expect(countriesRepository.createdVisits.length, 1);
   });
+  testWidgets('contextual country creation returns the persisted visit ID', (
+    tester,
+  ) async {
+    final repository = FakeCountriesRepository();
+    final associationRepository = FakeExploreTripAssociationRepository();
+
+    CreatedVisitResult? result;
+    var resultReceived = false;
+
+    await pumpContextualVisitForm(
+      tester,
+      destinationType: AddDestinationType.country,
+      repository: repository,
+      tripAssociationRepository: associationRepository,
+      onResult: (value) {
+        resultReceived = true;
+        result = value;
+      },
+    );
+
+    // The form opens directly in country visit mode.
+    await tester.tap(find.byKey(const Key('openContextualVisitForm')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddDestinationSheet), findsOneWidget);
+    expect(find.text('Create country visit'), findsOneWidget);
+
+    // Trip selection must not be available.
+    expect(find.byKey(const Key('countryVisitTripSelection')), findsNothing);
+
+    // Choose the destination.
+    await tester.tap(find.text('Select a country'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Portugal'));
+    await tester.pumpAndSettle();
+
+    // Choose dates.
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    // Persist the visit.
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(resultReceived, isTrue);
+    expect(result, isNotNull);
+
+    expect(result!.visitId, 'visit-1');
+    expect(result!.isCountry, isTrue);
+
+    // The independent visit was persisted.
+    expect(repository.createCalls, 1);
+    expect(repository.createdVisits, hasLength(1));
+    expect(repository.lastCreatedCountryCode, 'PT');
+
+    // No Trip association was created.
+    expect(associationRepository.addCountryCalls, 0);
+    expect(associationRepository.addCityCalls, 0);
+
+    // The form has closed.
+    expect(find.byType(AddDestinationSheet), findsNothing);
+  });
+  testWidgets('contextual city creation returns the persisted visit ID', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+    final associationRepository = FakeExploreTripAssociationRepository();
+
+    CreatedVisitResult? result;
+    var resultReceived = false;
+
+    await pumpContextualVisitForm(
+      tester,
+      destinationType: AddDestinationType.city,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+      tripAssociationRepository: associationRepository,
+      onResult: (value) {
+        resultReceived = true;
+        result = value;
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('openContextualVisitForm')));
+
+    await tester.pumpAndSettle();
+
+    // City mode must be selected immediately.
+    expect(find.text('Create city visit'), findsOneWidget);
+    expect(find.text('Select a city'), findsOneWidget);
+
+    expect(find.byKey(const Key('cityVisitTripSelection')), findsNothing);
+
+    // Select Lisbon.
+    await tester.tap(find.text('Select a city'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('destinationCitySearch')),
+      'lis',
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lisbon'));
+    await tester.pumpAndSettle();
+
+    // Register the visit.
+    await selectVisitMonth(tester, field: 'START DATE', year: 2024, month: 6);
+
+    await selectVisitMonth(tester, field: 'END DATE', year: 2024, month: 8);
+
+    await tester.tap(find.text('Save Visit'));
+    await tester.pumpAndSettle();
+
+    expect(resultReceived, isTrue);
+    expect(result, isNotNull);
+
+    expect(result!.isCountry, isFalse);
+
+    // The returned ID is the actual persisted City Visit.
+    expect(cityVisitsRepository.createdVisits, hasLength(1));
+
+    expect(result!.visitId, cityVisitsRepository.createdVisits.single.id);
+
+    expect(cityVisitsRepository.createCalls, 1);
+    expect(cityVisitsRepository.lastCreatedCityId, 2267057);
+
+    // No Country Visit was implicitly created.
+    expect(countriesRepository.createCalls, 0);
+
+    // No Trip association was created.
+    expect(associationRepository.addCountryCalls, 0);
+    expect(associationRepository.addCityCalls, 0);
+
+    expect(find.byType(AddDestinationSheet), findsNothing);
+  });
+  testWidgets('canceling contextual visit creation returns null', (
+    tester,
+  ) async {
+    final countriesRepository = FakeCountriesRepository();
+    final cityVisitsRepository = FakeCityVisitsRepository();
+    final associationRepository = FakeExploreTripAssociationRepository();
+
+    CreatedVisitResult? result;
+    var resultReceived = false;
+
+    await pumpContextualVisitForm(
+      tester,
+      destinationType: AddDestinationType.country,
+      repository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
+      tripAssociationRepository: associationRepository,
+      onResult: (value) {
+        resultReceived = true;
+        result = value;
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('openContextualVisitForm')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddDestinationSheet), findsOneWidget);
+
+    // Close without saving.
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    expect(resultReceived, isTrue);
+    expect(result, isNull);
+
+    expect(countriesRepository.createCalls, 0);
+    expect(cityVisitsRepository.createCalls, 0);
+
+    expect(associationRepository.addCountryCalls, 0);
+    expect(associationRepository.addCityCalls, 0);
+
+    expect(find.byType(AddDestinationSheet), findsNothing);
+  });
+  testWidgets(
+    'contextual visit form hides record type and Trip selection controls',
+    (tester) async {
+      await pumpContextualVisitForm(
+        tester,
+        destinationType: AddDestinationType.country,
+        onResult: (_) {},
+      );
+
+      await tester.tap(find.byKey(const Key('openContextualVisitForm')));
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create country visit'), findsOneWidget);
+
+      // Standard destination type controls are absent.
+      expect(find.text('Lived'), findsNothing);
+      expect(find.text('Wish'), findsNothing);
+
+      // Trip selection must be unavailable.
+      expect(find.byKey(const Key('countryVisitTripSelection')), findsNothing);
+
+      expect(find.byKey(const Key('cityVisitTripSelection')), findsNothing);
+
+      // Only visit registration is available.
+      expect(find.text('Save Visit'), findsOneWidget);
+    },
+  );
 }

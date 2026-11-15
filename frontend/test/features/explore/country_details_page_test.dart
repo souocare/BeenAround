@@ -520,6 +520,9 @@ void main() {
           RepositoryProvider<CountriesRepository>.value(
             value: countriesRepository,
           ),
+          RepositoryProvider<CityRepository>(
+            create: (_) => FakeCityRepository(),
+          ),
           RepositoryProvider<CityVisitsRepository>.value(
             value: cityVisitsRepository,
           ),

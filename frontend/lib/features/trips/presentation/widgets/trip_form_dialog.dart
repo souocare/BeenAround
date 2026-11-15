@@ -25,6 +25,9 @@ import '../../application/trip_visit_suggestions.dart';
 import '../../domain/trip_status.dart';
 
 import 'inline_trip_visit_suggestions.dart';
+import '../../../explore/presentation/widgets/add_destination_sheet.dart';
+import '../../../explore/presentation/widgets/show_add_destination.dart';
+import '../../../geography/domain/city_repository.dart';
 
 /// Opens the Create/Edit Trip form.
 ///
@@ -45,6 +48,8 @@ Future<bool> showTripFormDialog({
   final cityVisitsRepository = isCreating
       ? context.read<CityVisitsRepository>()
       : null;
+
+  final cityRepository = isCreating ? context.read<CityRepository>() : null;
 
   final associationRepository = isCreating
       ? context.read<TripAssociationRepository>()
@@ -74,6 +79,7 @@ Future<bool> showTripFormDialog({
         RepositoryProvider<CityVisitsRepository>.value(
           value: cityVisitsRepository!,
         ),
+        RepositoryProvider<CityRepository>.value(value: cityRepository!),
       ],
       child: form,
     );
@@ -282,6 +288,14 @@ class _TripFormDialogState extends State<TripFormDialog> {
       context: context,
       excludedVisitIds: const {},
       initiallySelectedVisitIds: _selectedCountryVisitIds,
+      createVisit: () async {
+        final result = await showAddDestinationWithResult(
+          context,
+          destinationType: AddDestinationType.country,
+        );
+
+        return result?.visitId;
+      },
     );
 
     if (!mounted || selected == null) {
@@ -302,6 +316,14 @@ class _TripFormDialogState extends State<TripFormDialog> {
       context: context,
       excludedVisitIds: const {},
       initiallySelectedVisitIds: _selectedCityVisitIds,
+      createVisit: () async {
+        final result = await showAddDestinationWithResult(
+          context,
+          destinationType: AddDestinationType.city,
+        );
+
+        return result?.visitId;
+      },
     );
 
     if (!mounted || selected == null) {

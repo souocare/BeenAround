@@ -9,6 +9,8 @@ import '../../../../core/models/visit_date_precision.dart';
 
 import '../../application/trip_associations_cubit.dart';
 import '../../application/trip_associations_state.dart';
+import '../../../explore/presentation/widgets/add_destination_sheet.dart';
+import '../../../explore/presentation/widgets/show_add_destination.dart';
 
 /// Read-only presentation of a Trip's associated country and city visits.
 ///
@@ -145,6 +147,14 @@ class _TripAssociatedVisitsSectionState
     final selectedVisitIds = await showTripCountryVisitPicker(
       context: context,
       excludedVisitIds: state.countryVisits.map((visit) => visit.id).toSet(),
+      createVisit: () async {
+        final result = await showAddDestinationWithResult(
+          context,
+          destinationType: AddDestinationType.country,
+        );
+
+        return result?.visitId;
+      },
     );
 
     if (!context.mounted ||
@@ -165,6 +175,14 @@ class _TripAssociatedVisitsSectionState
     final selectedVisitIds = await showTripCityVisitPicker(
       context: context,
       excludedVisitIds: state.cityVisits.map((visit) => visit.id).toSet(),
+      createVisit: () async {
+        final result = await showAddDestinationWithResult(
+          context,
+          destinationType: AddDestinationType.city,
+        );
+
+        return result?.visitId;
+      },
     );
 
     if (!context.mounted ||

@@ -12,6 +12,7 @@ import '../../domain/trip_repository.dart';
 import '../../domain/trip_association_repository.dart';
 
 import '../pages/trip_details_page.dart';
+import '../../../geography/domain/city_repository.dart';
 
 /// Opens Trip Details with all dependencies required by its features.
 ///
@@ -33,6 +34,7 @@ Future<void> openTripDetails(
 
   final countriesRepository = context.read<CountriesRepository>();
   final cityVisitsRepository = context.read<CityVisitsRepository>();
+  final cityRepository = context.read<CityRepository>();
 
   final flightRepository = context.read<FlightRepository>();
   final airportRepository = context.read<AirportRepository>();
@@ -52,6 +54,7 @@ Future<void> openTripDetails(
           RepositoryProvider<CityVisitsRepository>.value(
             value: cityVisitsRepository,
           ),
+          RepositoryProvider<CityRepository>.value(value: cityRepository),
           RepositoryProvider<FlightRepository>.value(value: flightRepository),
           RepositoryProvider<AirportRepository>.value(value: airportRepository),
           RepositoryProvider<AirlineRepository>.value(value: airlineRepository),
