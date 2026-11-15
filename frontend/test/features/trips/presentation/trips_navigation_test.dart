@@ -304,6 +304,9 @@ void main() {
       expect(find.text('Trip Details'), findsOneWidget);
 
       expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+      expect(find.byKey(const Key('tripDetailsStatus')), findsOneWidget);
+
+      expect(find.byKey(const Key('tripDetailsDates')), findsOneWidget);
 
       expect(find.text('Japan 2027'), findsOneWidget);
       expect(find.text('Spring holiday'), findsOneWidget);
@@ -413,6 +416,9 @@ void main() {
       expect(find.text('Japan 2027'), findsOneWidget);
 
       expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+      expect(find.byKey(const Key('tripDetailsStatus')), findsOneWidget);
+
+      expect(find.byKey(const Key('tripDetailsDates')), findsOneWidget);
 
       expect(repository.detailCalls, 2);
     });
@@ -431,6 +437,9 @@ void main() {
         await openTrip(tester, 'trip-1');
 
         expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+        expect(find.byKey(const Key('tripDetailsStatus')), findsOneWidget);
+
+        expect(find.byKey(const Key('tripDetailsDates')), findsOneWidget);
 
         expect(find.text('Honeymoon'), findsOneWidget);
 
@@ -448,9 +457,17 @@ void main() {
         await tester.pumpAndSettle();
 
         // Open the city visit picker.
-        await tester.tap(find.byKey(const Key('addTripCitiesVisitButton')));
+        final addCitiesButton = find.byKey(
+          const Key('addTripCitiesVisitButton'),
+        );
 
+        await tester.ensureVisible(addCitiesButton);
         await tester.pumpAndSettle();
+
+        await tester.tap(addCitiesButton);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add city visits'), findsOneWidget);
 
         expect(find.text('Add city visits'), findsOneWidget);
 

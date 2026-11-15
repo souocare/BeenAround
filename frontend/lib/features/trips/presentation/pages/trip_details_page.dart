@@ -1,3 +1,4 @@
+import 'package:beenaround/features/trips/presentation/widgets/trip_overview_summary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -110,7 +111,51 @@ class _TripDetailsView extends StatelessWidget {
     };
   }
 
+  Widget _buildStatusBadge(BuildContext context, Trip trip) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    final status = resolveTripStatus(trip);
+
+    final (icon, color) = switch (status) {
+      TripStatus.upcoming => (Icons.event_outlined, colors.primary),
+      TripStatus.ongoing => (Icons.radio_button_checked, colors.tertiary),
+      TripStatus.completed => (Icons.check_circle_outline, colors.secondary),
+      TripStatus.undated => (Icons.help_outline, colors.onSurfaceVariant),
+    };
+
+    return Container(
+      key: const Key('tripDetailsStatus'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            _statusLabel(trip),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTripContent(BuildContext context, Trip trip) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final horizontalPadding = screenWidth < 600 ? AppSpacing.md : AppSpacing.xl;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
@@ -118,7 +163,10 @@ class _TripDetailsView extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: AppSpacing.xl,
+          ),
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,12 +185,7 @@ class _TripDetailsView extends StatelessWidget {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      Text(
-                        _statusLabel(trip),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colors.primary,
-                        ),
-                      ),
+                      _buildStatusBadge(context, trip),
                     ],
                   ),
                 ),
@@ -219,6 +262,20 @@ class _TripDetailsView extends StatelessWidget {
                 ],
               ),
             ),
+
+            const SizedBox(height: AppSpacing.xxxl),
+
+            Text(
+              'Overview',
+              key: const Key('tripOverviewHeading'),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            const TripOverviewSummary(),
 
             const SizedBox(height: AppSpacing.xxxl),
 
