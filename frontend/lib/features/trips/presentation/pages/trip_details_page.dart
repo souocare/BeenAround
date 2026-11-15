@@ -139,12 +139,17 @@ class _TripDetailsView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15, color: color),
+
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            _statusLabel(trip),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
+
+          Flexible(
+            child: Text(
+              _statusLabel(trip),
+              softWrap: true,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_tokens.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/domain/country_visit.dart';
 import 'package:beenaround/features/flights/domain/flight.dart';
@@ -50,12 +51,27 @@ CityVisit cityVisit({
 // Individual Flight fields are deliberately not required.
 class FakeOverviewFlight extends Fake implements Flight {}
 
-Widget buildTestApp(TripAssociationsCubit cubit) {
+Widget buildTestApp(
+  TripAssociationsCubit cubit, {
+  double textScale = 1.0,
+  double horizontalPadding = 0,
+}) {
   return MaterialApp(
+    builder: (context, child) {
+      return MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      );
+    },
     home: Scaffold(
       body: BlocProvider<TripAssociationsCubit>.value(
         value: cubit,
-        child: const TripOverviewSummary(),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: const TripOverviewSummary(),
+        ),
       ),
     ),
   );
@@ -310,5 +326,75 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
+    for (final width in <double>[320, 390, 768, 1280]) {
+      for (final textScale in <double>[1.0, 1.5, 2.0]) {
+        testWidgets('renders at ${width.toInt()}px with ${textScale}x text', (
+          tester,
+        ) async {
+          tester.view.physicalSize = Size(width, 844);
+          tester.view.devicePixelRatio = 1;
+
+          addTearDown(() {
+            tester.view.resetPhysicalSize();
+            tester.view.resetDevicePixelRatio();
+          });
+
+          final repository = FakeTripAssociationRepository(
+            countryVisits: [
+              countryVisit(id: 'country-visit-1', countryCode: 'JP'),
+            ],
+            cityVisits: [
+              cityVisit(
+                id: 'city-visit-1',
+                cityId: 1850147,
+                cityName: 'Tokyo',
+                countryCode: 'JP',
+                countryName: 'Japan',
+              ),
+            ],
+            flights: [FakeOverviewFlight()],
+          );
+
+          final cubit = TripAssociationsCubit(
+            repository: repository,
+            tripId: 'trip-1',
+          );
+
+          addTearDown(cubit.close);
+
+          await cubit.load();
+
+          await tester.pumpWidget(
+            buildTestApp(
+              cubit,
+              textScale: textScale,
+              horizontalPadding: width < 600 ? AppSpacing.md : AppSpacing.xl,
+            ),
+          );
+
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(const Key('tripOverviewSummary')), findsOneWidget);
+
+          expectMetric(key: 'tripOverviewCountries', value: 1);
+
+          expectMetric(key: 'tripOverviewCities', value: 1);
+
+          expectMetric(key: 'tripOverviewFlights', value: 1);
+
+          expect(find.text('Countries'), findsOneWidget);
+          expect(find.text('Cities'), findsOneWidget);
+          expect(find.text('Flights'), findsOneWidget);
+
+          expect(
+            tester.takeException(),
+            isNull,
+            reason:
+                'Overview overflow at ${width.toInt()}px '
+                'with ${textScale}x text.',
+          );
+        });
+      }
+    }
   });
 }

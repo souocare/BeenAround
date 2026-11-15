@@ -73,6 +73,27 @@ class _TripAssociatedFlightsSectionState
     return _catalogFuture!;
   }
 
+  String _flightAccessibilityLabel(
+    Flight flight,
+    ResolvedFlightCatalog catalog,
+  ) {
+    final departure =
+        catalog.airportFor(flight.departureAirportId)?.displayCode ??
+        '${flight.departureAirportId}';
+
+    final arrival =
+        catalog.airportFor(flight.arrivalAirportId)?.displayCode ??
+        '${flight.arrivalAirportId}';
+
+    final flightNumber = flight.flightNumber?.trim();
+
+    final prefix = flightNumber != null && flightNumber.isNotEmpty
+        ? 'Flight $flightNumber'
+        : 'Flight';
+
+    return '$prefix, $departure to $arrival';
+  }
+
   Future<void> _addFlights(
     BuildContext context,
     TripAssociationsState state,
@@ -154,6 +175,7 @@ class _TripAssociatedFlightsSectionState
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final flightLabel = _flightAccessibilityLabel(flight, catalog);
 
     return Padding(
       key: Key('tripFlight-${flight.id}'),
@@ -166,18 +188,24 @@ class _TripAssociatedFlightsSectionState
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(18),
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: Key('openTripFlight-${flight.id}'),
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => _openFlightDetails(context, flight),
-              child: FlightCard(
-                flight: flight,
-                departureAirport: catalog.airportFor(flight.departureAirportId),
-                arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
-                airline: flight.airlineId == null
-                    ? null
-                    : catalog.airlineFor(flight.airlineId!),
-                airlineName: catalog.airlineNameFor(flight),
+            child: Semantics(
+              label: 'View $flightLabel',
+              explicitChildNodes: true,
+              child: InkWell(
+                key: Key('openTripFlight-${flight.id}'),
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _openFlightDetails(context, flight),
+                child: FlightCard(
+                  flight: flight,
+                  departureAirport: catalog.airportFor(
+                    flight.departureAirportId,
+                  ),
+                  arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
+                  airline: flight.airlineId == null
+                      ? null
+                      : catalog.airlineFor(flight.airlineId!),
+                  airlineName: catalog.airlineNameFor(flight),
+                ),
               ),
             ),
           ),
@@ -188,31 +216,39 @@ class _TripAssociatedFlightsSectionState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton.icon(
-                  key: Key('viewTripFlight-${flight.id}'),
-                  onPressed: () => _openFlightDetails(context, flight),
-                  icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                  label: const Text('View'),
+                Tooltip(
+                  message: 'View $flightLabel',
+                  child: TextButton.icon(
+                    key: Key('viewTripFlight-${flight.id}'),
+                    onPressed: () => _openFlightDetails(context, flight),
+                    icon: const Icon(Icons.open_in_new_outlined, size: 18),
+                    label: const Text('View'),
+                  ),
                 ),
 
                 const SizedBox(width: AppSpacing.sm),
 
-                TextButton.icon(
-                  key: Key('removeTripFlight-${flight.id}'),
-                  onPressed: isMutating
-                      ? null
-                      : () => _removeFlight(context, flight),
-                  icon: Icon(
-                    Icons.remove_circle_outline,
-                    size: 18,
-                    color: isMutating ? colors.onSurfaceVariant : colors.error,
-                  ),
-                  label: Text(
-                    'Remove',
-                    style: theme.textTheme.labelLarge?.copyWith(
+                Tooltip(
+                  message: 'Remove $flightLabel from Trip',
+                  child: TextButton.icon(
+                    key: Key('removeTripFlight-${flight.id}'),
+                    onPressed: isMutating
+                        ? null
+                        : () => _removeFlight(context, flight),
+                    icon: Icon(
+                      Icons.remove_circle_outline,
+                      size: 18,
                       color: isMutating
                           ? colors.onSurfaceVariant
                           : colors.error,
+                    ),
+                    label: Text(
+                      'Remove',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: isMutating
+                            ? colors.onSurfaceVariant
+                            : colors.error,
+                      ),
                     ),
                   ),
                 ),

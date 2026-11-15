@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:beenaround/core/network/api_exception.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
@@ -7,6 +8,7 @@ import 'package:beenaround/features/trips/domain/trip.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_input.dart';
 import 'package:beenaround/features/trips/domain/trip_repository.dart';
+import 'package:beenaround/features/trips/presentation/pages/trip_details_page.dart';
 
 import 'package:beenaround/features/trips/presentation/pages/trips_page.dart';
 
@@ -237,6 +239,41 @@ Future<void> tapSaveTrip(WidgetTester tester) async {
 
   await tester.tap(button);
   await tester.pumpAndSettle();
+}
+
+Future<void> focusWithTab(
+  WidgetTester tester,
+  Finder target, {
+  int maxTabs = 40,
+}) async {
+  for (var attempt = 0; attempt < maxTabs; attempt++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+
+    if (focusedContext == null) {
+      continue;
+    }
+
+    final focusedElement = find.byElementPredicate(
+      (element) => identical(element, focusedContext),
+    );
+
+    final targetContainsFocus = find
+        .ancestor(of: focusedElement, matching: target)
+        .evaluate()
+        .isNotEmpty;
+
+    if (targetContainsFocus) {
+      return;
+    }
+  }
+
+  fail(
+    'Could not reach ${target.description} '
+    'using Tab after $maxTabs attempts.',
+  );
 }
 
 Widget buildRouteScopedTripsTestApp(TripRepository repository) {
@@ -484,5 +521,217 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+    testWidgets('Trip Details remains usable on a narrow mobile screen', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final repository = InMemoryTripRepository(
+        initialTrips: [
+          sampleTrip(
+            id: 'trip-1',
+            name: 'A very long journey across several countries',
+            description:
+                'A journey with multiple destinations, '
+                'flights and memorable experiences.',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      await openTrip(tester, 'trip-1');
+
+      expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+
+      expect(find.byKey(const Key('tripDetailsStatus')), findsOneWidget);
+
+      expect(find.byKey(const Key('tripDetailsDates')), findsOneWidget);
+
+      expect(find.byKey(const Key('editTripDetailsButton')), findsOneWidget);
+
+      expect(find.byKey(const Key('deleteTripDetailsButton')), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets(
+      'Trip Details allows reaching all empty section actions on mobile',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 700);
+        tester.view.devicePixelRatio = 1;
+
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final repository = InMemoryTripRepository(
+          initialTrips: [sampleTrip(id: 'trip-1', name: 'Empty Trip')],
+        );
+
+        await tester.pumpWidget(buildTestApp(repository));
+        await tester.pumpAndSettle();
+
+        await openTrip(tester, 'trip-1');
+
+        final countryAction = find.byKey(
+          const Key('addTripCountriesVisitButton'),
+        );
+
+        final cityAction = find.byKey(const Key('addTripCitiesVisitButton'));
+
+        final flightAction = find.byKey(const Key('addTripFlightsButton'));
+
+        final pageScroll = find.descendant(
+          of: find.byType(TripDetailsPage),
+          matching: find.byType(Scrollable),
+        );
+
+        // Country action.
+        await tester.scrollUntilVisible(
+          countryAction,
+          200,
+          scrollable: pageScroll.first,
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(countryAction, findsOneWidget);
+
+        expect(
+          tester.widget<ButtonStyleButton>(countryAction).onPressed,
+          isNotNull,
+        );
+
+        // City action.
+        await tester.scrollUntilVisible(
+          cityAction,
+          200,
+          scrollable: pageScroll.first,
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(cityAction, findsOneWidget);
+
+        expect(
+          tester.widget<ButtonStyleButton>(cityAction).onPressed,
+          isNotNull,
+        );
+
+        // Flight action.
+        await tester.scrollUntilVisible(
+          flightAction,
+          200,
+          scrollable: pageScroll.first,
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(flightAction, findsOneWidget);
+
+        expect(
+          tester.widget<ButtonStyleButton>(flightAction).onPressed,
+          isNotNull,
+        );
+
+        expect(tester.takeException(), isNull);
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+    testWidgets('opens Trip Details using keyboard navigation', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final repository = InMemoryTripRepository(
+        initialTrips: [sampleTrip(id: 'trip-1', name: 'Japan 2027')],
+      );
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      final tripCard = find.byKey(const Key('tripCard-trip-1'));
+
+      expect(tripCard, findsOneWidget);
+
+      // The TripCard contains independently focusable Edit/Delete buttons.
+      // Focus the card's own InkWell, not one of its child actions.
+      final cardFocusNode = Focus.of(tester.element(tripCard));
+
+      for (
+        var attempt = 0;
+        attempt < 40 && !cardFocusNode.hasPrimaryFocus;
+        attempt++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+
+      expect(
+        cardFocusNode.hasPrimaryFocus,
+        isTrue,
+        reason:
+            'The TripCard InkWell must be reachable '
+            'through keyboard Tab navigation.',
+      );
+
+      // Activate the focused Trip Card.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tripDetailsName')), findsOneWidget);
+
+      expect(find.text('Japan 2027'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('opens Edit Trip dialog using keyboard navigation', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final repository = InMemoryTripRepository(
+        initialTrips: [sampleTrip(id: 'trip-1', name: 'Japan 2027')],
+      );
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      await openTrip(tester, 'trip-1');
+
+      final editButton = find.byKey(const Key('editTripDetailsButton'));
+
+      expect(editButton, findsOneWidget);
+
+      await focusWithTab(tester, editButton);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Trip'), findsOneWidget);
+
+      expect(find.byKey(const Key('tripNameField')), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
   });
 }

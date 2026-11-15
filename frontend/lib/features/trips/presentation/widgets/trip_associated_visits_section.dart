@@ -243,6 +243,7 @@ class _TripAssociatedVisitsSectionState
     required Key key,
     required Key removeButtonKey,
     VoidCallback? onRemove,
+    required String removeTooltip,
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -307,7 +308,7 @@ class _TripAssociatedVisitsSectionState
 
             IconButton(
               key: removeButtonKey,
-              tooltip: 'Remove from Trip',
+              tooltip: removeTooltip,
               onPressed: onRemove,
               icon: const Icon(Icons.remove_circle_outline),
               color: colors.error,
@@ -439,31 +440,41 @@ class _TripAssociatedVisitsSectionState
                   return Column(
                     children: [
                       for (final visit in state.countryVisits)
-                        _visitTile(
-                          context,
-                          key: Key('tripCountryVisit-${visit.id}'),
-                          removeButtonKey: Key(
-                            'removeTripCountryVisit-${visit.id}',
-                          ),
-                          title: _countryName(countryNames, visit.countryCode),
-                          icon: Icons.public_outlined,
-                          dates: _formatRange(
-                            context,
-                            start: visit.startedOn,
-                            startPrecision: visit.startedOnPrecision,
-                            end: visit.endedOn,
-                            endPrecision: visit.endedOnPrecision,
-                          ),
-                          onRemove: state.isMutating
-                              ? null
-                              : () => _removeCountryVisit(
-                                  context,
-                                  visitId: visit.id,
-                                  visitName: _countryName(
-                                    countryNames,
-                                    visit.countryCode,
-                                  ),
-                                ),
+                        Builder(
+                          builder: (context) {
+                            final countryName = _countryName(
+                              countryNames,
+                              visit.countryCode,
+                            );
+
+                            final dates = _formatRange(
+                              context,
+                              start: visit.startedOn,
+                              startPrecision: visit.startedOnPrecision,
+                              end: visit.endedOn,
+                              endPrecision: visit.endedOnPrecision,
+                            );
+
+                            return _visitTile(
+                              context,
+                              key: Key('tripCountryVisit-${visit.id}'),
+                              removeButtonKey: Key(
+                                'removeTripCountryVisit-${visit.id}',
+                              ),
+                              title: countryName,
+                              icon: Icons.public_outlined,
+                              dates: dates,
+                              removeTooltip:
+                                  'Remove $countryName visit ($dates) from Trip',
+                              onRemove: state.isMutating
+                                  ? null
+                                  : () => _removeCountryVisit(
+                                      context,
+                                      visitId: visit.id,
+                                      visitName: countryName,
+                                    ),
+                            );
+                          },
                         ),
                     ],
                   );
@@ -499,27 +510,35 @@ class _TripAssociatedVisitsSectionState
               )
             else
               for (final visit in state.cityVisits)
-                _visitTile(
-                  context,
-                  key: Key('tripCityVisit-${visit.id}'),
-                  removeButtonKey: Key('removeTripCityVisit-${visit.id}'),
-                  title: visit.cityName,
-                  subtitle: visit.countryName,
-                  icon: Icons.location_city_outlined,
-                  dates: _formatRange(
-                    context,
-                    start: visit.startedOn,
-                    startPrecision: visit.startedOnPrecision,
-                    end: visit.endedOn,
-                    endPrecision: visit.endedOnPrecision,
-                  ),
-                  onRemove: state.isMutating
-                      ? null
-                      : () => _removeCityVisit(
-                          context,
-                          visitId: visit.id,
-                          visitName: visit.cityName,
-                        ),
+                Builder(
+                  builder: (context) {
+                    final dates = _formatRange(
+                      context,
+                      start: visit.startedOn,
+                      startPrecision: visit.startedOnPrecision,
+                      end: visit.endedOn,
+                      endPrecision: visit.endedOnPrecision,
+                    );
+
+                    return _visitTile(
+                      context,
+                      key: Key('tripCityVisit-${visit.id}'),
+                      removeButtonKey: Key('removeTripCityVisit-${visit.id}'),
+                      title: visit.cityName,
+                      subtitle: visit.countryName,
+                      icon: Icons.location_city_outlined,
+                      dates: dates,
+                      removeTooltip:
+                          'Remove ${visit.cityName} visit ($dates) from Trip',
+                      onRemove: state.isMutating
+                          ? null
+                          : () => _removeCityVisit(
+                              context,
+                              visitId: visit.id,
+                              visitName: visit.cityName,
+                            ),
+                    );
+                  },
                 ),
           ],
         );

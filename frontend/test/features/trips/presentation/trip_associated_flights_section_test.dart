@@ -1580,5 +1580,64 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
+    testWidgets('associated flight exposes an accessible navigation label', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final flightCard = find.byKey(const ValueKey('flight-card-flight-1'));
+
+      expect(flightCard, findsOneWidget);
+
+      final semantics = find.ancestor(
+        of: find.byKey(const Key('openTripFlight-flight-1')),
+        matching: find.byType(Semantics),
+      );
+
+      expect(semantics, findsWidgets);
+
+      final labelledSemantics = tester
+          .widgetList<Semantics>(semantics)
+          .where(
+            (widget) =>
+                widget.properties.label?.contains('View Flight TP1234') ??
+                false,
+          );
+
+      expect(labelledSemantics, isNotEmpty);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('Remove Flight action identifies the flight', (tester) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final removeButton = find.byKey(const Key('removeTripFlight-flight-1'));
+
+      final tooltip = find.ancestor(
+        of: removeButton,
+        matching: find.byType(Tooltip),
+      );
+
+      expect(tooltip, findsOneWidget);
+
+      final widget = tester.widget<Tooltip>(tooltip);
+
+      expect(widget.message, contains('TP1234'));
+      expect(widget.message, contains('from Trip'));
+
+      expect(tester.takeException(), isNull);
+    });
   });
 }

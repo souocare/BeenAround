@@ -201,8 +201,12 @@ class TripCard extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.md),
 
-              // Status
-              Row(
+              // Status and actions adapt to the available card width.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -220,40 +224,51 @@ class TripCard extends StatelessWidget {
 
                         const SizedBox(width: AppSpacing.xs),
 
-                        Text(
-                          _statusLabel(status),
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            _statusLabel(status),
+                            softWrap: true,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Spacer(),
 
-                  if (onEdit != null)
-                    IconButton(
-                      key: Key('editTrip-${trip.id}'),
-                      tooltip: 'Edit Trip',
-                      onPressed: onEdit,
-                      icon: Icon(
-                        Icons.edit_outlined,
-                        color: colors.onSurfaceVariant,
-                      ),
+                  if (onEdit != null || onDelete != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onEdit != null)
+                          IconButton(
+                            key: Key('editTrip-${trip.id}'),
+                            tooltip: 'Edit Trip',
+                            onPressed: onEdit,
+                            icon: Icon(
+                              Icons.edit_outlined,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+
+                        if (onDelete != null) ...[
+                          if (onEdit != null)
+                            const SizedBox(width: AppSpacing.xs),
+
+                          IconButton(
+                            key: Key('deleteTrip-${trip.id}'),
+                            tooltip: 'Delete Trip',
+                            onPressed: onDelete,
+                            icon: Icon(
+                              Icons.delete_outline_rounded,
+                              color: colors.error,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: AppSpacing.xs),
-                    IconButton(
-                      key: Key('deleteTrip-${trip.id}'),
-                      tooltip: 'Delete Trip',
-                      onPressed: onDelete,
-                      icon: Icon(
-                        Icons.delete_outline_rounded,
-                        color: colors.error,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],

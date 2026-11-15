@@ -1516,4 +1516,48 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+  testWidgets('country remove action identifies the associated visit', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      countryVisits: [countryVisit()],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final removeButton = find.byKey(
+      const Key('removeTripCountryVisit-country-1'),
+    );
+
+    expect(removeButton, findsOneWidget);
+
+    final button = tester.widget<IconButton>(removeButton);
+
+    expect(button.tooltip, contains('Japan'));
+    expect(button.tooltip, contains('2027'));
+    expect(button.tooltip, contains('from Trip'));
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('city remove action identifies the associated visit', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(cityVisits: [cityVisit()]);
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final removeButton = find.byKey(const Key('removeTripCityVisit-city-1'));
+
+    expect(removeButton, findsOneWidget);
+
+    final button = tester.widget<IconButton>(removeButton);
+
+    expect(button.tooltip, contains('Tokyo'));
+    expect(button.tooltip, contains('2027'));
+    expect(button.tooltip, contains('from Trip'));
+
+    expect(tester.takeException(), isNull);
+  });
 }
