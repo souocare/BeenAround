@@ -105,15 +105,22 @@ void main() {
     expect(find.text('Countries'), findsOneWidget);
     expect(find.text('Cities'), findsOneWidget);
 
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsOneWidget);
+
+    expect(find.text('No countries added'), findsOneWidget);
+
+    expect(find.text('No cities added'), findsOneWidget);
+
     expect(
-      find.text('No country visits associated with this Trip yet.'),
+      find.byKey(const Key('addTripCountriesVisitButton')),
       findsOneWidget,
     );
 
-    expect(
-      find.text('No city visits associated with this Trip yet.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('addTripCitiesVisitButton')), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shows associated country visits with full country names', (
@@ -216,11 +223,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('tripCountryVisit-country-1')), findsNothing);
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
 
     expect(
-      find.text('No country visits associated with this Trip yet.'),
+      find.byKey(const Key('addTripCountriesVisitButton')),
       findsOneWidget,
     );
+
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
 
     expect(repository.countryVisits, isEmpty);
   });
@@ -243,11 +253,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('tripCityVisit-city-1')), findsNothing);
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsOneWidget);
 
-    expect(
-      find.text('No city visits associated with this Trip yet.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('addTripCitiesVisitButton')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsOneWidget);
 
     expect(repository.cityVisits, isEmpty);
   });
@@ -362,10 +372,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Initially, no visits are associated with the Trip.
-    expect(
-      find.text('No country visits associated with this Trip yet.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
 
     // Open the existing visits picker.
     final addButton = find.byKey(const Key('addTripCountriesVisitButton'));
@@ -498,10 +505,7 @@ void main() {
 
     expect(find.text('Add country visits'), findsNothing);
 
-    expect(
-      find.text('No country visits associated with this Trip yet.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
 
     expect(repository.countryVisits, isEmpty);
     expect(repository.addCountryVisitCalls, 0);
@@ -768,10 +772,7 @@ void main() {
 
       expect(associationRepository.countryVisits, isEmpty);
 
-      expect(
-        find.text('No country visits associated with this Trip yet.'),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
 
       // ---------------------------------------------------------
       // 7. Verify the independent visit remains persisted.
@@ -947,10 +948,7 @@ void main() {
 
     expect(cityVisitsRepository.createCalls, 1);
 
-    expect(
-      find.text('No city visits associated with this Trip yet.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsOneWidget);
 
     expect(tester.takeException(), isNull);
   });
@@ -1275,6 +1273,246 @@ void main() {
       find.descendant(of: card, matching: find.text('May 2025 – June 2025')),
       findsOneWidget,
     );
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('shows one add action per empty visit section', (tester) async {
+    final repository = FakeTripAssociationRepository();
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('addTripCountriesVisitButton')),
+      findsOneWidget,
+    );
+
+    expect(find.byKey(const Key('addTripCitiesVisitButton')), findsOneWidget);
+
+    final countryAction = tester.widget<ButtonStyleButton>(
+      find.byKey(const Key('addTripCountriesVisitButton')),
+    );
+
+    final cityAction = tester.widget<ButtonStyleButton>(
+      find.byKey(const Key('addTripCitiesVisitButton')),
+    );
+
+    expect(countryAction.onPressed, isNotNull);
+    expect(cityAction.onPressed, isNotNull);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'shows header add actions instead of empty states when visits exist',
+    (tester) async {
+      final repository = FakeTripAssociationRepository(
+        countryVisits: [countryVisit()],
+        cityVisits: [cityVisit()],
+      );
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      // Both sections display existing records.
+      expect(
+        find.byKey(const Key('tripCountryVisit-country-1')),
+        findsOneWidget,
+      );
+
+      expect(find.byKey(const Key('tripCityVisit-city-1')), findsOneWidget);
+
+      // Empty states are no longer displayed.
+      expect(find.byKey(const Key('tripCountriesEmptyState')), findsNothing);
+
+      expect(find.byKey(const Key('tripCitiesEmptyState')), findsNothing);
+
+      // Each section retains exactly one Add action.
+      expect(
+        find.byKey(const Key('addTripCountriesVisitButton')),
+        findsOneWidget,
+      );
+
+      expect(find.byKey(const Key('addTripCitiesVisitButton')), findsOneWidget);
+
+      final countryButton = tester.widget<TextButton>(
+        find.byKey(const Key('addTripCountriesVisitButton')),
+      );
+
+      final cityButton = tester.widget<TextButton>(
+        find.byKey(const Key('addTripCitiesVisitButton')),
+      );
+
+      expect(countryButton.onPressed, isNotNull);
+      expect(cityButton.onPressed, isNotNull);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('shows country empty state independently of city associations', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(cityVisits: [cityVisit()]);
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsNothing);
+
+    expect(find.byKey(const Key('tripCityVisit-city-1')), findsOneWidget);
+
+    expect(
+      find.byKey(const Key('addTripCountriesVisitButton')),
+      findsOneWidget,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('shows city empty state independently of country associations', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      countryVisits: [countryVisit()],
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('tripCountriesEmptyState')), findsNothing);
+
+    expect(find.byKey(const Key('tripCitiesEmptyState')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCountryVisit-country-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('addTripCitiesVisitButton')), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'mutation failure preserves associated visits and restores actions',
+    (tester) async {
+      final repository = FakeTripAssociationRepository(
+        countryVisits: [countryVisit()],
+      );
+
+      repository.onAddCountryVisit = (tripId, visitId) async {
+        throw StateError('Simulated association failure.');
+      };
+
+      await tester.pumpWidget(buildTestApp(repository));
+      await tester.pumpAndSettle();
+
+      final existingVisit = find.byKey(const Key('tripCountryVisit-country-1'));
+
+      expect(existingVisit, findsOneWidget);
+
+      final sectionContext = tester.element(
+        find.byType(TripAssociatedVisitsSection),
+      );
+
+      final cubit = sectionContext.read<TripAssociationsCubit>();
+
+      // Trigger the same Cubit operation used by the association flow.
+      await cubit.addCountryVisit(visitId: 'another-country-visit');
+
+      await tester.pumpAndSettle();
+
+      // The failed operation does not remove existing associations.
+      expect(
+        find.byKey(const Key('tripCountryVisit-country-1')),
+        findsOneWidget,
+      );
+
+      expect(repository.countryVisits.length, 1);
+
+      expect(cubit.state.hasMutationError, isTrue);
+      expect(cubit.state.isMutating, isFalse);
+
+      // The error is visible to the user.
+      final errorBanner = find.byKey(const Key('tripAssociationMutationError'));
+
+      expect(errorBanner, findsOneWidget);
+
+      expect(
+        find.descendant(
+          of: errorBanner,
+          matching: find.text('Unable to update Trip associations.'),
+        ),
+        findsOneWidget,
+      );
+
+      // The user can refresh after an error.
+      expect(
+        find.descendant(
+          of: errorBanner,
+          matching: find.widgetWithText(TextButton, 'Refresh'),
+        ),
+        findsOneWidget,
+      );
+
+      // The Add action is available again.
+      final addButton = tester.widget<TextButton>(
+        find.byKey(const Key('addTripCountriesVisitButton')),
+      );
+
+      expect(addButton.onPressed, isNotNull);
+
+      // The existing visit can still be removed.
+      final removeButton = tester.widget<IconButton>(
+        find.byKey(const Key('removeTripCountryVisit-country-1')),
+      );
+
+      expect(removeButton.onPressed, isNotNull);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('refresh clears a previous association mutation error', (
+    tester,
+  ) async {
+    final repository = FakeTripAssociationRepository(
+      countryVisits: [countryVisit()],
+    );
+
+    repository.onAddCountryVisit = (tripId, visitId) async {
+      throw StateError('Simulated association failure.');
+    };
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    final cubit = tester
+        .element(find.byType(TripAssociatedVisitsSection))
+        .read<TripAssociationsCubit>();
+
+    await cubit.addCountryVisit(visitId: 'another-country-visit');
+
+    await tester.pumpAndSettle();
+
+    final errorBanner = find.byKey(const Key('tripAssociationMutationError'));
+
+    expect(errorBanner, findsOneWidget);
+
+    final refreshButton = find.descendant(
+      of: errorBanner,
+      matching: find.widgetWithText(TextButton, 'Refresh'),
+    );
+
+    await tester.tap(refreshButton);
+    await tester.pumpAndSettle();
+
+    expect(cubit.state.hasLoadError, isFalse);
+
+    // Refresh reloads records, but does not clear mutationError
+    // in the current Cubit implementation.
+    expect(cubit.state.hasMutationError, isFalse);
+
+    expect(find.byKey(const Key('tripAssociationMutationError')), findsNothing);
+
+    expect(find.byKey(const Key('tripCountryVisit-country-1')), findsOneWidget);
+
+    expect(find.byKey(const Key('tripCountryVisit-country-1')), findsOneWidget);
 
     expect(tester.takeException(), isNull);
   });

@@ -11,6 +11,7 @@ import '../../application/trip_associations_cubit.dart';
 import '../../application/trip_associations_state.dart';
 import '../../../explore/presentation/widgets/add_destination_sheet.dart';
 import '../../../explore/presentation/widgets/show_add_destination.dart';
+import 'trip_section_empty_state.dart';
 
 /// Read-only presentation of a Trip's associated country and city visits.
 ///
@@ -317,18 +318,6 @@ class _TripAssociatedVisitsSectionState
     );
   }
 
-  Widget _emptyState(BuildContext context, String message) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TripAssociationsCubit, TripAssociationsState>(
@@ -420,16 +409,25 @@ class _TripAssociatedVisitsSectionState
               title: 'Countries',
               count: state.countryVisits.length,
               icon: Icons.public_outlined,
-              showAddButton: true,
-              onAdd: state.isMutating
+              showAddButton: state.countryVisits.isNotEmpty,
+              onAdd: state.isMutating || state.isLoading
                   ? null
                   : () => _addCountryVisit(context, state),
             ),
 
             if (state.countryVisits.isEmpty)
-              _emptyState(
-                context,
-                'No country visits associated with this Trip yet.',
+              TripSectionEmptyState(
+                key: const Key('tripCountriesEmptyState'),
+                title: 'No countries added',
+                message:
+                    'Add country visits to record the destinations '
+                    'in this Trip.',
+                icon: Icons.public_outlined,
+                actionLabel: 'Add countries',
+                actionKey: const Key('addTripCountriesVisitButton'),
+                onAction: state.isMutating || state.isLoading
+                    ? null
+                    : () => _addCountryVisit(context, state),
               )
             else
               FutureBuilder<Map<String, String>>(
@@ -479,16 +477,25 @@ class _TripAssociatedVisitsSectionState
               title: 'Cities',
               count: state.cityVisits.length,
               icon: Icons.location_city_outlined,
-              showAddButton: true,
-              onAdd: state.isMutating
+              showAddButton: state.cityVisits.isNotEmpty,
+              onAdd: state.isMutating || state.isLoading
                   ? null
                   : () => _addCityVisit(context, state),
             ),
 
             if (state.cityVisits.isEmpty)
-              _emptyState(
-                context,
-                'No city visits associated with this Trip yet.',
+              TripSectionEmptyState(
+                key: const Key('tripCitiesEmptyState'),
+                title: 'No cities added',
+                message:
+                    'Add city visits to record the places '
+                    "you've explored during this Trip.",
+                icon: Icons.location_city_outlined,
+                actionLabel: 'Add cities',
+                actionKey: const Key('addTripCitiesVisitButton'),
+                onAction: state.isMutating || state.isLoading
+                    ? null
+                    : () => _addCityVisit(context, state),
               )
             else
               for (final visit in state.cityVisits)

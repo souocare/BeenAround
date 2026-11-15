@@ -16,6 +16,7 @@ import '../../application/trip_associations_cubit.dart';
 import '../../application/trip_associations_state.dart';
 
 import 'trip_flight_picker_dialog.dart';
+import 'trip_section_empty_state.dart';
 
 /// Displays independent flights explicitly associated with a Trip.
 ///
@@ -254,14 +255,15 @@ class _TripAssociatedFlightsSectionState
                     ),
                   ),
                 ),
-                TextButton.icon(
-                  key: const Key('addTripFlightsButton'),
-                  onPressed: state.isMutating || state.isLoading
-                      ? null
-                      : () => _addFlights(context, state),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add'),
-                ),
+                if (state.flights.isNotEmpty)
+                  TextButton.icon(
+                    key: const Key('addTripFlightsButton'),
+                    onPressed: state.isMutating || state.isLoading
+                        ? null
+                        : () => _addFlights(context, state),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add'),
+                  ),
 
                 const SizedBox(width: AppSpacing.sm),
 
@@ -278,15 +280,18 @@ class _TripAssociatedFlightsSectionState
             const SizedBox(height: AppSpacing.sm),
 
             if (state.flights.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Text(
-                  'No flights associated with this Trip yet.',
-                  key: const Key('tripFlightsEmptyState'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
+              TripSectionEmptyState(
+                key: const Key('tripFlightsEmptyState'),
+                title: 'No flights added',
+                message:
+                    'Add flights to connect the destinations '
+                    'you visited during this Trip.',
+                icon: Icons.flight_outlined,
+                actionLabel: 'Add flights',
+                actionKey: const Key('addTripFlightsButton'),
+                onAction: state.isMutating || state.isLoading
+                    ? null
+                    : () => _addFlights(context, state),
               )
             else
               FutureBuilder<ResolvedFlightCatalog>(

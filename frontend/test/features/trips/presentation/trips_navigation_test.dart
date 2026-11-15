@@ -444,7 +444,17 @@ void main() {
         expect(find.text('Honeymoon'), findsOneWidget);
 
         // Open the country visit picker.
-        await tester.tap(find.byKey(const Key('addTripCountriesVisitButton')));
+        final addCountryButton = find.byKey(
+          const Key('addTripCountriesVisitButton'),
+        );
+
+        expect(addCountryButton, findsOneWidget);
+
+        await tester.ensureVisible(addCountryButton);
+        await tester.pumpAndSettle();
+
+        await tester.tap(addCountryButton);
+        await tester.pumpAndSettle();
 
         await tester.pumpAndSettle();
 

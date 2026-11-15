@@ -27,9 +27,14 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
 
   Future<void> load() => _reload();
 
-  Future<void> refresh() => _reload();
+  Future<void> refresh() {
+    return _reload(clearMutationErrorOnSuccess: true);
+  }
 
-  Future<void> _reload({bool duringMutation = false}) async {
+  Future<void> _reload({
+    bool duringMutation = false,
+    bool clearMutationErrorOnSuccess = false,
+  }) async {
     if (isClosed) return;
 
     // External refreshes must not interfere with a mutation.
@@ -64,6 +69,9 @@ class TripAssociationsCubit extends Cubit<TripAssociationsState> {
           hasLoaded: true,
           isLoading: false,
           loadError: null,
+          mutationError: clearMutationErrorOnSuccess
+              ? null
+              : state.mutationError,
         ),
       );
     } on ApiException catch (error) {

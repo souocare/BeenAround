@@ -322,6 +322,83 @@ void main() {
     expect(cubit.state.isMutating, isFalse);
   });
 
+  test('successful manual refresh clears a previous mutation error', () async {
+    repository.countries = [sampleCountryVisit()];
+
+    await cubit.load();
+
+    // Simulate an association failure.
+    repository.onAddCountry = (_) async {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Unable to associate country visit.',
+        statusCode: 500,
+      );
+    };
+
+    await cubit.addCountryVisit(visitId: 'another-country-visit');
+
+    expect(cubit.state.mutationError, 'Unable to associate country visit.');
+
+    expect(cubit.state.countryVisits, hasLength(1));
+    expect(cubit.state.isMutating, isFalse);
+
+    // A successful manual refresh acknowledges the previous failure.
+    await cubit.refresh();
+
+    expect(cubit.state.mutationError, isNull);
+    expect(cubit.state.loadError, isNull);
+
+    // Existing records must remain available.
+    expect(cubit.state.countryVisits, hasLength(1));
+    expect(cubit.state.countryVisits.single.id, 'country-visit-1');
+
+    expect(cubit.state.hasLoaded, isTrue);
+    expect(cubit.state.isLoading, isFalse);
+  });
+
+  test('failed manual refresh preserves the previous mutation error', () async {
+    repository.countries = [sampleCountryVisit()];
+
+    await cubit.load();
+
+    repository.onAddCountry = (_) async {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Unable to associate country visit.',
+        statusCode: 500,
+      );
+    };
+
+    await cubit.addCountryVisit(visitId: 'another-country-visit');
+
+    expect(cubit.state.mutationError, 'Unable to associate country visit.');
+
+    // The user attempts a manual refresh, but the request fails.
+    repository.onGetCountries = () async {
+      throw const ApiException(
+        type: ApiErrorType.server,
+        message: 'Unable to refresh Trip associations.',
+        statusCode: 500,
+      );
+    };
+
+    await cubit.refresh();
+
+    // Both errors remain available because the refresh did not succeed.
+    expect(cubit.state.mutationError, 'Unable to associate country visit.');
+
+    expect(cubit.state.loadError, 'Unable to refresh Trip associations.');
+
+    // Previously loaded records are preserved.
+    expect(cubit.state.countryVisits, hasLength(1));
+    expect(cubit.state.countryVisits.single.id, 'country-visit-1');
+
+    expect(cubit.state.hasLoaded, isTrue);
+    expect(cubit.state.isLoading, isFalse);
+    expect(cubit.state.isMutating, isFalse);
+  });
+
   test('prevents duplicate mutations', () async {
     final pending = Completer<void>();
 

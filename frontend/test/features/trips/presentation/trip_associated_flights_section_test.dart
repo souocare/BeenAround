@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -413,6 +414,25 @@ Future<void> createTestFlight(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+class DelayedFlightAssociationsRepository
+    extends FakeTripAssociationRepository {
+  DelayedFlightAssociationsRepository({super.flights});
+
+  Completer<void>? delayNextFlightLoad;
+
+  @override
+  Future<List<Flight>> getFlights({required String tripId}) async {
+    final delay = delayNextFlightLoad;
+
+    if (delay != null) {
+      delayNextFlightLoad = null;
+      await delay.future;
+    }
+
+    return super.getFlights(tripId: tripId);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -444,6 +464,9 @@ void main() {
       expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
 
       expect(find.byKey(const Key('addTripFlightsButton')), findsOneWidget);
+      expect(find.text('No flights added'), findsOneWidget);
+
+      expect(find.text('Add flights'), findsOneWidget);
     });
 
     // -----------------------------------------------------------------------
@@ -658,6 +681,9 @@ void main() {
       expect(repository.flights, isEmpty);
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsNothing);
+      expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+
+      expect(find.byKey(const Key('addTripFlightsButton')), findsOneWidget);
 
       expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
     });
@@ -685,7 +711,7 @@ void main() {
       // Open Add menu and select "Add existing flights".
       await openExistingFlightsPicker(tester);
 
-      expect(find.text('Add flights'), findsOneWidget);
+      expect(find.byKey(const Key('tripFlightPickerSearch')), findsOneWidget);
 
       expect(
         find.byKey(const Key('tripFlightPicker-flight-1')),
@@ -1369,6 +1395,188 @@ void main() {
         find.descendant(of: card, matching: find.text('Completed')),
         findsOneWidget,
       );
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('shows exactly one Add Flights action when empty', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository();
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final addButton = find.byKey(const Key('addTripFlightsButton'));
+
+      expect(addButton, findsOneWidget);
+
+      final button = tester.widget<ButtonStyleButton>(addButton);
+
+      expect(button.onPressed, isNotNull);
+
+      expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('shows header add action when associated flights exist', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      // The shared FlightCard is displayed.
+      expect(
+        find.byKey(const ValueKey('flight-card-flight-1')),
+        findsOneWidget,
+      );
+
+      // The empty state disappears.
+      expect(find.byKey(const Key('tripFlightsEmptyState')), findsNothing);
+
+      // There is still exactly one Add action.
+      final addButton = find.byKey(const Key('addTripFlightsButton'));
+
+      expect(addButton, findsOneWidget);
+
+      final button = tester.widget<TextButton>(addButton);
+
+      expect(button.onPressed, isNotNull);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('disables Add Flights while associations are refreshing', (
+      tester,
+    ) async {
+      final repository = DelayedFlightAssociationsRepository();
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      final sectionContext = tester.element(
+        find.byType(TripAssociatedFlightsSection),
+      );
+
+      final cubit = sectionContext.read<TripAssociationsCubit>();
+
+      final delay = Completer<void>();
+      repository.delayNextFlightLoad = delay;
+
+      final refresh = cubit.refresh();
+
+      expect(cubit.state.isRefreshing, isTrue);
+
+      // Allow BlocBuilder to rebuild while the refresh is still pending.
+
+      // Do not use pumpAndSettle() before completing the delayed request.
+
+      await tester.pump();
+
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final addButtonFinder = find.byKey(const Key('addTripFlightsButton'));
+
+      expect(addButtonFinder, findsOneWidget);
+
+      final addButton = tester.widget<FilledButton>(addButtonFinder);
+
+      expect(
+        addButton.onPressed,
+
+        isNull,
+
+        reason: 'Add Flights must be disabled during refresh.',
+      );
+
+      delay.complete();
+
+      await refresh;
+      await tester.pumpAndSettle();
+
+      expect(cubit.state.isRefreshing, isFalse);
+
+      final restoredButton = tester.widget<FilledButton>(
+        find.byKey(const Key('addTripFlightsButton')),
+      );
+
+      expect(restoredButton.onPressed, isNotNull);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('disables Flight actions while removing an association', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      final removalDelay = Completer<void>();
+
+      repository.onRemoveFlight = (tripId, flightId) async {
+        await removalDelay.future;
+
+        repository.flights.removeWhere((flight) => flight.id == flightId);
+      };
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('removeTripFlight-flight-1')));
+
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(AlertDialog);
+
+      expect(dialog, findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: dialog,
+          matching: find.widgetWithText(TextButton, 'Remove'),
+        ),
+      );
+
+      await tester.pump();
+
+      final cubit = tester
+          .element(find.byType(TripAssociatedFlightsSection))
+          .read<TripAssociationsCubit>();
+
+      expect(cubit.state.isMutating, isTrue);
+
+      final addButton = tester.widget<TextButton>(
+        find.byKey(const Key('addTripFlightsButton')),
+      );
+
+      final removeButton = tester.widget<TextButton>(
+        find.byKey(const Key('removeTripFlight-flight-1')),
+      );
+
+      expect(addButton.onPressed, isNull);
+      expect(removeButton.onPressed, isNull);
+
+      removalDelay.complete();
+
+      await tester.pumpAndSettle();
+
+      expect(cubit.state.isMutating, isFalse);
+
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsNothing);
+
+      expect(find.byKey(const Key('tripFlightsEmptyState')), findsOneWidget);
+
+      final restoredButton = tester.widget<FilledButton>(
+        find.byKey(const Key('addTripFlightsButton')),
+      );
+
+      expect(restoredButton.onPressed, isNotNull);
 
       expect(tester.takeException(), isNull);
     });
