@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/trips/presentation/widgets/trip_overview_summary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -188,6 +189,31 @@ class _TripDetailsView extends StatelessWidget {
                         ),
                       ),
 
+                      const SizedBox(height: AppSpacing.sm),
+
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 16,
+                            color: colors.onSurfaceVariant,
+                          ),
+
+                          const SizedBox(width: AppSpacing.sm),
+
+                          Flexible(
+                            child: Text(
+                              _dateRange(context, trip),
+                              key: const Key('tripDetailsDates'),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: colors.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
                       const SizedBox(height: AppSpacing.md),
 
                       _buildStatusBadge(context, trip),
@@ -197,19 +223,24 @@ class _TripDetailsView extends StatelessWidget {
 
                 const SizedBox(width: AppSpacing.md),
 
-                IconButton.filledTonal(
+                IconButton(
                   key: const Key('editTripDetailsButton'),
                   tooltip: 'Edit Trip',
                   onPressed: () => _editTrip(context, trip),
-                  icon: const Icon(Icons.edit_outlined),
+                  icon: Icon(AppActionIcons.edit(context), size: 22),
                 ),
-                const SizedBox(width: AppSpacing.sm),
+
+                const SizedBox(width: AppSpacing.xs),
 
                 IconButton(
                   key: const Key('deleteTripDetailsButton'),
                   tooltip: 'Delete Trip',
                   onPressed: () => _deleteTrip(context, trip),
-                  icon: Icon(Icons.delete_outline, color: colors.error),
+                  icon: Icon(
+                    AppActionIcons.delete(context),
+                    color: colors.error,
+                    size: 22,
+                  ),
                 ),
               ],
             ),
@@ -225,51 +256,7 @@ class _TripDetailsView extends StatelessWidget {
                 ),
               ),
             ],
-
-            const SizedBox(height: AppSpacing.xl),
-
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(
-                  color: colors.outlineVariant.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_month_outlined, color: colors.primary),
-
-                  const SizedBox(width: AppSpacing.md),
-
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Travel dates',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-
-                        const SizedBox(height: AppSpacing.xs),
-
-                        Text(
-                          _dateRange(context, trip),
-                          key: const Key('tripDetailsDates'),
-                          style: theme.textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             const SizedBox(height: AppSpacing.xxl),
-
             Text(
               'Overview',
               key: const Key('tripOverviewHeading'),
