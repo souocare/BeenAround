@@ -308,6 +308,8 @@ void main() {
                 home: AuthenticatedAppShell(
                   user: user,
                   onLogout: onLogout ?? () async {},
+                  mapPageBuilder: (_) =>
+                      const SizedBox(key: Key('testMapPage')),
                 ),
               );
             },
@@ -359,7 +361,6 @@ void main() {
 
       final destinations = <String, String>{
         'Trips': 'Every journey tells a story.',
-        'Map': 'Discover your travel history on the map.',
         'Statistics': 'Explore your travel statistics.',
       };
 
@@ -379,6 +380,16 @@ void main() {
           expect(find.text('Your journeys start here'), findsOneWidget);
         }
       }
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Map'),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('testMapPage')), findsOneWidget);
 
       await tester.tap(
         find.descendant(
@@ -573,10 +584,8 @@ void main() {
 
       await tester.tap(find.text('Map'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Discover your travel history on the map.'),
-        findsOneWidget,
-      );
+
+      expect(find.byKey(const Key('testMapPage')), findsOneWidget);
 
       await tester.tap(find.text('Statistics'));
       await tester.pumpAndSettle();

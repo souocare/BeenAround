@@ -9,16 +9,19 @@ import '../../features/explore/presentation/pages/explore_page.dart';
 import '../../features/trips/presentation/pages/trips_page.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/foundation.dart';
+import '../../features/map/presentation/pages/map_page.dart';
 
 class AuthenticatedAppShell extends StatefulWidget {
   const AuthenticatedAppShell({
     required this.user,
     required this.onLogout,
+    this.mapPageBuilder,
     super.key,
   });
 
   final AuthenticatedUser user;
   final Future<void> Function() onLogout;
+  final WidgetBuilder? mapPageBuilder;
 
   @override
   State<AuthenticatedAppShell> createState() => _AuthenticatedAppShellState();
@@ -97,7 +100,15 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
             defaultTargetPlatform == TargetPlatform.iOS &&
             !useTopNavigation;
 
-        final content = SafeArea(child: _buildDestinationContent(context));
+        final isMap = _selectedDestination == AppDestination.map;
+
+        final content = SafeArea(
+          top: !isMap,
+          bottom: !isMap,
+          left: !isMap,
+          right: !isMap,
+          child: _buildDestinationContent(context),
+        );
 
         if (useNativeIOSNavigation) {
           return _buildIOSScaffold(context, content);
@@ -157,11 +168,8 @@ class _AuthenticatedAppShellState extends State<AuthenticatedAppShell> {
     return switch (_selectedDestination) {
       AppDestination.explore => const ExplorePage(),
       AppDestination.trips => const TripsPage(),
-      AppDestination.map => const _DestinationPlaceholder(
-        title: 'Map',
-        subtitle: 'Discover your travel history on the map.',
-        icon: Icons.map_outlined,
-      ),
+      AppDestination.map =>
+        widget.mapPageBuilder?.call(context) ?? const MapPage(),
       AppDestination.statistics => const _DestinationPlaceholder(
         title: 'Statistics',
         subtitle: 'Explore your travel statistics.',

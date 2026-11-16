@@ -38,5 +38,34 @@ void main() {
 
       expect(CountryMapStyle.colorToHex(const Color(0xFF353640)), '#353640');
     });
+    test('generates different styles for dark and light themes', () {
+      const darkColors = ColorScheme.dark(surface: Color(0xFF101116));
+
+      const lightColors = ColorScheme.light(surface: Color(0xFFF7F7F9));
+
+      final darkStyle = CountryMapStyle.build(darkColors);
+      final lightStyle = CountryMapStyle.build(lightColors);
+
+      expect(darkStyle, isNot(lightStyle));
+
+      final dark = jsonDecode(darkStyle) as Map<String, dynamic>;
+      final light = jsonDecode(lightStyle) as Map<String, dynamic>;
+
+      final darkBackground =
+          (dark['layers'] as List<dynamic>).first as Map<String, dynamic>;
+
+      final lightBackground =
+          (light['layers'] as List<dynamic>).first as Map<String, dynamic>;
+
+      expect(
+        (darkBackground['paint'] as Map<String, dynamic>)['background-color'],
+        '#101116',
+      );
+
+      expect(
+        (lightBackground['paint'] as Map<String, dynamic>)['background-color'],
+        '#F7F7F9',
+      );
+    });
   });
 }
