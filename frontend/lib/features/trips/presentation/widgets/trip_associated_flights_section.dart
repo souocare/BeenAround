@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/trips/presentation/widgets/trip_association_slidable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -236,7 +237,7 @@ class _TripAssociatedFlightsSectionState
                     onPressed: state.isMutating || state.isLoading
                         ? null
                         : () => _addFlights(context, state),
-                    icon: const Icon(Icons.add),
+                    icon: Icon(AppActionIcons.add(context)),
                     label: const Text('Add'),
                   ),
 

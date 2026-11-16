@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/trips/domain/trip_association_repository.dart';
@@ -170,7 +171,7 @@ class _TripsViewState extends State<_TripsView> {
             ),
           ),
           onPressed: () => _openTripForm(),
-          icon: const Icon(Icons.add, size: 26),
+          icon: Icon(AppActionIcons.add(context), size: 26),
         ),
       ],
     );
@@ -199,7 +200,7 @@ class _TripsViewState extends State<_TripsView> {
                     _query = '';
                   });
                 },
-                icon: const Icon(Icons.close),
+                icon: Icon(AppActionIcons.close(context)),
               )
             : null,
 
@@ -283,7 +284,7 @@ class _TripsViewState extends State<_TripsView> {
 
               FilledButton.icon(
                 onPressed: () => _openTripForm(),
-                icon: const Icon(Icons.add),
+                icon: Icon(AppActionIcons.add(context)),
                 label: const Text('Create Trip'),
               ),
             ],

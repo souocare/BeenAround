@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_tokens.dart';
@@ -73,7 +74,7 @@ class TripSectionEmptyState extends StatelessWidget {
           FilledButton.tonalIcon(
             key: actionKey,
             onPressed: onAction,
-            icon: const Icon(Icons.add),
+            icon: Icon(AppActionIcons.add(context)),
             label: Text(actionLabel),
           ),
         ],

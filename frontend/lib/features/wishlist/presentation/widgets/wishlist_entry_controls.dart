@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:flutter/material.dart';
 
 class WishlistEntryControls extends StatelessWidget {
@@ -34,7 +35,7 @@ class WishlistEntryControls extends StatelessWidget {
           key: const Key('editWishlistNoteButton'),
           tooltip: 'Edit Wishlist note',
           onPressed: onEditNote,
-          icon: const Icon(Icons.edit_outlined),
+          icon: Icon(AppActionIcons.edit(context)),
           iconSize: 20,
           visualDensity: VisualDensity.compact,
         ),

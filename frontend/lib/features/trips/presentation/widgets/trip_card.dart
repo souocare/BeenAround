@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_tokens.dart';
@@ -248,7 +249,7 @@ class TripCard extends StatelessWidget {
                             tooltip: 'Edit Trip',
                             onPressed: onEdit,
                             icon: Icon(
-                              Icons.edit_outlined,
+                              AppActionIcons.edit(context),
                               color: colors.onSurfaceVariant,
                             ),
                           ),
@@ -262,7 +263,7 @@ class TripCard extends StatelessWidget {
                             tooltip: 'Delete Trip',
                             onPressed: onDelete,
                             icon: Icon(
-                              Icons.delete_outline_rounded,
+                              AppActionIcons.delete(context),
                               color: colors.error,
                             ),
                           ),

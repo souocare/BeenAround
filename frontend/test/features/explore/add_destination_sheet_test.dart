@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/features/explore/application/explore_cubit.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
@@ -879,7 +880,13 @@ void main() {
   testWidgets('opens Add Destination from Explore', (tester) async {
     await pumpExplore(tester);
 
-    await tester.tap(find.byIcon(Icons.add));
+    final addButton = find.byWidgetPredicate(
+      (widget) => widget is IconButton && widget.tooltip == 'Add Destination',
+    );
+
+    expect(addButton, findsOneWidget);
+
+    await tester.tap(addButton);
     await tester.pumpAndSettle();
 
     // New global record selector.

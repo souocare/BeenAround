@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/explore/data/countries_repository.dart';
 import 'package:beenaround/features/trips/presentation/widgets/remove_trip_visit_dialog.dart';
 import 'package:beenaround/features/trips/presentation/widgets/trip_visit_picker_dialog.dart';
@@ -126,7 +127,7 @@ class _TripAssociatedVisitsSectionState
           TextButton.icon(
             key: Key('addTrip${title}VisitButton'),
             onPressed: onAdd,
-            icon: const Icon(Icons.add),
+            icon: Icon(AppActionIcons.add(context)),
             label: const Text('Add'),
           ),
           const SizedBox(width: AppSpacing.sm),

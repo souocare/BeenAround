@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/flights/presentation/formatters/flight_timing_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -190,7 +191,7 @@ class FlightDetailsPage extends StatelessWidget {
                         onPressed: canEdit
                             ? () => _editFlight(context, state)
                             : null,
-                        icon: const Icon(Icons.edit_outlined),
+                        icon: Icon(AppActionIcons.edit(context)),
                       );
                     },
                   ),
@@ -222,7 +223,7 @@ class FlightDetailsPage extends StatelessWidget {
                                 ),
                               )
                             : Icon(
-                                Icons.delete_outline_rounded,
+                                AppActionIcons.delete(context),
                                 color: Theme.of(context).colorScheme.error,
                               ),
                       );

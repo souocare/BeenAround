@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/core/models/partial_visit_date.dart';
 import 'package:beenaround/core/models/visit_date_precision.dart';
 import 'package:beenaround/core/widgets/adaptive_record_actions_menu.dart';
@@ -173,7 +174,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
         backgroundColor: colors.primary,
         foregroundColor: Colors.white,
         onPressed: _addVisit,
-        child: const Icon(Icons.add_rounded),
+        child: Icon(AppActionIcons.add(context)),
       ),
       body: BlocBuilder<ExploreCubit, ExploreState>(
         builder: (context, state) {

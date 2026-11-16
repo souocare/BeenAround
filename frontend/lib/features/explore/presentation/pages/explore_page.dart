@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/explore/presentation/widgets/destination_filter_bar.dart';
 import 'package:beenaround/features/explore/presentation/widgets/show_add_record.dart';
 import 'package:beenaround/features/flights/application/flights_state.dart';
@@ -337,7 +338,7 @@ class _ExploreViewState extends State<_ExploreView> {
                             borderRadius: BorderRadius.circular(18),
                           ),
                           onPressed: _addDestination,
-                          child: const Icon(Icons.add_rounded, size: 28),
+                          child: Icon(AppActionIcons.add(context), size: 28),
                         ),
                       ),
                     ),
@@ -488,7 +489,7 @@ class _ExploreContentState extends State<_ExploreContent> {
                 ),
               ),
               onPressed: widget.onAddDestination,
-              icon: const Icon(Icons.add, size: 26),
+              icon: Icon(AppActionIcons.add(context), size: 26),
             ),
           ],
         ),

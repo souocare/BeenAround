@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -70,7 +71,7 @@ class AdaptiveRecordActionsMenu extends StatelessWidget {
       return IconButton(
         key: const Key('recordActionsMenu'),
         tooltip: tooltip,
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: Icon(AppActionIcons.more(context)),
         onPressed: () => _showCupertinoActions(context),
       );
     }
@@ -78,7 +79,7 @@ class AdaptiveRecordActionsMenu extends StatelessWidget {
     return PopupMenuButton<_RecordAction>(
       key: const Key('recordActionsMenu'),
       tooltip: tooltip,
-      icon: const Icon(Icons.more_vert_rounded),
+      icon: Icon(AppActionIcons.more(context)),
       onSelected: (action) {
         switch (action) {
           case _RecordAction.edit:
@@ -96,7 +97,7 @@ class AdaptiveRecordActionsMenu extends StatelessWidget {
             value: _RecordAction.edit,
             child: Row(
               children: [
-                const Icon(Icons.edit_outlined, size: 20),
+                Icon(AppActionIcons.edit(context), size: 20),
                 const SizedBox(width: 12),
                 Text(editLabel),
               ],
@@ -107,7 +108,7 @@ class AdaptiveRecordActionsMenu extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  Icons.delete_outline_rounded,
+                  AppActionIcons.delete(context),
                   size: 20,
                   color: colors.error,
                 ),

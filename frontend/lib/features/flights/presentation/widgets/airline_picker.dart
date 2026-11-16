@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:beenaround/features/flights/presentation/widgets/flight_picker_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -262,7 +263,7 @@ class _AirlinePickerContentState extends State<_AirlinePickerContent> {
             child: OutlinedButton.icon(
               key: const Key('enterManualAirline'),
               onPressed: _enterManualAirline,
-              icon: const Icon(Icons.edit_outlined),
+              icon: Icon(AppActionIcons.edit(context)),
               label: const Text('Enter airline manually'),
             ),
           ),
