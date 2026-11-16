@@ -1602,7 +1602,21 @@ void main() {
         find.byKey(const ValueKey('slidable-flight-flight-1')),
       );
 
-      expect(slidable.enabled, isFalse);
+      // The internal Slidable remains enabled to keep its
+      // gesture/semantics state stable.
+      expect(slidable.enabled, isTrue);
+
+      // The application-level association action is disabled.
+      final associationAction = tester.widget<TripAssociationSlidable>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('slidable-flight-flight-1')),
+              matching: find.byType(TripAssociationSlidable),
+            )
+            .first,
+      );
+
+      expect(associationAction.enabled, isFalse);
 
       expect(addButton.onPressed, isNull);
 

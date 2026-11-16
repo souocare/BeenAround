@@ -1,3 +1,4 @@
+import 'package:beenaround/app/theme/app_action_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -74,7 +75,7 @@ class _TripAssociationSlidableState extends State<TripAssociationSlidable> {
 
     return Slidable(
       key: ValueKey('slidable-${widget.associationId}'),
-      enabled: _canRemove,
+      enabled: true,
       groupTag: 'trip-associations',
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
@@ -100,7 +101,7 @@ class _TripAssociationSlidableState extends State<TripAssociationSlidable> {
             backgroundColor: colors.error,
             foregroundColor: colors.onError,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            icon: Icons.delete_outline,
+            icon: AppActionIcons.delete(context),
             label: widget.removeLabel,
           ),
         ],
@@ -131,7 +132,7 @@ class _TripAssociationSlidableState extends State<TripAssociationSlidable> {
       key: ValueKey('associationMenu-${widget.associationId}'),
       tooltip: 'Association actions',
       enabled: _canRemove,
-      icon: const Icon(Icons.more_vert_rounded),
+      icon: Icon(AppActionIcons.more(context)),
       onSelected: (value) {
         if (value == 'delete') {
           _requestRemoval();
@@ -143,7 +144,11 @@ class _TripAssociationSlidableState extends State<TripAssociationSlidable> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_outline, color: colors.error, size: 20),
+              Icon(
+                AppActionIcons.delete(context),
+                color: colors.error,
+                size: 20,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Text(widget.removeLabel, style: TextStyle(color: colors.error)),
             ],

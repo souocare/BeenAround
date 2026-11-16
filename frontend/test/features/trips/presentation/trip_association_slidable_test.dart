@@ -82,7 +82,7 @@ void main() {
     expect(removeRequests, 1);
   });
 
-  testWidgets('disabled association cannot be swiped', (tester) async {
+  testWidgets('disabled association cannot request removal', (tester) async {
     var removeRequests = 0;
 
     await tester.pumpWidget(
@@ -137,8 +137,17 @@ void main() {
     final slidable = tester.widget<Slidable>(
       find.byKey(const ValueKey('slidable-visit-1')),
     );
+    // Keep Slidable's gesture controller stable during removal.
+    // Duplicate requests are blocked by _requestRemoval().
+    expect(slidable.enabled, isTrue);
 
-    expect(slidable.enabled, isFalse);
+    // Attempt a second removal while the first is still pending.
+
+    await tester.tap(deleteAction);
+
+    await tester.pump();
+
+    expect(removeRequests, 1);
 
     removalDelay.complete();
     await tester.pumpAndSettle();
