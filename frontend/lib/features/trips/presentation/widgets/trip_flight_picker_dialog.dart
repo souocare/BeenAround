@@ -10,6 +10,7 @@ import '../../../flights/domain/airline_repository.dart';
 import '../../../flights/domain/airport_repository.dart';
 import '../../../flights/domain/flight.dart';
 import '../../../flights/domain/flight_repository.dart';
+import '../../../../app/widgets/country_flag.dart';
 
 /// Open a picker for existing personal flights.
 ///
@@ -256,6 +257,29 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
         .toList(growable: false);
   }
 
+  Widget _airportLabel(int airportId) {
+    final airport = _catalog.airportFor(airportId);
+
+    final countryCode = airport?.countryCode;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (countryCode != null && countryCode.isNotEmpty) ...[
+          CountryFlag(countryCode: countryCode, size: 20),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+        Flexible(
+          child: Text(
+            _airportName(airportId),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _loadNextPage() async {
     if (_isLoading || (_hasLoaded && !_hasMore)) {
       return;
@@ -336,17 +360,26 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
     final selected = _selectedIds.contains(flight.id);
     final isNew = _newlyCreatedIds.contains(flight.id);
 
-    return CheckboxListTile(
+    return CheckboxListTile.adaptive(
       key: Key('tripFlightPicker-${flight.id}'),
       value: selected,
+      activeColor: Theme.of(context).colorScheme.primary,
+      checkColor: Theme.of(context).colorScheme.onPrimary,
+      tileColor: Colors.transparent,
+      selectedTileColor: Colors.transparent,
       onChanged: (_) => _toggleFlight(flight.id),
       title: Row(
         children: [
           Expanded(
-            child: Text(
-              _flightTitle(flight),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Flexible(child: _airportLabel(flight.departureAirportId)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  child: Icon(Icons.arrow_forward, size: 16),
+                ),
+                Flexible(child: _airportLabel(flight.arrivalAirportId)),
+              ],
             ),
           ),
           if (isNew) ...[
@@ -504,55 +537,63 @@ class _TripFlightPickerDialogState extends State<_TripFlightPickerDialog> {
         ],
 
         const Divider(height: 1),
+        const Divider(height: 1),
 
-        Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                count == 0
-                    ? 'No flights selected'
-                    : '$count ${count == 1 ? 'flight' : 'flights'} selected',
-                key: const Key('tripFlightPickerSelectionCount'),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _isCreatingFlight
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
+        SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: AppSpacing.xxl),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.md,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  count == 0
+                      ? 'No flights selected'
+                      : '$count ${count == 1 ? 'flight' : 'flights'} selected',
+                  key: const Key('tripFlightPickerSelectionCount'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
                   ),
+                ),
 
-                  const SizedBox(width: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
 
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      key: const Key('confirmTripFlightSelection'),
-                      onPressed: count == 0 || _isCreatingFlight
-                          ? null
-                          : _confirm,
-                      child: Text(
-                        count == 1 ? 'Add 1 flight' : 'Add $count flights',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: _isCreatingFlight
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+
+                    const SizedBox(width: AppSpacing.sm),
+
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        key: const Key('confirmTripFlightSelection'),
+                        onPressed: count == 0 || _isCreatingFlight
+                            ? null
+                            : _confirm,
+                        child: Text(
+                          count == 1 ? 'Add 1 flight' : 'Add $count flights',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],

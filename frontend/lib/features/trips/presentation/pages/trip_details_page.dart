@@ -268,7 +268,7 @@ class _TripDetailsView extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: AppSpacing.xxxl),
+            const SizedBox(height: AppSpacing.xxl),
 
             Text(
               'Overview',
@@ -278,15 +278,15 @@ class _TripDetailsView extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             const TripOverviewSummary(),
 
-            const SizedBox(height: AppSpacing.xxxl),
+            const SizedBox(height: AppSpacing.xxl),
 
             const TripAssociatedVisitsSection(),
 
-            const SizedBox(height: AppSpacing.xxxl),
+            const SizedBox(height: AppSpacing.lg),
 
             const TripAssociatedFlightsSection(),
           ],

@@ -8,6 +8,7 @@ import '../../../../core/models/visit_date_precision.dart';
 
 import '../../../explore/data/countries_repository.dart';
 import '../../../geography/domain/city_visits_repository.dart';
+import '../../../../app/widgets/country_flag.dart';
 
 /// Opens a picker for existing country visits.
 ///
@@ -50,6 +51,7 @@ Future<List<String>?> showTripCountryVisitPicker({
             return _VisitOption(
               id: visit.id,
               title: countryName,
+              countryCode: visit.countryCode,
               subtitle: countryName == visit.countryCode
                   ? null
                   : visit.countryCode,
@@ -97,6 +99,7 @@ Future<List<String>?> showTripCityVisitPicker({
               id: visit.id,
               title: visit.cityName,
               subtitle: visit.countryName,
+              countryCode: visit.countryCode,
               searchText:
                   '${visit.cityName} ${visit.countryName} '
                   '${visit.countryCode}',
@@ -171,6 +174,7 @@ class _VisitOption {
   const _VisitOption({
     required this.id,
     required this.title,
+    required this.countryCode,
     required this.searchText,
     required this.startedOn,
     required this.startedOnPrecision,
@@ -181,6 +185,7 @@ class _VisitOption {
 
   final String id;
   final String title;
+  final String countryCode;
   final String? subtitle;
   final String searchText;
 
@@ -515,60 +520,64 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
 
         final selected = _selectedVisitIds.contains(visit.id);
 
-        return Card(
+        return CheckboxListTile.adaptive(
           key: Key('tripVisitOption-${visit.id}'),
-          margin: const EdgeInsets.symmetric(vertical: 5),
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outlineVariant,
-            ),
+
+          value: selected,
+
+          onChanged: (_) => _toggleVisit(visit.id),
+
+          controlAffinity: ListTileControlAffinity.leading,
+
+          activeColor: Theme.of(context).colorScheme.primary,
+          checkColor: Theme.of(context).colorScheme.onPrimary,
+
+          tileColor: Colors.transparent,
+          selectedTileColor: Colors.transparent,
+
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    visit.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+
+          title: Row(
+            children: [
+              CountryFlag(countryCode: visit.countryCode, size: 22),
+
+              const SizedBox(width: AppSpacing.sm),
+
+              Expanded(
+                child: Text(
+                  visit.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+              if (_newlyCreatedIds.contains(visit.id)) ...[
+                const SizedBox(width: AppSpacing.sm),
+
+                const Badge(label: Text('NEW')),
+              ],
+            ],
+          ),
+
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (visit.subtitle != null) ...[
+                Text(
+                  visit.subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
 
-                if (_newlyCreatedIds.contains(visit.id)) ...[
-                  const SizedBox(width: 8),
+                const SizedBox(height: AppSpacing.xs),
+              ],
 
-                  Badge(label: const Text('NEW')),
-                ],
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (visit.subtitle != null) Text(visit.subtitle!),
-                const SizedBox(height: 4),
-                Text(_formatDateRange(visit)),
-              ],
-            ),
-            trailing: Icon(
-              selected
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked_rounded,
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            onTap: () => _toggleVisit(visit.id),
+              Text(_formatDateRange(visit), maxLines: 2),
+            ],
           ),
         );
       },
@@ -661,61 +670,72 @@ class _TripVisitPickerDialogState extends State<_TripVisitPickerDialog> {
 
         const Divider(height: 1),
 
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$selectedCount '
-                '${selectedCount == 1 ? 'visit' : 'visits'} selected',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
+        const Divider(height: 1),
 
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      key: const Key('cancelTripVisitPickerButton'),
-                      onPressed: _isCreatingVisit
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
+        SafeArea(
+          top: false,
+          left: false,
+          right: false,
+          minimum: const EdgeInsets.only(bottom: AppSpacing.xxl),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.md,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$selectedCount '
+                  '${selectedCount == 1 ? 'visit' : 'visits'} selected',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
                   ),
+                ),
 
-                  const SizedBox(width: 12),
+                const SizedBox(height: 12),
 
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      key: const Key('confirmTripVisitPickerButton'),
-                      onPressed:
-                          selectedCount == 0 ||
-                              _isCreatingVisit ||
-                              _isLoading ||
-                              _errorMessage != null ||
-                              _pendingCreatedVisitIds.isNotEmpty
-                          ? null
-                          : () {
-                              Navigator.of(
-                                context,
-                              ).pop(_selectedVisitIds.toList(growable: false));
-                            },
-                      child: Text(
-                        'Add $selectedCount '
-                        '${selectedCount == 1 ? 'visit' : 'visits'}',
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        key: const Key('cancelTripVisitPickerButton'),
+                        onPressed: _isCreatingVisit
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        key: const Key('confirmTripVisitPickerButton'),
+                        onPressed:
+                            selectedCount == 0 ||
+                                _isCreatingVisit ||
+                                _isLoading ||
+                                _errorMessage != null ||
+                                _pendingCreatedVisitIds.isNotEmpty
+                            ? null
+                            : () {
+                                Navigator.of(context).pop(
+                                  _selectedVisitIds.toList(growable: false),
+                                );
+                              },
+                        child: Text(
+                          'Add $selectedCount '
+                          '${selectedCount == 1 ? 'visit' : 'visits'}',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],
