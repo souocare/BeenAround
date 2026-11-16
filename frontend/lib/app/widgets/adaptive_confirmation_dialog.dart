@@ -15,6 +15,9 @@ Future<bool> showAdaptiveConfirmationDialog(
   required String confirmLabel,
   required String cancelLabel,
   bool isDestructive = false,
+  Key? dialogKey,
+  Key? confirmButtonKey,
+  Key? cancelButtonKey,
 }) async {
   final platform = Theme.of(context).platform;
 
@@ -26,16 +29,19 @@ Future<bool> showAdaptiveConfirmationDialog(
     builder: (dialogContext) {
       if (useCupertino) {
         return CupertinoAlertDialog(
+          key: dialogKey,
           title: Text(title),
           content: Text(message),
           actions: [
             CupertinoDialogAction(
+              key: cancelButtonKey,
               onPressed: () {
                 Navigator.of(dialogContext).pop(false);
               },
               child: Text(cancelLabel),
             ),
             CupertinoDialogAction(
+              key: confirmButtonKey,
               isDestructiveAction: isDestructive,
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
@@ -49,6 +55,7 @@ Future<bool> showAdaptiveConfirmationDialog(
       final colors = Theme.of(dialogContext).colorScheme;
 
       return AlertDialog(
+        key: dialogKey,
         icon: isDestructive
             ? Icon(Icons.warning_amber_rounded, color: colors.error)
             : null,
@@ -56,12 +63,14 @@ Future<bool> showAdaptiveConfirmationDialog(
         content: Text(message),
         actions: [
           TextButton(
+            key: cancelButtonKey,
             onPressed: () {
               Navigator.of(dialogContext).pop(false);
             },
             child: Text(cancelLabel),
           ),
           FilledButton(
+            key: confirmButtonKey,
             style: isDestructive
                 ? FilledButton.styleFrom(
                     backgroundColor: colors.error,
