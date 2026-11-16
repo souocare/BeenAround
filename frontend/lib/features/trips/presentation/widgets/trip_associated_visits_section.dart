@@ -12,6 +12,7 @@ import '../../application/trip_associations_state.dart';
 import '../../../explore/presentation/widgets/add_destination_sheet.dart';
 import '../../../explore/presentation/widgets/show_add_destination.dart';
 import 'trip_section_empty_state.dart';
+import 'trip_association_slidable.dart';
 
 /// Read-only presentation of a Trip's associated country and city visits.
 ///
@@ -208,7 +209,7 @@ class _TripAssociatedVisitsSectionState
       visitName: visitName,
     );
 
-    if (!context.mounted || !confirmed) {
+    if (!context.mounted || !confirmed || cubit.isClosed) {
       return;
     }
 
@@ -236,84 +237,91 @@ class _TripAssociatedVisitsSectionState
 
   Widget _visitTile(
     BuildContext context, {
+    required String associationId,
     required String title,
     String? subtitle,
     required String dates,
     required IconData icon,
     required Key key,
     required Key removeButtonKey,
-    VoidCallback? onRemove,
     required String removeTooltip,
+    Future<void> Function()? onRemove,
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return Card(
-      key: key,
-      margin: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: colors.primaryContainer,
-                borderRadius: BorderRadius.circular(AppRadius.md),
+    return TripAssociationSlidable(
+      associationId: associationId,
+      removeLabel: 'Delete',
+      enabled: onRemove != null,
+      onRemoveRequested: onRemove ?? () async {},
+      child: Card(
+        key: key,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(icon, color: colors.onPrimaryContainer, size: 20),
               ),
-              child: Icon(icon, color: colors.onPrimaryContainer, size: 20),
-            ),
 
-            const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.md),
 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  if (subtitle != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      subtitle,
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    if (subtitle != null) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: AppSpacing.xs),
+
+                    Text(
+                      dates,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
                     ),
                   ],
-
-                  const SizedBox(height: AppSpacing.xs),
-
-                  Text(
-                    dates,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
 
-            const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.sm),
 
-            IconButton(
-              key: removeButtonKey,
-              tooltip: removeTooltip,
-              onPressed: onRemove,
-              icon: const Icon(Icons.remove_circle_outline),
-              color: colors.error,
-            ),
-          ],
+              IconButton(
+                key: removeButtonKey,
+                tooltip: removeTooltip,
+                onPressed: onRemove,
+                icon: const Icon(Icons.remove_circle_outline),
+                color: colors.error,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -416,6 +424,8 @@ class _TripAssociatedVisitsSectionState
                   : () => _addCountryVisit(context, state),
             ),
 
+            const SizedBox(height: AppSpacing.md),
+
             if (state.countryVisits.isEmpty)
               TripSectionEmptyState(
                 key: const Key('tripCountriesEmptyState'),
@@ -439,7 +449,10 @@ class _TripAssociatedVisitsSectionState
 
                   return Column(
                     children: [
-                      for (final visit in state.countryVisits)
+                      for (final (index, visit)
+                          in state.countryVisits.indexed) ...[
+                        if (index > 0) const SizedBox(height: AppSpacing.sm),
+
                         Builder(
                           builder: (context) {
                             final countryName = _countryName(
@@ -458,6 +471,7 @@ class _TripAssociatedVisitsSectionState
                             return _visitTile(
                               context,
                               key: Key('tripCountryVisit-${visit.id}'),
+                              associationId: 'country-${visit.id}',
                               removeButtonKey: Key(
                                 'removeTripCountryVisit-${visit.id}',
                               ),
@@ -476,6 +490,7 @@ class _TripAssociatedVisitsSectionState
                             );
                           },
                         ),
+                      ],
                     ],
                   );
                 },
@@ -494,6 +509,8 @@ class _TripAssociatedVisitsSectionState
                   : () => _addCityVisit(context, state),
             ),
 
+            const SizedBox(height: AppSpacing.md),
+
             if (state.cityVisits.isEmpty)
               TripSectionEmptyState(
                 key: const Key('tripCitiesEmptyState'),
@@ -509,7 +526,9 @@ class _TripAssociatedVisitsSectionState
                     : () => _addCityVisit(context, state),
               )
             else
-              for (final visit in state.cityVisits)
+              for (final (index, visit) in state.cityVisits.indexed) ...[
+                if (index > 0) const SizedBox(height: AppSpacing.sm),
+
                 Builder(
                   builder: (context) {
                     final dates = _formatRange(
@@ -522,6 +541,7 @@ class _TripAssociatedVisitsSectionState
 
                     return _visitTile(
                       context,
+                      associationId: 'city-${visit.id}',
                       key: Key('tripCityVisit-${visit.id}'),
                       removeButtonKey: Key('removeTripCityVisit-${visit.id}'),
                       title: visit.cityName,
@@ -540,6 +560,7 @@ class _TripAssociatedVisitsSectionState
                     );
                   },
                 ),
+              ],
           ],
         );
       },

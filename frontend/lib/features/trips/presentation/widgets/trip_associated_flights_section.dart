@@ -1,3 +1,4 @@
+import 'package:beenaround/features/trips/presentation/widgets/trip_association_slidable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -17,6 +18,7 @@ import '../../application/trip_associations_state.dart';
 
 import 'trip_flight_picker_dialog.dart';
 import 'trip_section_empty_state.dart';
+import '../../../../app/widgets/adaptive_confirmation_dialog.dart';
 
 /// Displays independent flights explicitly associated with a Trip.
 ///
@@ -119,31 +121,18 @@ class _TripAssociatedFlightsSectionState
   Future<void> _removeFlight(BuildContext context, Flight flight) async {
     final cubit = context.read<TripAssociationsCubit>();
 
-    final confirmed = await showAdaptiveDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Remove flight from Trip?'),
-          content: const Text(
-            'This will only remove the association with this Trip. '
-            'The flight will remain available in Explore.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('Remove'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showAdaptiveConfirmationDialog(
+      context,
+      title: 'Remove flight from Trip?',
+      message:
+          'This will only remove the association with this Trip. '
+          'The flight will remain available in Explore.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      isDestructive: true,
+      dialogKey: const Key('removeTripFlightDialog'),
+      cancelButtonKey: const Key('cancelRemoveTripFlightButton'),
+      confirmButtonKey: const Key('confirmRemoveTripFlightButton'),
     );
 
     if (!context.mounted || confirmed != true || cubit.isClosed) {
@@ -173,89 +162,39 @@ class _TripAssociatedFlightsSectionState
     required ResolvedFlightCatalog catalog,
     required bool isMutating,
   }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final flightLabel = _flightAccessibilityLabel(flight, catalog);
 
     return Padding(
       key: Key('tripFlight-${flight.id}'),
       padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Reuse the exact FlightCard displayed in Flight History.
-          Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            clipBehavior: Clip.antiAlias,
-            child: Semantics(
-              label: 'View $flightLabel',
-              explicitChildNodes: true,
-              child: InkWell(
-                key: Key('openTripFlight-${flight.id}'),
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => _openFlightDetails(context, flight),
-                child: FlightCard(
-                  flight: flight,
-                  departureAirport: catalog.airportFor(
-                    flight.departureAirportId,
-                  ),
-                  arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
-                  airline: flight.airlineId == null
-                      ? null
-                      : catalog.airlineFor(flight.airlineId!),
-                  airlineName: catalog.airlineNameFor(flight),
-                ),
+      child: TripAssociationSlidable(
+        associationId: 'flight-${flight.id}',
+        removeLabel: 'Delete',
+        enabled: !isMutating,
+        onRemoveRequested: () => _removeFlight(context, flight),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: Semantics(
+            label: 'View $flightLabel',
+            explicitChildNodes: true,
+            child: InkWell(
+              key: Key('openTripFlight-${flight.id}'),
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _openFlightDetails(context, flight),
+              child: FlightCard(
+                flight: flight,
+                departureAirport: catalog.airportFor(flight.departureAirportId),
+                arrivalAirport: catalog.airportFor(flight.arrivalAirportId),
+                airline: flight.airlineId == null
+                    ? null
+                    : catalog.airlineFor(flight.airlineId!),
+                airlineName: catalog.airlineNameFor(flight),
               ),
             ),
           ),
-
-          // Trip-specific actions remain outside FlightCard.
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Tooltip(
-                  message: 'View $flightLabel',
-                  child: TextButton.icon(
-                    key: Key('viewTripFlight-${flight.id}'),
-                    onPressed: () => _openFlightDetails(context, flight),
-                    icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                    label: const Text('View'),
-                  ),
-                ),
-
-                const SizedBox(width: AppSpacing.sm),
-
-                Tooltip(
-                  message: 'Remove $flightLabel from Trip',
-                  child: TextButton.icon(
-                    key: Key('removeTripFlight-${flight.id}'),
-                    onPressed: isMutating
-                        ? null
-                        : () => _removeFlight(context, flight),
-                    icon: Icon(
-                      Icons.remove_circle_outline,
-                      size: 18,
-                      color: isMutating
-                          ? colors.onSurfaceVariant
-                          : colors.error,
-                    ),
-                    label: Text(
-                      'Remove',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: isMutating
-                            ? colors.onSurfaceVariant
-                            : colors.error,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

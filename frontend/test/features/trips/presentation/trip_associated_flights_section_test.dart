@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:beenaround/features/trips/presentation/widgets/trip_association_slidable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:beenaround/features/explore/data/countries_repository.dart';
@@ -439,6 +441,17 @@ class DelayedFlightAssociationsRepository
 
 void main() {
   group('TripAssociatedFlightsSection', () {
+    Future<void> revealFlightDelete(
+      WidgetTester tester, {
+      String flightId = 'flight-1',
+    }) async {
+      await tester.drag(
+        find.byKey(Key('openTripFlight-$flightId')),
+        const Offset(-180, 0),
+      );
+
+      await tester.pumpAndSettle();
+    }
     // -----------------------------------------------------------------------
     // Empty state
     // -----------------------------------------------------------------------
@@ -587,25 +600,30 @@ void main() {
           findsNWidgets(2),
         );
 
-        // Catalog failures must not hide Trip association actions.
+        // Catalog failures must not hide the Flight Card.
         expect(
-          find.byKey(const Key('viewTripFlight-flight-1')),
+          find.byKey(const ValueKey('flight-card-flight-1')),
           findsOneWidget,
         );
+
+        // Navigation remains available.
+        expect(
+          find.byKey(const Key('openTripFlight-flight-1')),
+          findsOneWidget,
+        );
+
+        // Association removal remains available through swipe.
+        expect(
+          find.byKey(const ValueKey('slidable-flight-flight-1')),
+          findsOneWidget,
+        );
+
+        // The previous action buttons are intentionally absent.
+        expect(find.byKey(const Key('viewTripFlight-flight-1')), findsNothing);
 
         expect(
           find.byKey(const Key('removeTripFlight-flight-1')),
-          findsOneWidget,
-        );
-
-        expect(
-          find.byKey(const Key('viewTripFlight-flight-1')),
-          findsOneWidget,
-        );
-
-        expect(
-          find.byKey(const Key('removeTripFlight-flight-1')),
-          findsOneWidget,
+          findsNothing,
         );
       },
     );
@@ -623,7 +641,13 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('removeTripFlight-flight-1')));
+      await revealFlightDelete(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('removeSwipe-flight-flight-1')),
+      );
+
+      await tester.pumpAndSettle();
 
       await tester.pumpAndSettle();
 
@@ -651,7 +675,13 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('removeTripFlight-flight-1')));
+      await revealFlightDelete(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('removeSwipe-flight-flight-1')),
+      );
+
+      await tester.pumpAndSettle();
 
       await tester.pumpAndSettle();
 
@@ -664,9 +694,8 @@ void main() {
 
       expect(confirmationDialog, findsOneWidget);
 
-      final confirmRemoveButton = find.descendant(
-        of: confirmationDialog,
-        matching: find.widgetWithText(TextButton, 'Remove'),
+      final confirmRemoveButton = find.byKey(
+        const Key('confirmRemoveTripFlightButton'),
       );
 
       expect(confirmRemoveButton, findsOneWidget);
@@ -833,7 +862,7 @@ void main() {
 
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('viewTripFlight-flight-1')));
+      await tester.tap(find.byKey(const Key('openTripFlight-flight-1')));
 
       await tester.pumpAndSettle();
 
@@ -873,7 +902,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('viewTripFlight-flight-1')));
+      await tester.tap(find.byKey(const Key('openTripFlight-flight-1')));
 
       await tester.pumpAndSettle();
 
@@ -928,7 +957,7 @@ void main() {
       expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
       // Open Flight Details.
-      await tester.tap(find.byKey(const Key('viewTripFlight-flight-1')));
+      await tester.tap(find.byKey(const Key('openTripFlight-flight-1')));
 
       await tester.pumpAndSettle();
 
@@ -1352,10 +1381,23 @@ void main() {
       );
 
       // Trip-specific actions are outside FlightCard.
-      expect(find.byKey(const Key('viewTripFlight-flight-1')), findsOneWidget);
-
+      // The shared FlightCard remains unchanged.
       expect(
-        find.byKey(const Key('removeTripFlight-flight-1')),
+        find.byKey(const ValueKey('flight-card-flight-1')),
+        findsOneWidget,
+      );
+
+      // The entire card opens Flight Details.
+      expect(find.byKey(const Key('openTripFlight-flight-1')), findsOneWidget);
+
+      // The previous action buttons are no longer displayed.
+      expect(find.byKey(const Key('viewTripFlight-flight-1')), findsNothing);
+
+      expect(find.byKey(const Key('removeTripFlight-flight-1')), findsNothing);
+
+      // Removal is available through the Trip-specific swipe action.
+      expect(
+        find.byKey(const ValueKey('slidable-flight-flight-1')),
         findsOneWidget,
       );
 
@@ -1528,7 +1570,11 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('removeTripFlight-flight-1')));
+      await revealFlightDelete(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('removeSwipe-flight-flight-1')),
+      );
 
       await tester.pumpAndSettle();
 
@@ -1536,14 +1582,11 @@ void main() {
 
       expect(dialog, findsOneWidget);
 
-      await tester.tap(
-        find.descendant(
-          of: dialog,
-          matching: find.widgetWithText(TextButton, 'Remove'),
-        ),
-      );
+      await tester.tap(find.byKey(const Key('confirmRemoveTripFlightButton')));
 
+      // Allow the dialog to close and the Cubit to enter its mutating state.
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       final cubit = tester
           .element(find.byType(TripAssociatedFlightsSection))
@@ -1555,12 +1598,13 @@ void main() {
         find.byKey(const Key('addTripFlightsButton')),
       );
 
-      final removeButton = tester.widget<TextButton>(
-        find.byKey(const Key('removeTripFlight-flight-1')),
+      final slidable = tester.widget<Slidable>(
+        find.byKey(const ValueKey('slidable-flight-flight-1')),
       );
 
+      expect(slidable.enabled, isFalse);
+
       expect(addButton.onPressed, isNull);
-      expect(removeButton.onPressed, isNull);
 
       removalDelay.complete();
 
@@ -1614,7 +1658,9 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
-    testWidgets('Remove Flight action identifies the flight', (tester) async {
+    testWidgets('Flight swipe Delete opens the association confirmation', (
+      tester,
+    ) async {
       final repository = FakeTripAssociationRepository(
         flights: [sampleFlight()],
       );
@@ -1623,19 +1669,94 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final removeButton = find.byKey(const Key('removeTripFlight-flight-1'));
+      // The flight is displayed.
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
-      final tooltip = find.ancestor(
-        of: removeButton,
-        matching: find.byType(Tooltip),
+      expect(find.text('TP1234'), findsOneWidget);
+
+      // Reveal the Trip-specific Delete action.
+      await revealFlightDelete(tester);
+
+      final deleteAction = find.byKey(
+        const ValueKey('removeSwipe-flight-flight-1'),
       );
 
-      expect(tooltip, findsOneWidget);
+      expect(deleteAction, findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
 
-      final widget = tester.widget<Tooltip>(tooltip);
+      // Request removal.
+      await tester.tap(deleteAction);
+      await tester.pumpAndSettle();
 
-      expect(widget.message, contains('TP1234'));
-      expect(widget.message, contains('from Trip'));
+      // The confirmation clearly explains what will be removed.
+      expect(find.byKey(const Key('removeTripFlightDialog')), findsOneWidget);
+
+      expect(find.text('Remove flight from Trip?'), findsOneWidget);
+
+      expect(
+        find.textContaining('The flight will remain available in Explore.'),
+        findsOneWidget,
+      );
+
+      // Cancel must preserve the association.
+      await tester.tap(find.byKey(const Key('cancelRemoveTripFlightButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(repository.removeFlightCalls, 0);
+
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('Flight swipe Delete opens the association confirmation', (
+      tester,
+    ) async {
+      final repository = FakeTripAssociationRepository(
+        flights: [sampleFlight()],
+      );
+
+      await tester.pumpWidget(buildTestApp(associationRepository: repository));
+
+      await tester.pumpAndSettle();
+
+      // The flight is displayed.
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
+
+      expect(find.text('TP1234'), findsOneWidget);
+
+      // Reveal the Trip-specific Delete action.
+      await revealFlightDelete(tester);
+
+      final deleteAction = find.byKey(
+        const ValueKey('removeSwipe-flight-flight-1'),
+      );
+
+      expect(deleteAction, findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+
+      // Request removal.
+      await tester.tap(deleteAction);
+      await tester.pumpAndSettle();
+
+      // The confirmation clearly explains what will be removed.
+      expect(find.byKey(const Key('removeTripFlightDialog')), findsOneWidget);
+
+      expect(find.text('Remove flight from Trip?'), findsOneWidget);
+
+      expect(
+        find.textContaining('The flight will remain available in Explore.'),
+        findsOneWidget,
+      );
+
+      // Cancel must preserve the association.
+      await tester.tap(find.byKey(const Key('cancelRemoveTripFlightButton')));
+
+      await tester.pumpAndSettle();
+
+      expect(repository.removeFlightCalls, 0);
+
+      expect(find.byKey(const Key('tripFlight-flight-1')), findsOneWidget);
 
       expect(tester.takeException(), isNull);
     });
