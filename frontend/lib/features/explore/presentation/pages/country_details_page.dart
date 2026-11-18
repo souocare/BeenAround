@@ -257,6 +257,7 @@ class _CountryDetailsPageState extends State<CountryDetailsPage> {
 
                         // Country map will be integrated here.
                         CountryMap(
+                          key: ValueKey((widget.country.code, isVisited)),
                           countryCode: widget.country.code,
                           isVisited: isVisited,
                         ),

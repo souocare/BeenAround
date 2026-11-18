@@ -126,10 +126,13 @@ class _CountryMapState extends State<CountryMap> {
       });
 
       await _initializeLayers();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted || widget.countryCode != requestedCountryCode) {
         return;
       }
+
+      debugPrint('CountryMap: unable to load geometries: $error');
+      debugPrintStack(stackTrace: stackTrace);
 
       setState(() {
         _error = error;
@@ -195,13 +198,25 @@ class _CountryMapState extends State<CountryMap> {
     final borderColor = CountryMapStyle.colorToHex(colors.outlineVariant);
 
     try {
-      // ---------------------------------------------------------------------
-      // 1. World context
-      // ---------------------------------------------------------------------
+      // ---------------------------------------------------------
+      // 1. World source
+      // ---------------------------------------------------------
 
       await style.addSource(
         GeoJsonSource(id: _worldSourceId, data: _worldGeoJson!),
       );
+
+      // ---------------------------------------------------------
+      // 2. Selected country source
+      // ---------------------------------------------------------
+
+      await style.addSource(
+        GeoJsonSource(id: _countrySourceId, data: _countryGeoJson!),
+      );
+
+      // ---------------------------------------------------------
+      // 3. Neutral world fill
+      // ---------------------------------------------------------
 
       await style.addLayer(
         FillStyleLayer(
@@ -211,22 +226,9 @@ class _CountryMapState extends State<CountryMap> {
         ),
       );
 
-      await style.addLayer(
-        LineStyleLayer(
-          id: _worldBorderLayerId,
-          sourceId: _worldSourceId,
-          paint: {'line-color': borderColor, 'line-width': 0.8},
-        ),
-        aboveLayerId: _worldFillLayerId,
-      );
-
-      // ---------------------------------------------------------------------
-      // 2. Selected country
-      // ---------------------------------------------------------------------
-
-      await style.addSource(
-        GeoJsonSource(id: _countrySourceId, data: _countryGeoJson!),
-      );
+      // ---------------------------------------------------------
+      // 4. Selected country fill
+      // ---------------------------------------------------------
 
       await style.addLayer(
         FillStyleLayer(
@@ -234,8 +236,23 @@ class _CountryMapState extends State<CountryMap> {
           sourceId: _countrySourceId,
           paint: {'fill-color': selectedFillColor, 'fill-opacity': 1.0},
         ),
-        aboveLayerId: _worldBorderLayerId,
       );
+
+      // ---------------------------------------------------------
+      // 5. World borders
+      // ---------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _worldBorderLayerId,
+          sourceId: _worldSourceId,
+          paint: {'line-color': borderColor, 'line-width': 0.8},
+        ),
+      );
+
+      // ---------------------------------------------------------
+      // 6. Selected country border
+      // ---------------------------------------------------------
 
       await style.addLayer(
         LineStyleLayer(
@@ -243,7 +260,6 @@ class _CountryMapState extends State<CountryMap> {
           sourceId: _countrySourceId,
           paint: {'line-color': borderColor, 'line-width': 1.2},
         ),
-        aboveLayerId: _countryFillLayerId,
       );
 
       if (!mounted) return;
@@ -253,6 +269,8 @@ class _CountryMapState extends State<CountryMap> {
         _error = null;
       });
     } catch (error, stackTrace) {
+      debugPrint('CountryMap: unable to initialize layers: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted) return;
