@@ -69,10 +69,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/geo/demo_countries.geojson
-    - assets/geo/world_countries.geojson
+    - assets/geo/
     - assets/geo/countries/
-    - assets/geo/cities_catalog.sqlite
 
   # To add assets to your application, add an assets section, like this:
   # assets:

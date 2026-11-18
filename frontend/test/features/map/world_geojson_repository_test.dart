@@ -14,10 +14,12 @@ class FakeWorldAssetBundle extends AssetBundle {
 
   int loadCount = 0;
   bool shouldFail = false;
+  String? lastLoadedKey;
 
   @override
   Future<ByteData> load(String key) async {
     loadCount++;
+    lastLoadedKey = key;
 
     if (shouldFail) {
       throw FlutterError('Asset unavailable');
@@ -35,7 +37,7 @@ void main() {
   }
   ''';
 
-  test('loads the world GeoJSON asset', () async {
+  test('loads the default world GeoJSON asset', () async {
     final bundle = FakeWorldAssetBundle(geoJson);
 
     final repository = WorldGeoJsonRepository(assetBundle: bundle);
@@ -44,6 +46,8 @@ void main() {
 
     expect(result, geoJson);
     expect(bundle.loadCount, 1);
+
+    expect(bundle.lastLoadedKey, 'assets/geo/world_countries.geojson');
   });
 
   test('caches successful loads', () async {
@@ -68,5 +72,35 @@ void main() {
 
     expect(await repository.load(), geoJson);
     expect(bundle.loadCount, 2);
+  });
+  test('loads a custom world GeoJSON asset', () async {
+    final bundle = FakeWorldAssetBundle(geoJson);
+
+    final repository = WorldGeoJsonRepository(
+      assetBundle: bundle,
+      assetPath: 'assets/geo/world_countries_complete.geojson',
+    );
+
+    final result = await repository.load();
+
+    expect(result, geoJson);
+    expect(bundle.loadCount, 1);
+
+    expect(bundle.lastLoadedKey, 'assets/geo/world_countries_complete.geojson');
+  });
+  test('caches custom asset loads', () async {
+    final bundle = FakeWorldAssetBundle(geoJson);
+
+    final repository = WorldGeoJsonRepository(
+      assetBundle: bundle,
+      assetPath: 'assets/geo/world_countries_complete.geojson',
+    );
+
+    final first = await repository.load();
+    final second = await repository.load();
+
+    expect(first, geoJson);
+    expect(second, geoJson);
+    expect(bundle.loadCount, 1);
   });
 }
