@@ -12,6 +12,7 @@ class MapState {
     this.countryPreviews = const {},
     this.activeStatus = MapDestinationStatus.visited,
     this.selectedCountryCode,
+    this.selectedCityId,
     this.cities = const {},
     this.errorMessage,
   });
@@ -27,6 +28,12 @@ class MapState {
   final MapDestinationStatus activeStatus;
 
   final String? selectedCountryCode;
+
+  /// Currently selected city, identified by its catalog ID.
+  ///
+  /// Geographic selection is mutually exclusive: selecting a city
+  /// clears the previously selected country.
+  final int? selectedCityId;
 
   /// Geographic city projections indexed by catalog city ID.
   ///
@@ -61,6 +68,18 @@ class MapState {
     return countryPreviews[code];
   }
 
+  /// Geographic projection of the currently selected city.
+  ///
+  /// Returns null when no city is selected or when the selected
+  /// city is no longer available in the loaded projection.
+  MapCityData? get selectedCity {
+    final cityId = selectedCityId;
+
+    if (cityId == null) return null;
+
+    return cities[cityId];
+  }
+
   MapState copyWith({
     MapPhase? phase,
     MapCountryData? countryData,
@@ -68,6 +87,8 @@ class MapState {
     MapDestinationStatus? activeStatus,
     String? selectedCountryCode,
     bool clearSelectedCountry = false,
+    int? selectedCityId,
+    bool clearSelectedCity = false,
     Map<int, MapCityData>? cities,
     String? errorMessage,
     bool clearError = false,
@@ -80,6 +101,9 @@ class MapState {
       selectedCountryCode: clearSelectedCountry
           ? null
           : selectedCountryCode ?? this.selectedCountryCode,
+      selectedCityId: clearSelectedCity
+          ? null
+          : selectedCityId ?? this.selectedCityId,
       cities: cities ?? this.cities,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );

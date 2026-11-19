@@ -182,10 +182,12 @@ class MapCubit extends Cubit<MapState> {
   }
 
   // ---------------------------------------------------------
-  // Country selection
+  // Geographic selection
   // ---------------------------------------------------------
 
   /// Selects a country for inspection without modifying travel records.
+  ///
+  /// Selecting a country clears any previously selected city.
   void selectCountry(String countryCode) {
     if (isClosed) return;
 
@@ -195,20 +197,67 @@ class MapCubit extends Cubit<MapState> {
       return;
     }
 
-    if (state.selectedCountryCode == normalizedCode) {
+    if (state.selectedCountryCode == normalizedCode &&
+        state.selectedCityId == null) {
       return;
     }
 
-    emit(state.copyWith(selectedCountryCode: normalizedCode));
+    emit(
+      state.copyWith(
+        selectedCountryCode: normalizedCode,
+        clearSelectedCity: true,
+      ),
+    );
+  }
+
+  /// Selects a city for inspection without modifying travel records.
+  ///
+  /// Selecting a city clears any previously selected country.
+  void selectCity(int cityId) {
+    if (isClosed) return;
+
+    if (cityId <= 0) {
+      return;
+    }
+
+    if (state.selectedCityId == cityId && state.selectedCountryCode == null) {
+      return;
+    }
+
+    emit(state.copyWith(selectedCityId: cityId, clearSelectedCountry: true));
   }
 
   /// Clears the current country selection.
+  ///
+  /// Does not modify a separately selected city.
   void clearCountrySelection() {
     if (isClosed || state.selectedCountryCode == null) {
       return;
     }
 
     emit(state.copyWith(clearSelectedCountry: true));
+  }
+
+  /// Clears the current city selection.
+  ///
+  /// Does not modify a separately selected country.
+  void clearCitySelection() {
+    if (isClosed || state.selectedCityId == null) {
+      return;
+    }
+
+    emit(state.copyWith(clearSelectedCity: true));
+  }
+
+  /// Clears any currently selected geographic destination.
+  void clearSelection() {
+    if (isClosed) return;
+
+    if (state.selectedCountryCode == null && state.selectedCityId == null) {
+      return;
+    }
+
+    emit(state.copyWith(clearSelectedCountry: true, clearSelectedCity: true));
   }
 
   // ---------------------------------------------------------

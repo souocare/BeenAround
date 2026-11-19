@@ -377,5 +377,71 @@ void main() {
 
       expect(cubit.state.errorMessage, isNotNull);
     });
+    test('selects a city independently of the active filter', () {
+      cubit.selectCity(123);
+
+      expect(cubit.state.selectedCityId, 123);
+      expect(cubit.state.selectedCountryCode, isNull);
+
+      cubit.selectStatus(MapDestinationStatus.wishlist);
+
+      expect(cubit.state.selectedCityId, 123);
+    });
+    test('selecting a city clears the previous country selection', () {
+      cubit.selectCountry('PT');
+
+      expect(cubit.state.selectedCountryCode, 'PT');
+
+      cubit.selectCity(123);
+
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedCityId, 123);
+    });
+
+    test('selecting a country clears the previous city selection', () {
+      cubit.selectCity(123);
+
+      cubit.selectCountry('ES');
+
+      expect(cubit.state.selectedCountryCode, 'ES');
+      expect(cubit.state.selectedCityId, isNull);
+    });
+
+    test('does not emit when selecting the same city again', () {
+      cubit.selectCity(123);
+
+      final previousState = cubit.state;
+
+      cubit.selectCity(123);
+
+      expect(cubit.state, same(previousState));
+    });
+    test('clears the current geographic selection', () {
+      cubit.selectCity(123);
+
+      cubit.clearSelection();
+
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedCityId, isNull);
+    });
+    test('preserves city selection after refreshing data', () async {
+      await cubit.load();
+
+      cubit.selectCity(123);
+
+      await cubit.refresh();
+
+      expect(cubit.state.phase, MapPhase.ready);
+      expect(cubit.state.selectedCityId, 123);
+    });
+
+    test('ignores invalid city identifiers', () {
+      final previousState = cubit.state;
+
+      cubit.selectCity(0);
+      cubit.selectCity(-1);
+
+      expect(cubit.state, same(previousState));
+    });
   });
 }
