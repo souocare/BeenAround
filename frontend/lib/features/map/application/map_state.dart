@@ -2,6 +2,7 @@ import '../domain/map_country_data.dart';
 import '../domain/map_destination_status.dart';
 import '../domain/map_country_preview.dart';
 import '../domain/map_city_data.dart';
+import '../domain/map_search_destination.dart';
 
 enum MapPhase { initial, loading, ready, failure }
 
@@ -14,6 +15,7 @@ class MapState {
     this.selectedCountryCode,
     this.selectedCityId,
     this.cities = const {},
+    this.selectedSearchDestination,
     this.errorMessage,
   });
 
@@ -42,6 +44,14 @@ class MapState {
   final Map<int, MapCityData> cities;
 
   final String? errorMessage;
+  // Catalog destination selected through geographic search.
+  ///
+  /// This is a temporary selection independent of personal
+  /// travel records and the active visualization filter.
+  ///
+  /// Country and city selections retain their existing identifiers.
+  /// Airports are represented exclusively by this destination.
+  final MapSearchDestination? selectedSearchDestination;
 
   bool get hasData => countryData != null;
 
@@ -92,6 +102,8 @@ class MapState {
     Map<int, MapCityData>? cities,
     String? errorMessage,
     bool clearError = false,
+    MapSearchDestination? selectedSearchDestination,
+    bool clearSelectedSearchDestination = false,
   }) {
     return MapState(
       phase: phase ?? this.phase,
@@ -105,6 +117,9 @@ class MapState {
           ? null
           : selectedCityId ?? this.selectedCityId,
       cities: cities ?? this.cities,
+      selectedSearchDestination: clearSelectedSearchDestination
+          ? null
+          : selectedSearchDestination ?? this.selectedSearchDestination,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }

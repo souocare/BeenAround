@@ -13,6 +13,7 @@ import 'map_city_projection.dart';
 import 'map_country_preview_projection.dart';
 import 'map_country_projection.dart';
 import 'map_state.dart';
+import '../domain/map_search_destination.dart';
 
 /// Manages the authenticated user's geographic travel visualization.
 ///
@@ -188,17 +189,19 @@ class MapCubit extends Cubit<MapState> {
   /// Selects a country for inspection without modifying travel records.
   ///
   /// Selecting a country clears any previously selected city.
+  /// Selects a country without modifying travel records.
+  ///
+  /// Clears any previous city, airport or catalog selection.
   void selectCountry(String countryCode) {
     if (isClosed) return;
 
     final normalizedCode = countryCode.trim().toUpperCase();
 
-    if (normalizedCode.isEmpty) {
-      return;
-    }
+    if (normalizedCode.isEmpty) return;
 
     if (state.selectedCountryCode == normalizedCode &&
-        state.selectedCityId == null) {
+        state.selectedCityId == null &&
+        state.selectedSearchDestination == null) {
       return;
     }
 
@@ -206,6 +209,7 @@ class MapCubit extends Cubit<MapState> {
       state.copyWith(
         selectedCountryCode: normalizedCode,
         clearSelectedCity: true,
+        clearSelectedSearchDestination: true,
       ),
     );
   }
@@ -213,18 +217,25 @@ class MapCubit extends Cubit<MapState> {
   /// Selects a city for inspection without modifying travel records.
   ///
   /// Selecting a city clears any previously selected country.
+  /// Selects a city from the user's geographic map projection.
+  ///
+  /// Clears any previous country or catalog selection.
   void selectCity(int cityId) {
-    if (isClosed) return;
+    if (isClosed || cityId <= 0) return;
 
-    if (cityId <= 0) {
+    if (state.selectedCityId == cityId &&
+        state.selectedCountryCode == null &&
+        state.selectedSearchDestination == null) {
       return;
     }
 
-    if (state.selectedCityId == cityId && state.selectedCountryCode == null) {
-      return;
-    }
-
-    emit(state.copyWith(selectedCityId: cityId, clearSelectedCountry: true));
+    emit(
+      state.copyWith(
+        selectedCityId: cityId,
+        clearSelectedCountry: true,
+        clearSelectedSearchDestination: true,
+      ),
+    );
   }
 
   /// Clears the current country selection.
@@ -240,24 +251,42 @@ class MapCubit extends Cubit<MapState> {
 
   /// Clears the current city selection.
   ///
-  /// Does not modify a separately selected country.
+  /// Also clears the associated temporary catalog selection,
+  /// when the selected search destination is a city.
   void clearCitySelection() {
     if (isClosed || state.selectedCityId == null) {
       return;
     }
 
-    emit(state.copyWith(clearSelectedCity: true));
+    emit(
+      state.copyWith(
+        clearSelectedCity: true,
+        clearSelectedSearchDestination:
+            state.selectedSearchDestination?.type ==
+            MapSearchDestinationType.city,
+      ),
+    );
   }
 
   /// Clears any currently selected geographic destination.
+  ///
+  /// Includes temporary catalog destinations such as airports.
   void clearSelection() {
     if (isClosed) return;
 
-    if (state.selectedCountryCode == null && state.selectedCityId == null) {
+    if (state.selectedCountryCode == null &&
+        state.selectedCityId == null &&
+        state.selectedSearchDestination == null) {
       return;
     }
 
-    emit(state.copyWith(clearSelectedCountry: true, clearSelectedCity: true));
+    emit(
+      state.copyWith(
+        clearSelectedCountry: true,
+        clearSelectedCity: true,
+        clearSelectedSearchDestination: true,
+      ),
+    );
   }
 
   // ---------------------------------------------------------
@@ -285,6 +314,92 @@ class MapCubit extends Cubit<MapState> {
     }
 
     emit(state.copyWith(activeStatus: status));
+  }
+
+  /// Selects a destination from the shared geographic catalog.
+  ///
+  /// Search selection is read-only and never modifies visits,
+  /// residences, wishlists or Trips.
+  ///
+  /// Only one geographic destination can be selected at a time.
+  void selectSearchDestination(MapSearchDestination destination) {
+    if (isClosed) return;
+
+    switch (destination.type) {
+      // -------------------------------------------------------
+      // Country
+      // -------------------------------------------------------
+
+      case MapSearchDestinationType.country:
+        final countryCode = destination.countryCode?.trim().toUpperCase();
+
+        if (countryCode == null || countryCode.isEmpty) {
+          return;
+        }
+
+        // Countries already have a geographic selection model.
+        // Reuse it instead of duplicating country state.
+        selectCountry(countryCode);
+
+      // -------------------------------------------------------
+      // City
+      // -------------------------------------------------------
+
+      case MapSearchDestinationType.city:
+        final rawCityId = destination.id;
+
+        if (!rawCityId.startsWith('city:')) {
+          return;
+        }
+
+        final cityId = int.tryParse(rawCityId.substring(5));
+
+        if (cityId == null || cityId <= 0 || !destination.hasCoordinates) {
+          return;
+        }
+
+        if (state.selectedCityId == cityId &&
+            state.selectedCountryCode == null &&
+            state.selectedSearchDestination?.id == destination.id) {
+          return;
+        }
+
+        emit(
+          state.copyWith(
+            selectedCityId: cityId,
+            selectedSearchDestination: destination,
+            clearSelectedCountry: true,
+          ),
+        );
+
+      // -------------------------------------------------------
+      // Airport
+      // -------------------------------------------------------
+
+      case MapSearchDestinationType.airport:
+        // Airports without coordinates cannot currently be
+        // positioned on the map.
+        //
+        // Their search results remain available, but geographic
+        // selection requires valid coordinates.
+        if (!destination.hasCoordinates) {
+          return;
+        }
+
+        if (state.selectedSearchDestination?.id == destination.id &&
+            state.selectedCountryCode == null &&
+            state.selectedCityId == null) {
+          return;
+        }
+
+        emit(
+          state.copyWith(
+            selectedSearchDestination: destination,
+            clearSelectedCountry: true,
+            clearSelectedCity: true,
+          ),
+        );
+    }
   }
 
   // ---------------------------------------------------------

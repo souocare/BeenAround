@@ -17,6 +17,7 @@ import 'package:beenaround/features/explore/domain/country.dart';
 import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/map/application/map_city_projection.dart';
+import 'package:beenaround/features/map/domain/map_search_destination.dart';
 
 final _now = DateTime.utc(2026, 11, 18);
 
@@ -156,6 +157,132 @@ void main() {
 
   tearDown(() async {
     await cubit.close();
+  });
+
+  group('Geographic catalog selection', () {
+    test('selects a catalog country using existing country selection', () {
+      final destination = MapSearchDestination.country(
+        code: 'pt',
+        name: 'Portugal',
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state.selectedCountryCode, 'PT');
+      expect(cubit.state.selectedCityId, isNull);
+      expect(cubit.state.selectedSearchDestination, isNull);
+    });
+
+    test('selects a city independently of personal travel history', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.city,
+        id: 'city:123',
+        title: 'Tokyo',
+        subtitle: 'Japan',
+        countryCode: 'JP',
+        latitude: 35.6762,
+        longitude: 139.6503,
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state.selectedCityId, 123);
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedSearchDestination, same(destination));
+
+      // Tokyo does not need to exist in the personal city projection.
+      expect(cubit.state.selectedCity, isNull);
+    });
+
+    test('selects an airport without modifying country or city data', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.airport,
+        id: 'airport:456',
+        title: 'Lisbon Airport',
+        subtitle: 'LIS · Lisbon, Portugal',
+        countryCode: 'PT',
+        latitude: 38.7742,
+        longitude: -9.1342,
+      );
+
+      cubit.selectCountry('ES');
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedCityId, isNull);
+      expect(cubit.state.selectedSearchDestination, same(destination));
+    });
+
+    test('normal map selection clears temporary catalog selection', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.city,
+        id: 'city:123',
+        title: 'Tokyo',
+        subtitle: 'Japan',
+        latitude: 35.6762,
+        longitude: 139.6503,
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      cubit.selectCountry('PT');
+
+      expect(cubit.state.selectedCountryCode, 'PT');
+      expect(cubit.state.selectedCityId, isNull);
+      expect(cubit.state.selectedSearchDestination, isNull);
+    });
+
+    test('clearing selection also clears a selected airport', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.airport,
+        id: 'airport:456',
+        title: 'Lisbon Airport',
+        subtitle: 'Portugal',
+        latitude: 38.7742,
+        longitude: -9.1342,
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      cubit.clearSelection();
+
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedCityId, isNull);
+      expect(cubit.state.selectedSearchDestination, isNull);
+    });
+
+    test('does not select airports without usable coordinates', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.airport,
+        id: 'airport:789',
+        title: 'Unknown Airport',
+        subtitle: 'Unknown location',
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state.selectedSearchDestination, isNull);
+    });
+
+    test('does not emit when selecting the same catalog city again', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.city,
+        id: 'city:123',
+        title: 'Tokyo',
+        subtitle: 'Japan',
+        latitude: 35.6762,
+        longitude: 139.6503,
+      );
+
+      cubit.selectSearchDestination(destination);
+
+      final previousState = cubit.state;
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state, same(previousState));
+    });
   });
 
   group('MapCubit', () {
