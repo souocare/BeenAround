@@ -13,6 +13,7 @@ import '../../application/map_camera_target.dart';
 import '../../application/map_country_focus_padding.dart';
 import '../../application/map_city_geojson_projection.dart';
 import '../../domain/map_city_data.dart';
+import '../../application/map_city_camera_target.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -779,18 +780,27 @@ class _TravelMapState extends State<TravelMap> {
     );
 
     for (final feature in cityFeatures) {
-      final cityId = feature.properties['city_id'];
+      final rawCityId = feature.properties['city_id'];
 
-      if (cityId is int && cityId > 0) {
-        widget.onCitySelected?.call(cityId);
-        return;
+      if (rawCityId is! num || rawCityId <= 0 || rawCityId % 1 != 0) {
+        continue;
       }
 
-      // Defensive handling for numeric values decoded as doubles.
-      if (cityId is num && cityId > 0 && cityId % 1 == 0) {
-        widget.onCitySelected?.call(cityId.toInt());
-        return;
+      final cityId = rawCityId.toInt();
+
+      widget.onCitySelected?.call(cityId);
+
+      final city = widget.selectedCity?.cityId == cityId
+          ? widget.selectedCity
+          : widget.cities
+                .where((candidate) => candidate.cityId == cityId)
+                .firstOrNull;
+
+      if (city != null) {
+        unawaited(_focusCity(city));
       }
+
+      return;
     }
 
     // ---------------------------------------------------------
@@ -873,6 +883,29 @@ class _TravelMapState extends State<TravelMap> {
       );
     } catch (error, stackTrace) {
       debugPrint('TravelMap: unable to focus country: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _focusCity(MapCityData city) async {
+    final controller = _mapController;
+
+    if (controller == null || !_layersReady || !mounted) {
+      return;
+    }
+
+    try {
+      final center = calculateMapCityCameraCenter(city);
+
+      await controller.animateCamera(
+        center: center,
+        zoom: 4.5,
+        nativeDuration: const Duration(milliseconds: 900),
+      );
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+
+      debugPrint('TravelMap: unable to focus city: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
