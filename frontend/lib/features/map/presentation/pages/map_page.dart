@@ -2,31 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../explore/data/countries_repository.dart';
+import '../../../explore/presentation/navigation/open_country_details.dart';
+import '../../../flights/domain/airport_repository.dart';
 import '../../../geography/domain/city_repository.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../residences/domain/residence_repository.dart';
 import '../../../trips/domain/trip_repository.dart';
 import '../../../wishlist/domain/wishlist_repository.dart';
 
+import '../../application/map_city_projection.dart';
 import '../../application/map_country_projection.dart';
 import '../../application/map_country_related_cubit.dart';
 import '../../application/map_country_related_state.dart';
 import '../../application/map_cubit.dart';
+import '../../application/map_search_cubit.dart';
+import '../../application/map_search_service.dart';
+import '../../application/map_search_state.dart';
 import '../../application/map_state.dart';
 
+import '../../domain/map_search_destination.dart';
+
 import '../widgets/map_country_panel.dart';
+import '../widgets/map_search_results_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
-import '../../application/map_city_projection.dart';
-import '../../../explore/presentation/navigation/open_country_details.dart';
-import '../../../flights/domain/airport_repository.dart';
 
-import '../../application/map_search_service.dart';
-import '../../application/map_search_cubit.dart';
-
-import '../../application/map_search_state.dart';
-import '../../domain/map_search_destination.dart';
-import '../widgets/map_search_results_panel.dart';
+// -----------------------------------------------------------------------------
+// Map page
+// -----------------------------------------------------------------------------
 
 class MapPage extends StatelessWidget {
   const MapPage({super.key});
@@ -35,33 +38,39 @@ class MapPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        // -------------------------------------------------------------------
+        // Geographic visualization
+        // -------------------------------------------------------------------
         BlocProvider<MapCubit>(
           create: (context) {
             final cityRepository = context.read<CityRepository>();
 
             return MapCubit(
               countriesRepository: context.read<CountriesRepository>(),
-
               cityVisitsRepository: context.read<CityVisitsRepository>(),
-
               residenceRepository: context.read<ResidenceRepository>(),
-
               wishlistRepository: context.read<WishlistRepository>(),
-
               countryProjection: MapCountryProjection(
                 cityRepository: cityRepository,
               ),
-
               cityProjection: MapCityProjection(cityRepository: cityRepository),
             )..load();
           },
         ),
+
+        // -------------------------------------------------------------------
+        // Related country information
+        // -------------------------------------------------------------------
         BlocProvider<MapCountryRelatedCubit>(
           create: (context) => MapCountryRelatedCubit(
             cityVisitsRepository: context.read<CityVisitsRepository>(),
             tripRepository: context.read<TripRepository>(),
           ),
         ),
+
+        // -------------------------------------------------------------------
+        // Unified geographic search
+        // -------------------------------------------------------------------
         BlocProvider<MapSearchCubit>(
           create: (context) {
             final service = MapSearchService(
@@ -79,6 +88,10 @@ class MapPage extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Map view
+// -----------------------------------------------------------------------------
+
 class _MapView extends StatefulWidget {
   const _MapView();
 
@@ -87,15 +100,91 @@ class _MapView extends StatefulWidget {
 }
 
 class _MapViewState extends State<_MapView> {
+  // ---------------------------------------------------------------------------
+  // Search presentation state
+  // ---------------------------------------------------------------------------
+
   bool _isSearchOpen = false;
 
+  // ---------------------------------------------------------------------------
+  // Contextual panel compaction
+  // ---------------------------------------------------------------------------
+
+  /// Incremented when the existing country panel should compact.
+  int _panelCompactRequestId = 0;
+
+  /// Prevents repeated compaction during the same search session.
+  bool _compactedForCurrentSearch = false;
+
+  // ---------------------------------------------------------------------------
+  // Open search
+  // ---------------------------------------------------------------------------
+
   void _openSearch() {
-    if (_isSearchOpen) return;
+    if (_isSearchOpen) {
+      return;
+    }
 
     setState(() {
       _isSearchOpen = true;
+      _compactedForCurrentSearch = false;
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Search query changes
+  // ---------------------------------------------------------------------------
+
+  void _onSearchChanged(String value) {
+    context.read<MapSearchCubit>().queryChanged(value);
+
+    // Opening the search alone must not compact the country panel.
+    //
+    // Compaction starts when the user enters a non-empty query,
+    // which is when the search results panel becomes visible.
+    if (!_isSearchOpen || value.trim().isEmpty || _compactedForCurrentSearch) {
+      return;
+    }
+
+    // Only compact an existing selected country panel.
+    //
+    // Do not change the selection, map status or camera.
+    final mapState = context.read<MapCubit>().state;
+
+    if (mapState.selectedCountryPreview == null) {
+      return;
+    }
+
+    setState(() {
+      _compactedForCurrentSearch = true;
+      _panelCompactRequestId++;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Close search
+  // ---------------------------------------------------------------------------
+
+  void _closeSearch() {
+    if (!_isSearchOpen) {
+      return;
+    }
+
+    context.read<MapSearchCubit>().clear();
+
+    setState(() {
+      _isSearchOpen = false;
+      _compactedForCurrentSearch = false;
+    });
+
+    // Deliberately do not change the country panel extent.
+    //
+    // Closing search must preserve the current panel position.
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search destination selection
+  // ---------------------------------------------------------------------------
 
   void _onSearchDestinationSelected(MapSearchDestination destination) {
     _closeSearch();
@@ -109,15 +198,9 @@ class _MapViewState extends State<_MapView> {
     );
   }
 
-  void _closeSearch() {
-    if (!_isSearchOpen) return;
-
-    context.read<MapSearchCubit>().clear();
-
-    setState(() {
-      _isSearchOpen = false;
-    });
-  }
+  // ---------------------------------------------------------------------------
+  // Country details navigation
+  // ---------------------------------------------------------------------------
 
   Future<void> _openSelectedCountryDetails(
     BuildContext context,
@@ -131,14 +214,18 @@ class _MapViewState extends State<_MapView> {
       countryCode: countryCode,
     );
 
-    if (!opened || !context.mounted) return;
+    if (!opened || !context.mounted) {
+      return;
+    }
 
     // Refresh map projections after edits made in CountryDetailsPage.
     if (!mapCubit.isClosed) {
       await mapCubit.refresh();
     }
 
-    if (!context.mounted || relatedCubit.isClosed) return;
+    if (!context.mounted || relatedCubit.isClosed) {
+      return;
+    }
 
     // The selected country may have changed while navigating.
     final selectedCode = mapCubit.state.selectedCountryCode;
@@ -150,6 +237,10 @@ class _MapViewState extends State<_MapView> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Presentation
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<MapCubit, MapState>(
@@ -157,6 +248,7 @@ class _MapViewState extends State<_MapView> {
           previous.selectedCountryCode != current.selectedCountryCode,
       listener: (context, state) {
         final relatedCubit = context.read<MapCountryRelatedCubit>();
+
         final countryCode = state.selectedCountryCode;
 
         if (countryCode == null) {
@@ -180,13 +272,18 @@ class _MapViewState extends State<_MapView> {
                     selectedCountryCode: state.selectedCountryCode,
                     cities: state.visibleCities,
                     selectedCity: state.selectedCity,
+
                     onCitySelected: (cityId) {
                       _closeSearch();
+
                       context.read<MapCubit>().selectCity(cityId);
                     },
+
                     onCountrySelected: (countryCode) {
                       _closeSearch();
+
                       final cubit = context.read<MapCubit>();
+
                       if (countryCode == null) {
                         cubit.clearSelection();
                       } else {
@@ -210,11 +307,11 @@ class _MapViewState extends State<_MapView> {
                       isSearchOpen: _isSearchOpen,
                       onSearchOpen: _openSearch,
                       onSearchClose: _closeSearch,
-                      onSearchChanged: context
-                          .read<MapSearchCubit>()
-                          .queryChanged,
+                      onSearchChanged: _onSearchChanged,
+
                       onStatusSelected: (status) {
                         _closeSearch();
+
                         context.read<MapCubit>().selectStatus(status);
                       },
                     ),
@@ -261,15 +358,26 @@ class _MapViewState extends State<_MapView> {
 
                               return MapCountryPanel(
                                 preview: preview,
+
+                                // -------------------------------------------------
+                                // Search-triggered panel compaction
+                                // -------------------------------------------------
+                                compactRequestId: _panelCompactRequestId,
+
+                                // -------------------------------------------------
+                                // Related country data
+                                // -------------------------------------------------
                                 relatedState: matchingState
                                     ? relatedState
                                     : MapCountryRelatedState(
                                         phase: MapCountryRelatedPhase.loading,
                                         countryCode: preview.countryCode,
                                       ),
+
                                 onClose: context
                                     .read<MapCubit>()
                                     .clearCountrySelection,
+
                                 onViewDetails: () =>
                                     _openSelectedCountryDetails(
                                       context,
@@ -318,17 +426,27 @@ class _MapViewState extends State<_MapView> {
                               return const SizedBox.shrink();
                             }
 
-                            return AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              child: MapSearchResultsPanel(
-                                key: const ValueKey('mapSearchResultsVisible'),
-                                state: searchState,
-                                maxHeight: panelHeight,
-                                onDestinationSelected:
-                                    _onSearchDestinationSelected,
-                                onRetry: context.read<MapSearchCubit>().retry,
+                            return SizedBox(
+                              width: double.infinity,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: MapSearchResultsPanel(
+                                    key: const ValueKey(
+                                      'mapSearchResultsVisible',
+                                    ),
+                                    state: searchState,
+                                    maxHeight: panelHeight,
+                                    onDestinationSelected:
+                                        _onSearchDestinationSelected,
+                                    onRetry: context
+                                        .read<MapSearchCubit>()
+                                        .retry,
+                                  ),
+                                ),
                               ),
                             );
                           },

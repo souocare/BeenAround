@@ -5,12 +5,13 @@ import '../../domain/map_country_preview.dart';
 import '../../application/map_country_related_state.dart';
 import '../../map_panel_layout.dart';
 
-class MapCountryPanel extends StatelessWidget {
+class MapCountryPanel extends StatefulWidget {
   const MapCountryPanel({
     required this.preview,
     required this.relatedState,
     required this.onClose,
     required this.onViewDetails,
+    this.compactRequestId = 0,
     super.key,
   });
 
@@ -19,9 +20,79 @@ class MapCountryPanel extends StatelessWidget {
   final MapCountryRelatedState relatedState;
   final VoidCallback onViewDetails;
 
+  /// Incremented when the parent requests a compact presentation.
+  ///
+  /// Repeated rebuilds with the same value do not trigger
+  /// additional panel animations.
+  final int compactRequestId;
+
+  @override
+  State<MapCountryPanel> createState() => _MapCountryPanelState();
+}
+
+class _MapCountryPanelState extends State<MapCountryPanel> {
+  // ---------------------------------------------------------------------------
+  // Panel lifecycle
+  // ---------------------------------------------------------------------------
+
+  static const _compactAnimationDuration = Duration(milliseconds: 420);
+
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  @override
+  void didUpdateWidget(covariant MapCountryPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.compactRequestId != widget.compactRequestId) {
+      _scheduleCompaction();
+    }
+  }
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Programmatic panel compaction
+  // ---------------------------------------------------------------------------
+
+  void _scheduleCompaction() {
+    final requestId = widget.compactRequestId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          requestId != widget.compactRequestId ||
+          !_sheetController.isAttached) {
+        return;
+      }
+
+      if (_sheetController.size <= MapPanelLayout.compactExtent) {
+        return;
+      }
+
+      _sheetController.animateTo(
+        MapPanelLayout.compactExtent,
+        duration: _compactAnimationDuration,
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Presentation
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
 
@@ -37,6 +108,10 @@ class MapCountryPanel extends StatelessWidget {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Bottom panel
+  // ---------------------------------------------------------------------------
+
   Widget _buildBottomPanel(BuildContext context, ColorScheme colors) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -50,8 +125,8 @@ class MapCountryPanel extends StatelessWidget {
           // Dismiss when the user drags the panel almost completely down.
           if (notification.extent <= 0.02) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) {
-                onClose();
+              if (mounted && context.mounted) {
+                widget.onClose();
               }
             });
           }
@@ -61,6 +136,7 @@ class MapCountryPanel extends StatelessWidget {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: DraggableScrollableSheet(
+            controller: _sheetController,
             initialChildSize: MapPanelLayout.initialExtent,
             minChildSize: MapPanelLayout.closedExtent,
             maxChildSize: MapPanelLayout.expandedExtent,
@@ -94,6 +170,10 @@ class MapCountryPanel extends StatelessWidget {
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Responsive side panel
+  // ---------------------------------------------------------------------------
 
   Widget _buildSidePanel(BuildContext context, BoxConstraints constraints) {
     final colors = Theme.of(context).colorScheme;
@@ -134,6 +214,10 @@ class MapCountryPanel extends StatelessWidget {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Country content
+  // ---------------------------------------------------------------------------
+
   Widget _buildContent(
     BuildContext context, {
     required ScrollController scrollController,
@@ -141,6 +225,9 @@ class MapCountryPanel extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+
+    final preview = widget.preview;
+    final relatedState = widget.relatedState;
 
     return CustomScrollView(
       controller: scrollController,
@@ -199,7 +286,7 @@ class MapCountryPanel extends StatelessWidget {
 
                               TextButton(
                                 key: const Key('mapCountryViewDetails'),
-                                onPressed: onViewDetails,
+                                onPressed: widget.onViewDetails,
                                 style: TextButton.styleFrom(
                                   foregroundColor: colors.onSurfaceVariant,
                                   minimumSize: const Size(0, 44),
@@ -239,7 +326,7 @@ class MapCountryPanel extends StatelessWidget {
                     IconButton(
                       key: const Key('mapCountryPanelClose'),
                       tooltip: 'Close country panel',
-                      onPressed: onClose,
+                      onPressed: widget.onClose,
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
@@ -417,7 +504,13 @@ class MapCountryPanel extends StatelessWidget {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Country status badges
+  // ---------------------------------------------------------------------------
+
   Widget _buildStatusBadges(BuildContext context) {
+    final preview = widget.preview;
+
     final statuses = <String>[
       if (preview.hasVisited) 'Visited',
       if (preview.hasLived) 'Lived',
@@ -454,6 +547,10 @@ class MapCountryPanel extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Statistic
+// -----------------------------------------------------------------------------
+
 class _Statistic extends StatelessWidget {
   const _Statistic({required this.value, required this.label});
 
@@ -485,6 +582,10 @@ class _Statistic extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Information row
+// -----------------------------------------------------------------------------
+
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.icon, required this.text});
 
@@ -500,7 +601,9 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(icon, size: 20, color: colors.primary),
+
           const SizedBox(width: 12),
+
           Expanded(child: Text(text)),
         ],
       ),
