@@ -14,6 +14,9 @@ import 'package:beenaround/features/residences/domain/residence_repository.dart'
 import 'package:beenaround/features/wishlist/domain/wishlist_entry.dart';
 import 'package:beenaround/features/wishlist/domain/wishlist_repository.dart';
 import 'package:beenaround/features/explore/domain/country.dart';
+import 'package:beenaround/features/geography/domain/city_visits_repository.dart';
+import 'package:beenaround/features/geography/domain/city_visit.dart';
+import 'package:beenaround/features/map/application/map_city_projection.dart';
 
 final _now = DateTime.utc(2026, 11, 18);
 
@@ -107,24 +110,47 @@ class FakeWishlistRepository extends Fake implements WishlistRepository {
 
 class FakeCityRepository extends Fake implements CityRepository {}
 
+class FakeCityVisitsRepository extends Fake implements CityVisitsRepository {
+  List<CityVisit> visits = [];
+
+  int loadCount = 0;
+
+  Future<List<CityVisit>> Function()? onLoad;
+
+  @override
+  Future<List<CityVisit>> getCityVisits() {
+    loadCount++;
+
+    if (onLoad != null) {
+      return onLoad!();
+    }
+
+    return Future.value(visits);
+  }
+}
+
 void main() {
   late FakeCountriesRepository countriesRepository;
+  late FakeCityVisitsRepository cityVisitsRepository;
   late FakeResidencesRepository residencesRepository;
   late FakeWishlistRepository wishlistRepository;
   late MapCubit cubit;
 
   setUp(() {
     countriesRepository = FakeCountriesRepository();
+    cityVisitsRepository = FakeCityVisitsRepository();
     residencesRepository = FakeResidencesRepository();
     wishlistRepository = FakeWishlistRepository();
 
+    final cityRepository = FakeCityRepository();
+
     cubit = MapCubit(
       countriesRepository: countriesRepository,
+      cityVisitsRepository: cityVisitsRepository,
       residenceRepository: residencesRepository,
       wishlistRepository: wishlistRepository,
-      countryProjection: MapCountryProjection(
-        cityRepository: FakeCityRepository(),
-      ),
+      countryProjection: MapCountryProjection(cityRepository: cityRepository),
+      cityProjection: MapCityProjection(cityRepository: cityRepository),
     );
   });
 
@@ -322,6 +348,34 @@ void main() {
       cubit.selectCountry('pt');
 
       expect(cubit.state, same(previousState));
+    });
+    test('loads city visits and publishes city projection', () async {
+      await cubit.load();
+
+      expect(cubit.state.phase, MapPhase.ready);
+
+      expect(cityVisitsRepository.loadCount, 1);
+
+      expect(cubit.state.cities, isEmpty);
+
+      expect(cubit.state.visibleCities, isEmpty);
+    });
+    test('preserves previous city data when refresh fails', () async {
+      await cubit.load();
+
+      final previousCities = cubit.state.cities;
+
+      cityVisitsRepository.onLoad = () async {
+        throw StateError('City visits unavailable');
+      };
+
+      await cubit.refresh();
+
+      expect(cubit.state.phase, MapPhase.failure);
+
+      expect(cubit.state.cities, same(previousCities));
+
+      expect(cubit.state.errorMessage, isNotNull);
     });
   });
 }

@@ -17,7 +17,7 @@ import '../../application/map_state.dart';
 import '../widgets/map_country_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
-
+import '../../application/map_city_projection.dart';
 import '../../../explore/presentation/navigation/open_country_details.dart';
 
 class MapPage extends StatelessWidget {
@@ -28,14 +28,25 @@ class MapPage extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<MapCubit>(
-          create: (context) => MapCubit(
-            countriesRepository: context.read<CountriesRepository>(),
-            residenceRepository: context.read<ResidenceRepository>(),
-            wishlistRepository: context.read<WishlistRepository>(),
-            countryProjection: MapCountryProjection(
-              cityRepository: context.read<CityRepository>(),
-            ),
-          )..load(),
+          create: (context) {
+            final cityRepository = context.read<CityRepository>();
+
+            return MapCubit(
+              countriesRepository: context.read<CountriesRepository>(),
+
+              cityVisitsRepository: context.read<CityVisitsRepository>(),
+
+              residenceRepository: context.read<ResidenceRepository>(),
+
+              wishlistRepository: context.read<WishlistRepository>(),
+
+              countryProjection: MapCountryProjection(
+                cityRepository: cityRepository,
+              ),
+
+              cityProjection: MapCityProjection(cityRepository: cityRepository),
+            )..load();
+          },
         ),
         BlocProvider<MapCountryRelatedCubit>(
           create: (context) => MapCountryRelatedCubit(
@@ -110,6 +121,7 @@ class _MapView extends StatelessWidget {
                   child: TravelMap(
                     highlightedCountryCodes: state.highlightedCountryCodes,
                     selectedCountryCode: state.selectedCountryCode,
+                    cities: state.visibleCities,
                     onCountrySelected: (countryCode) {
                       final cubit = context.read<MapCubit>();
 

@@ -11,11 +11,14 @@ import 'country_map_style.dart';
 import '../../application/map_country_highlight_geojson.dart';
 import '../../application/map_camera_target.dart';
 import '../../application/map_country_focus_padding.dart';
+import '../../application/map_city_geojson_projection.dart';
+import '../../domain/map_city_data.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
     this.worldRepository,
     this.highlightedCountryCodes = const <String>{},
+    this.cities = const <MapCityData>[],
     this.onCountrySelected,
     this.selectedCountryCode,
     super.key,
@@ -25,8 +28,12 @@ class TravelMap extends StatefulWidget {
 
   final Set<String> highlightedCountryCodes;
 
+  /// Cities currently visible according to the map application state.
+  final List<MapCityData> cities;
+
   /// Reports the tapped country code, or null when tapping outside a country.
   final ValueChanged<String?>? onCountrySelected;
+
   final String? selectedCountryCode;
 
   @override
@@ -41,6 +48,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _worldSourceId = 'travel-map-world-source';
   static const _highlightSourceId = 'travel-map-highlight-source';
   static const _selectionSourceId = 'travel-map-selection-source';
+  static const _citySourceId = 'travel-map-city-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -51,6 +59,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _countryHighlightLayerId = 'travel-map-country-highlight';
   static const _selectionFillLayerId = 'travel-map-selection-fill';
   static const _selectionBorderLayerId = 'travel-map-selection-border';
+  static const _cityCircleLayerId = 'travel-map-city-circles';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -63,6 +72,11 @@ class _TravelMapState extends State<TravelMap> {
   String? _appliedHighlightGeoJson;
   String? _selectionGeoJson;
   String? _appliedSelectionGeoJson;
+
+  late String _cityGeoJson;
+  String? _appliedCityGeoJson;
+
+  bool _cityUpdating = false;
 
   bool _selectionUpdating = false;
 
@@ -98,6 +112,8 @@ class _TravelMapState extends State<TravelMap> {
           assetPath: 'assets/geo/world_countries_complete.geojson',
         );
 
+    _cityGeoJson = buildMapCityGeoJson(cities: widget.cities);
+
     _loadWorld();
   }
 
@@ -126,6 +142,7 @@ class _TravelMapState extends State<TravelMap> {
     _styleController = null;
     _layersReady = false;
     _appliedHighlightGeoJson = null;
+    _appliedCityGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -194,6 +211,7 @@ class _TravelMapState extends State<TravelMap> {
     _styleGeneration++;
     _styleController = style;
     _appliedHighlightGeoJson = null;
+    _appliedCityGeoJson = null;
 
     setState(() {
       _layersReady = false;
@@ -265,7 +283,19 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 4. Neutral country fills
+      // 4. City source
+      // ---------------------------------------------------------------------
+
+      final initialCityGeoJson = _cityGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(id: _citySourceId, data: initialCityGeoJson),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // 5. Neutral country fills
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -284,7 +314,7 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 5. Highlighted country fills (Visited / Lived / Wishlist)
+      // 6. Highlighted country fills (Visited / Lived / Wishlist)
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -301,7 +331,7 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 6. Selected country fill
+      // 7. Selected country fill
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -318,7 +348,7 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 7. Country borders
+      // 8. Country borders
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -335,7 +365,7 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 8. Selected country border
+      // 9. Selected country border
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -353,11 +383,32 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // City markers
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        CircleStyleLayer(
+          id: _cityCircleLayerId,
+          sourceId: _citySourceId,
+          paint: {
+            'circle-radius': 5.5,
+            'circle-color': CountryMapStyle.colorToHex(colors.primary),
+            'circle-opacity': 1.0,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': CountryMapStyle.colorToHex(colors.surface),
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // 9. Mark sources as synchronized
       // ---------------------------------------------------------------------
 
       _appliedHighlightGeoJson = initialHighlightGeoJson;
       _appliedSelectionGeoJson = initialSelectionGeoJson;
+      _appliedCityGeoJson = initialCityGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -371,6 +422,7 @@ class _TravelMapState extends State<TravelMap> {
       // Apply any changes received while the style was initializing.
       unawaited(_synchronizeHighlights());
       unawaited(_synchronizeSelection());
+      unawaited(_synchronizeCities());
     } catch (error, stackTrace) {
       if (!_isCurrentStyle(style, generation)) return;
 
@@ -398,6 +450,14 @@ class _TravelMapState extends State<TravelMap> {
   @override
   void didUpdateWidget(covariant TravelMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    final nextCityGeoJson = buildMapCityGeoJson(cities: widget.cities);
+
+    if (nextCityGeoJson != _cityGeoJson) {
+      _cityGeoJson = nextCityGeoJson;
+
+      unawaited(_synchronizeCities());
+    }
 
     final worldGeoJson = _worldGeoJson;
 
@@ -470,6 +530,59 @@ class _TravelMapState extends State<TravelMap> {
           _layersReady &&
           _styleController != null) {
         unawaited(_synchronizeSelection());
+      }
+    }
+  }
+
+  Future<void> _synchronizeCities() async {
+    if (_cityUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _cityUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _cityGeoJson;
+
+        if (desiredGeoJson == _appliedCityGeoJson) {
+          break;
+        }
+
+        await style.updateGeoJsonSource(
+          id: _citySourceId,
+          data: desiredGeoJson,
+        );
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedCityGeoJson = desiredGeoJson;
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint('TravelMap: unable to update cities: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _cityUpdating = false;
+
+      // Ensure a replacement style can receive the latest city data
+      // after an asynchronous update from the previous style finishes.
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeCities());
       }
     }
   }

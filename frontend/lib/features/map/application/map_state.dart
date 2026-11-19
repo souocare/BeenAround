@@ -1,6 +1,7 @@
 import '../domain/map_country_data.dart';
 import '../domain/map_destination_status.dart';
 import '../domain/map_country_preview.dart';
+import '../domain/map_city_data.dart';
 
 enum MapPhase { initial, loading, ready, failure }
 
@@ -11,6 +12,7 @@ class MapState {
     this.countryPreviews = const {},
     this.activeStatus = MapDestinationStatus.visited,
     this.selectedCountryCode,
+    this.cities = const {},
     this.errorMessage,
   });
 
@@ -26,12 +28,25 @@ class MapState {
 
   final String? selectedCountryCode;
 
+  /// Geographic city projections indexed by catalog city ID.
+  ///
+  /// Contains all cities associated with recorded visits,
+  /// city residences or explicit city wishlist entries.
+  final Map<int, MapCityData> cities;
+
   final String? errorMessage;
 
   bool get hasData => countryData != null;
 
   Set<String> get highlightedCountryCodes {
     return countryData?.countriesFor(activeStatus) ?? const <String>{};
+  }
+
+  /// Cities matching the currently active visualization status.
+  List<MapCityData> get visibleCities {
+    return List.unmodifiable(
+      cities.values.where((city) => city.matchesStatus(activeStatus)),
+    );
   }
 
   /// Preview for the currently selected country.
@@ -53,6 +68,7 @@ class MapState {
     MapDestinationStatus? activeStatus,
     String? selectedCountryCode,
     bool clearSelectedCountry = false,
+    Map<int, MapCityData>? cities,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -64,6 +80,7 @@ class MapState {
       selectedCountryCode: clearSelectedCountry
           ? null
           : selectedCountryCode ?? this.selectedCountryCode,
+      cities: cities ?? this.cities,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
