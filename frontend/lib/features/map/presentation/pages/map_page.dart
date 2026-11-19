@@ -122,11 +122,14 @@ class _MapView extends StatelessWidget {
                     highlightedCountryCodes: state.highlightedCountryCodes,
                     selectedCountryCode: state.selectedCountryCode,
                     cities: state.visibleCities,
+                    selectedCity: state.selectedCity,
+                    onCitySelected: (cityId) {
+                      context.read<MapCubit>().selectCity(cityId);
+                    },
                     onCountrySelected: (countryCode) {
                       final cubit = context.read<MapCubit>();
-
                       if (countryCode == null) {
-                        cubit.clearCountrySelection();
+                        cubit.clearSelection();
                       } else {
                         cubit.selectCountry(countryCode);
                       }

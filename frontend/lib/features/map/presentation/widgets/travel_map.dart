@@ -21,6 +21,8 @@ class TravelMap extends StatefulWidget {
     this.cities = const <MapCityData>[],
     this.onCountrySelected,
     this.selectedCountryCode,
+    this.onCitySelected,
+    this.selectedCity,
     super.key,
   });
 
@@ -36,6 +38,12 @@ class TravelMap extends StatefulWidget {
 
   final String? selectedCountryCode;
 
+  /// Reports the catalog ID of the tapped city marker.
+  final ValueChanged<int>? onCitySelected;
+
+  /// Currently selected city, independently of the active map filter.
+  final MapCityData? selectedCity;
+
   @override
   State<TravelMap> createState() => _TravelMapState();
 }
@@ -49,6 +57,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _highlightSourceId = 'travel-map-highlight-source';
   static const _selectionSourceId = 'travel-map-selection-source';
   static const _citySourceId = 'travel-map-city-source';
+  static const _selectedCitySourceId = 'travel-map-selected-city-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -60,6 +69,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectionFillLayerId = 'travel-map-selection-fill';
   static const _selectionBorderLayerId = 'travel-map-selection-border';
   static const _cityCircleLayerId = 'travel-map-city-circles';
+  static const _selectedCityCircleLayerId = 'travel-map-selected-city-circle';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -77,6 +87,11 @@ class _TravelMapState extends State<TravelMap> {
   String? _appliedCityGeoJson;
 
   bool _cityUpdating = false;
+
+  late String _selectedCityGeoJson;
+  String? _appliedSelectedCityGeoJson;
+
+  bool _selectedCityUpdating = false;
 
   bool _selectionUpdating = false;
 
@@ -114,6 +129,10 @@ class _TravelMapState extends State<TravelMap> {
 
     _cityGeoJson = buildMapCityGeoJson(cities: widget.cities);
 
+    _selectedCityGeoJson = buildMapCityGeoJson(
+      cities: [if (widget.selectedCity != null) widget.selectedCity!],
+    );
+
     _loadWorld();
   }
 
@@ -143,6 +162,7 @@ class _TravelMapState extends State<TravelMap> {
     _layersReady = false;
     _appliedHighlightGeoJson = null;
     _appliedCityGeoJson = null;
+    _appliedSelectedCityGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -212,6 +232,7 @@ class _TravelMapState extends State<TravelMap> {
     _styleController = style;
     _appliedHighlightGeoJson = null;
     _appliedCityGeoJson = null;
+    _appliedSelectedCityGeoJson = null;
 
     setState(() {
       _layersReady = false;
@@ -290,6 +311,21 @@ class _TravelMapState extends State<TravelMap> {
 
       await style.addSource(
         GeoJsonSource(id: _citySourceId, data: initialCityGeoJson),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Selected city source
+      // ---------------------------------------------------------------------
+
+      final initialSelectedCityGeoJson = _selectedCityGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(
+          id: _selectedCitySourceId,
+          data: initialSelectedCityGeoJson,
+        ),
       );
 
       if (!_isCurrentStyle(style, generation)) return;
@@ -403,12 +439,33 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Selected city marker
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        CircleStyleLayer(
+          id: _selectedCityCircleLayerId,
+          sourceId: _selectedCitySourceId,
+          paint: {
+            'circle-radius': 8.0,
+            'circle-color': CountryMapStyle.colorToHex(colors.primary),
+            'circle-opacity': 1.0,
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // 9. Mark sources as synchronized
       // ---------------------------------------------------------------------
 
       _appliedHighlightGeoJson = initialHighlightGeoJson;
       _appliedSelectionGeoJson = initialSelectionGeoJson;
       _appliedCityGeoJson = initialCityGeoJson;
+      _appliedSelectedCityGeoJson = initialSelectedCityGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -423,6 +480,7 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeHighlights());
       unawaited(_synchronizeSelection());
       unawaited(_synchronizeCities());
+      unawaited(_synchronizeSelectedCity());
     } catch (error, stackTrace) {
       if (!_isCurrentStyle(style, generation)) return;
 
@@ -457,6 +515,15 @@ class _TravelMapState extends State<TravelMap> {
       _cityGeoJson = nextCityGeoJson;
 
       unawaited(_synchronizeCities());
+    }
+    final nextSelectedCityGeoJson = buildMapCityGeoJson(
+      cities: [if (widget.selectedCity != null) widget.selectedCity!],
+    );
+
+    if (nextSelectedCityGeoJson != _selectedCityGeoJson) {
+      _selectedCityGeoJson = nextSelectedCityGeoJson;
+
+      unawaited(_synchronizeSelectedCity());
     }
 
     final worldGeoJson = _worldGeoJson;
@@ -587,6 +654,60 @@ class _TravelMapState extends State<TravelMap> {
     }
   }
 
+  Future<void> _synchronizeSelectedCity() async {
+    if (_selectedCityUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _selectedCityUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _selectedCityGeoJson;
+
+        if (desiredGeoJson == _appliedSelectedCityGeoJson) {
+          break;
+        }
+
+        await style.updateGeoJsonSource(
+          id: _selectedCitySourceId,
+          data: desiredGeoJson,
+        );
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedSelectedCityGeoJson = desiredGeoJson;
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint('TravelMap: unable to update selected city: $error');
+
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _selectedCityUpdating = false;
+
+      // A stale update must not prevent the replacement style
+      // from receiving the latest selected city.
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeSelectedCity());
+      }
+    }
+  }
+
   Future<void> _synchronizeHighlights() async {
     if (_highlightUpdating || !_layersReady) {
       return;
@@ -648,17 +769,45 @@ class _TravelMapState extends State<TravelMap> {
       return;
     }
 
-    final features = controller.featuresAtPoint(
+    // ---------------------------------------------------------
+    // 1. City markers have priority over country polygons.
+    // ---------------------------------------------------------
+
+    final cityFeatures = controller.featuresAtPoint(
+      event.screenPoint,
+      layerIds: [_selectedCityCircleLayerId, _cityCircleLayerId],
+    );
+
+    for (final feature in cityFeatures) {
+      final cityId = feature.properties['city_id'];
+
+      if (cityId is int && cityId > 0) {
+        widget.onCitySelected?.call(cityId);
+        return;
+      }
+
+      // Defensive handling for numeric values decoded as doubles.
+      if (cityId is num && cityId > 0 && cityId % 1 == 0) {
+        widget.onCitySelected?.call(cityId.toInt());
+        return;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 2. Fall back to country selection.
+    // ---------------------------------------------------------
+
+    final countryFeatures = controller.featuresAtPoint(
       event.screenPoint,
       layerIds: [_countryFillLayerId],
     );
 
-    if (features.isEmpty) {
+    if (countryFeatures.isEmpty) {
       widget.onCountrySelected?.call(null);
       return;
     }
 
-    final countryCode = features.first.properties['country_code'];
+    final countryCode = countryFeatures.first.properties['country_code'];
 
     if (countryCode is String && countryCode.isNotEmpty) {
       widget.onCountrySelected?.call(countryCode);
