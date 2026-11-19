@@ -1,0 +1,170 @@
+import '../../explore/data/countries_repository.dart';
+import '../../explore/domain/country.dart';
+import '../../flights/domain/airport_repository.dart';
+import '../../geography/domain/city_repository.dart';
+import '../../geography/domain/city_sort.dart';
+
+import '../domain/map_search_destination.dart';
+import 'map_search_results.dart';
+
+/// Searches the shared geographic catalogs used by the Map.
+///
+/// The service is independent of MapLibre, user travel records,
+/// application state and presentation widgets.
+class MapSearchService {
+  MapSearchService({
+    required CountriesRepository countriesRepository,
+    required CityRepository cityRepository,
+    required AirportRepository airportRepository,
+  }) : _countriesRepository = countriesRepository,
+       _cityRepository = cityRepository,
+       _airportRepository = airportRepository;
+
+  static const int _resultLimit = 10;
+
+  final CountriesRepository _countriesRepository;
+  final CityRepository _cityRepository;
+  final AirportRepository _airportRepository;
+
+  /// Cached country catalog request.
+  ///
+  /// Concurrent searches share the same request. Failed requests
+  /// are removed from the cache so a later search can retry.
+  Future<List<Country>>? _countriesRequest;
+
+  /// Searches countries, cities and airports independently.
+  ///
+  /// Catalog failures are reported per category while preserving
+  /// successful results from the remaining catalogs.
+  Future<MapSearchResults> search(String query) async {
+    final normalizedQuery = query.trim();
+
+    if (normalizedQuery.isEmpty) {
+      return MapSearchResults();
+    }
+
+    var countries = <MapSearchDestination>[];
+    var cities = <MapSearchDestination>[];
+    var airports = <MapSearchDestination>[];
+
+    final failedCategories = <MapSearchCategory>{};
+
+    // The three independent catalogs are searched concurrently.
+    await Future.wait<void>([
+      () async {
+        try {
+          countries = await _searchCountries(normalizedQuery);
+        } catch (_) {
+          failedCategories.add(MapSearchCategory.countries);
+        }
+      }(),
+      () async {
+        try {
+          final result = await _cityRepository.search(
+            query: normalizedQuery,
+            sort: CitySort.population,
+            limit: _resultLimit,
+            offset: 0,
+          );
+
+          cities = [
+            for (final city in result.items) MapSearchDestination.city(city),
+          ];
+        } catch (_) {
+          failedCategories.add(MapSearchCategory.cities);
+        }
+      }(),
+      () async {
+        try {
+          final result = await _airportRepository.search(
+            query: normalizedQuery,
+            limit: _resultLimit,
+            offset: 0,
+          );
+
+          airports = [
+            for (final airport in result.items)
+              MapSearchDestination.airport(airport),
+          ];
+        } catch (_) {
+          failedCategories.add(MapSearchCategory.airports);
+        }
+      }(),
+    ]);
+
+    return MapSearchResults(
+      countries: countries,
+      cities: cities,
+      airports: airports,
+      failedCategories: failedCategories,
+    );
+  }
+
+  /// Searches the country catalog by name, ISO alpha-2 or alpha-3.
+  Future<List<MapSearchDestination>> _searchCountries(String query) async {
+    final countries = await _getCountries();
+
+    final normalizedQuery = query.toLowerCase();
+
+    final matches = countries.where((country) {
+      return country.name.toLowerCase().contains(normalizedQuery) ||
+          country.code.toLowerCase().contains(normalizedQuery) ||
+          country.alpha3Code.toLowerCase().contains(normalizedQuery);
+    }).toList();
+
+    // Exact code/name matches appear before partial matches.
+    int relevance(Country country) {
+      if (country.code.toLowerCase() == normalizedQuery ||
+          country.alpha3Code.toLowerCase() == normalizedQuery ||
+          country.name.toLowerCase() == normalizedQuery) {
+        return 0;
+      }
+
+      if (country.name.toLowerCase().startsWith(normalizedQuery)) {
+        return 1;
+      }
+
+      return 2;
+    }
+
+    matches.sort((a, b) {
+      final relevanceComparison = relevance(a).compareTo(relevance(b));
+
+      if (relevanceComparison != 0) {
+        return relevanceComparison;
+      }
+
+      final nameComparison = a.name.toLowerCase().compareTo(
+        b.name.toLowerCase(),
+      );
+
+      if (nameComparison != 0) {
+        return nameComparison;
+      }
+
+      return a.code.compareTo(b.code);
+    });
+
+    return [
+      for (final country in matches.take(_resultLimit))
+        MapSearchDestination.country(code: country.code, name: country.name),
+    ];
+  }
+
+  /// Loads the country catalog once per service instance.
+  ///
+  /// In-flight requests are reused. A failed request is not cached.
+  Future<List<Country>> _getCountries() async {
+    final request = _countriesRequest ??= _countriesRepository.getCountries();
+
+    try {
+      return await request;
+    } catch (_) {
+      if (identical(_countriesRequest, request)) {
+        _countriesRequest = null;
+      }
+
+      rethrow;
+    }
+  }
+}
