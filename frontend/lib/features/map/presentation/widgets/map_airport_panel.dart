@@ -4,6 +4,7 @@ import '../../../../app/widgets/country_flag.dart';
 import '../../domain/map_airport_data.dart';
 import '../../domain/map_search_destination.dart';
 import 'map_context_panel_shell.dart';
+import '../../application/map_state.dart';
 
 /// Contextual information panel for a selected airport.
 ///
@@ -19,6 +20,8 @@ class MapAirportPanel extends StatelessWidget {
     required this.destination,
     required this.onClose,
     this.airport,
+    this.airportPhase = MapAirportPhase.ready,
+    this.airportErrorMessage,
     this.compactRequestId = 0,
     super.key,
   });
@@ -37,7 +40,19 @@ class MapAirportPanel extends StatelessWidget {
   /// Requests compaction of the shared responsive panel.
   final int compactRequestId;
 
-  bool get _hasRecordedFlights => airport != null && airport!.flightCount > 0;
+  /// Loading state of the authenticated user's airport projection.
+  ///
+  /// An absent airport must only be considered unused when
+  /// the projection has finished loading successfully.
+  final MapAirportPhase airportPhase;
+
+  /// Optional failure message from the airport projection.
+  final String? airportErrorMessage;
+
+  bool get _hasRecordedFlights =>
+      airportPhase == MapAirportPhase.ready &&
+      airport != null &&
+      airport!.flightCount > 0;
 
   String get _airportCode {
     final code = destination.airportCode ?? airport?.code;
@@ -102,6 +117,83 @@ class MapAirportPanel extends StatelessWidget {
   // Airport content
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Loading state
+  // ---------------------------------------------------------------------------
+
+  Widget _buildLoadingState(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      key: const Key('mapAirportPanelLoading'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircularProgressIndicator.adaptive(),
+
+          const SizedBox(height: 16),
+
+          Text(
+            'Loading flight history...',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Failure state
+  // ---------------------------------------------------------------------------
+
+  Widget _buildFailureState(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      key: const Key('mapAirportPanelFailure'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, color: colors.error, size: 26),
+
+          const SizedBox(height: 12),
+
+          Text(
+            'Unable to load flight history',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            airportErrorMessage ?? 'Your recorded flights could not be loaded.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildContent(
     BuildContext context, {
     required ScrollController scrollController,
@@ -147,41 +239,48 @@ class MapAirportPanel extends StatelessWidget {
                 // ---------------------------------------------------------
                 // Recorded-flight status
                 // ---------------------------------------------------------
-                _buildStatusBadge(context),
-
-                const SizedBox(height: 24),
-
                 // ---------------------------------------------------------
-                // Flight statistics / empty state
+                // Airport flight-history state
                 // ---------------------------------------------------------
-                if (_hasRecordedFlights)
-                  _buildStatistics(context)
-                else
-                  _buildEmptyState(context),
+                if (airportPhase == MapAirportPhase.initial ||
+                    airportPhase == MapAirportPhase.loading) ...[
+                  _buildLoadingState(context),
+                ] else if (airportPhase == MapAirportPhase.failure) ...[
+                  _buildFailureState(context),
+                ] else ...[
+                  // -------------------------------------------------------
+                  // Flight projection is ready
+                  // -------------------------------------------------------
+                  _buildStatusBadge(context),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // ---------------------------------------------------------
-                // Flight history summary
-                // ---------------------------------------------------------
-                if (_hasRecordedFlights) ...[
-                  Text(
-                    'Flight history',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  if (_hasRecordedFlights)
+                    _buildStatistics(context)
+                  else
+                    _buildEmptyState(context),
+
+                  if (_hasRecordedFlights) ...[
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'Flight history',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  Text(
-                    '${airport!.flightCount} completed '
-                    '${airport!.flightCount == 1 ? 'flight' : 'flights'} '
-                    'recorded for this airport.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
+                    Text(
+                      '${airport!.flightCount} completed '
+                      '${airport!.flightCount == 1 ? 'flight' : 'flights'} '
+                      'recorded for this airport.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),

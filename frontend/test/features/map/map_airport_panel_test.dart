@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:beenaround/features/map/domain/map_airport_data.dart';
 import 'package:beenaround/features/map/domain/map_search_destination.dart';
 import 'package:beenaround/features/map/presentation/widgets/map_airport_panel.dart';
+import 'package:beenaround/features/map/application/map_state.dart';
 
 const lisbonDestination = MapSearchDestination(
   type: MapSearchDestinationType.airport,
@@ -44,6 +45,8 @@ const lisbonAirport = MapAirportData(
 Widget buildTestPanel({
   required MapSearchDestination destination,
   MapAirportData? airport,
+  MapAirportPhase airportPhase = MapAirportPhase.ready,
+  String? airportErrorMessage,
   VoidCallback? onClose,
 }) {
   return MaterialApp(
@@ -51,6 +54,8 @@ Widget buildTestPanel({
       body: MapAirportPanel(
         destination: destination,
         airport: airport,
+        airportPhase: airportPhase,
+        airportErrorMessage: airportErrorMessage,
         onClose: onClose ?? () {},
       ),
     ),
@@ -168,6 +173,86 @@ void main() {
       expect(find.text('Used in flight history'), findsOneWidget);
 
       expect(tester.takeException(), isNull);
+    });
+    testWidgets('shows loading while airport projection is loading', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestPanel(
+          destination: lisbonDestination,
+          airportPhase: MapAirportPhase.loading,
+        ),
+      );
+
+      expect(find.byKey(const Key('mapAirportPanelLoading')), findsOneWidget);
+
+      expect(find.text('Loading flight history...'), findsOneWidget);
+
+      expect(find.text('No flights recorded'), findsNothing);
+      expect(find.text('Not in flight history'), findsNothing);
+    });
+
+    testWidgets('does not assume unused airport before initial load', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestPanel(
+          destination: unusedDestination,
+          airportPhase: MapAirportPhase.initial,
+        ),
+      );
+
+      expect(find.byKey(const Key('mapAirportPanelLoading')), findsOneWidget);
+
+      expect(find.text('No flights recorded'), findsNothing);
+    });
+
+    testWidgets('shows failure without claiming airport is unused', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestPanel(
+          destination: lisbonDestination,
+          airportPhase: MapAirportPhase.failure,
+          airportErrorMessage: 'Unable to load flights.',
+        ),
+      );
+
+      expect(find.byKey(const Key('mapAirportPanelFailure')), findsOneWidget);
+
+      expect(find.text('Unable to load flights.'), findsOneWidget);
+
+      expect(find.text('No flights recorded'), findsNothing);
+      expect(find.text('Not in flight history'), findsNothing);
+    });
+
+    testWidgets('shows statistics only after projection becomes ready', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestPanel(
+          destination: lisbonDestination,
+          airport: lisbonAirport,
+          airportPhase: MapAirportPhase.loading,
+        ),
+      );
+
+      expect(find.byKey(const Key('mapAirportPanelStatistics')), findsNothing);
+
+      await tester.pumpWidget(
+        buildTestPanel(
+          destination: lisbonDestination,
+          airport: lisbonAirport,
+          airportPhase: MapAirportPhase.ready,
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('mapAirportPanelStatistics')),
+        findsOneWidget,
+      );
+
+      expect(find.text('Used in flight history'), findsOneWidget);
     });
   });
 }

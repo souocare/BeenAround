@@ -26,9 +26,12 @@ import '../widgets/map_country_panel.dart';
 import '../widgets/map_search_results_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
+import '../widgets/map_airport_panel.dart';
+import '../widgets/map_city_panel.dart';
 import '../../../flights/application/flight_catalog_resolver.dart';
 import '../../../flights/domain/airline_repository.dart';
 import '../../../flights/domain/flight_repository.dart';
+import '../../application/map_context_panel_selection.dart';
 
 // -----------------------------------------------------------------------------
 // Map page
@@ -127,7 +130,7 @@ class _MapViewState extends State<_MapView> {
   // Contextual panel compaction
   // ---------------------------------------------------------------------------
 
-  /// Incremented when the existing country panel should compact.
+  /// Incremented when the active geographic panel should compact.
   int _panelCompactRequestId = 0;
 
   /// Prevents repeated compaction during the same search session.
@@ -163,12 +166,15 @@ class _MapViewState extends State<_MapView> {
       return;
     }
 
-    // Only compact an existing selected country panel.
+    // Compact the currently selected geographic panel.
     //
-    // Do not change the selection, map status or camera.
+    // Search compaction must not change selection, map status,
+    // geographic records or camera position.
     final mapState = context.read<MapCubit>().state;
 
-    if (mapState.selectedCountryPreview == null) {
+    final selection = resolveMapContextPanelSelection(mapState);
+
+    if (selection == null) {
       return;
     }
 
@@ -278,6 +284,85 @@ class _MapViewState extends State<_MapView> {
   // Presentation
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Contextual geographic panel
+  // ---------------------------------------------------------------------------
+
+  Widget _buildContextPanel(
+    BuildContext context,
+    MapState state,
+    MapContextPanelSelection? selection,
+  ) {
+    if (selection == null) {
+      return const SizedBox.shrink(key: ValueKey('mapContextPanelClosed'));
+    }
+
+    switch (selection) {
+      // -----------------------------------------------------------------------
+      // Country
+      // -----------------------------------------------------------------------
+
+      case MapCountryPanelSelection(:final countryCode):
+        final preview = state.countryPreviews[countryCode];
+
+        if (preview == null) {
+          return const SizedBox.shrink(key: ValueKey('mapContextPanelClosed'));
+        }
+
+        return BlocBuilder<MapCountryRelatedCubit, MapCountryRelatedState>(
+          key: ValueKey('country:$countryCode'),
+          builder: (context, relatedState) {
+            final matchingState = relatedState.countryCode == countryCode;
+
+            return MapCountryPanel(
+              preview: preview,
+              compactRequestId: _panelCompactRequestId,
+              relatedState: matchingState
+                  ? relatedState
+                  : MapCountryRelatedState(
+                      phase: MapCountryRelatedPhase.loading,
+                      countryCode: countryCode,
+                    ),
+              onClose: context.read<MapCubit>().clearSelection,
+              onViewDetails: () =>
+                  _openSelectedCountryDetails(context, countryCode),
+            );
+          },
+        );
+
+      // -----------------------------------------------------------------------
+      // City
+      // -----------------------------------------------------------------------
+
+      case MapCityPanelSelection(:final data):
+        return MapCityPanel(
+          key: ValueKey(selection.key),
+          data: data,
+          compactRequestId: _panelCompactRequestId,
+          onClose: context.read<MapCubit>().clearSelection,
+        );
+
+      // -----------------------------------------------------------------------
+      // Airport
+      // -----------------------------------------------------------------------
+
+      case MapAirportPanelSelection(
+        :final destination,
+        :final airport,
+        :final airportPhase,
+      ):
+        return MapAirportPanel(
+          key: ValueKey(selection.key),
+          destination: destination,
+          airport: airport,
+          airportPhase: airportPhase,
+          airportErrorMessage: state.airportErrorMessage,
+          compactRequestId: _panelCompactRequestId,
+          onClose: context.read<MapCubit>().clearSelection,
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<MapCubit, MapState>(
@@ -298,6 +383,8 @@ class _MapViewState extends State<_MapView> {
         resizeToAvoidBottomInset: false,
         body: BlocBuilder<MapCubit, MapState>(
           builder: (context, state) {
+            final panelSelection = resolveMapContextPanelSelection(state);
+
             return Stack(
               children: [
                 // ---------------------------------------------------------
@@ -392,6 +479,9 @@ class _MapViewState extends State<_MapView> {
                 // ---------------------------------------------------------
                 // Selected country panel
                 // ---------------------------------------------------------
+                // ---------------------------------------------------------
+                // Contextual geographic panel
+                // ---------------------------------------------------------
                 Positioned.fill(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 550),
@@ -409,54 +499,7 @@ class _MapViewState extends State<_MapView> {
                         child: child,
                       );
                     },
-                    child: state.selectedCountryPreview == null
-                        ? const SizedBox.shrink(
-                            key: ValueKey('mapCountryPanelClosed'),
-                          )
-                        : BlocBuilder<
-                            MapCountryRelatedCubit,
-                            MapCountryRelatedState
-                          >(
-                            key: ValueKey(
-                              state.selectedCountryPreview!.countryCode,
-                            ),
-                            builder: (context, relatedState) {
-                              final preview = state.selectedCountryPreview!;
-
-                              final matchingState =
-                                  relatedState.countryCode ==
-                                  preview.countryCode;
-
-                              return MapCountryPanel(
-                                preview: preview,
-
-                                // -------------------------------------------------
-                                // Search-triggered panel compaction
-                                // -------------------------------------------------
-                                compactRequestId: _panelCompactRequestId,
-
-                                // -------------------------------------------------
-                                // Related country data
-                                // -------------------------------------------------
-                                relatedState: matchingState
-                                    ? relatedState
-                                    : MapCountryRelatedState(
-                                        phase: MapCountryRelatedPhase.loading,
-                                        countryCode: preview.countryCode,
-                                      ),
-
-                                onClose: context
-                                    .read<MapCubit>()
-                                    .clearCountrySelection,
-
-                                onViewDetails: () =>
-                                    _openSelectedCountryDetails(
-                                      context,
-                                      preview.countryCode,
-                                    ),
-                              );
-                            },
-                          ),
+                    child: _buildContextPanel(context, state, panelSelection),
                   ),
                 ),
 
