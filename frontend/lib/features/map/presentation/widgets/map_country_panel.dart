@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/country_flag.dart';
-import '../../domain/map_country_preview.dart';
 import '../../application/map_country_related_state.dart';
-import '../../map_panel_layout.dart';
+import '../../domain/map_country_preview.dart';
+import 'map_context_panel_shell.dart';
 
-class MapCountryPanel extends StatefulWidget {
+/// Contextual information panel for a selected country.
+///
+/// The responsive panel behavior is delegated to
+/// [MapContextPanelShell].
+///
+/// This widget is responsible only for country-specific
+/// information and presentation.
+class MapCountryPanel extends StatelessWidget {
   const MapCountryPanel({
     required this.preview,
     required this.relatedState,
@@ -16,74 +23,18 @@ class MapCountryPanel extends StatefulWidget {
   });
 
   final MapCountryPreview preview;
-  final VoidCallback onClose;
+
   final MapCountryRelatedState relatedState;
+
+  final VoidCallback onClose;
+
   final VoidCallback onViewDetails;
 
   /// Incremented when the parent requests a compact presentation.
   ///
-  /// Repeated rebuilds with the same value do not trigger
-  /// additional panel animations.
+  /// The shared panel shell handles the animation and ignores
+  /// repeated rebuilds with the same request identifier.
   final int compactRequestId;
-
-  @override
-  State<MapCountryPanel> createState() => _MapCountryPanelState();
-}
-
-class _MapCountryPanelState extends State<MapCountryPanel> {
-  // ---------------------------------------------------------------------------
-  // Panel lifecycle
-  // ---------------------------------------------------------------------------
-
-  static const _compactAnimationDuration = Duration(milliseconds: 420);
-
-  final DraggableScrollableController _sheetController =
-      DraggableScrollableController();
-
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
-  @override
-  void didUpdateWidget(covariant MapCountryPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.compactRequestId != widget.compactRequestId) {
-      _scheduleCompaction();
-    }
-  }
-
-  @override
-  void dispose() {
-    _sheetController.dispose();
-    super.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Programmatic panel compaction
-  // ---------------------------------------------------------------------------
-
-  void _scheduleCompaction() {
-    final requestId = widget.compactRequestId;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          requestId != widget.compactRequestId ||
-          !_sheetController.isAttached) {
-        return;
-      }
-
-      if (_sheetController.size <= MapPanelLayout.compactExtent) {
-        return;
-      }
-
-      _sheetController.animateTo(
-        MapPanelLayout.compactExtent,
-        duration: _compactAnimationDuration,
-        curve: Curves.easeInOutCubic,
-      );
-    });
-  }
 
   // ---------------------------------------------------------------------------
   // Presentation
@@ -91,126 +42,16 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    final isLandscape =
-        MediaQuery.orientationOf(context) == Orientation.landscape;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (isLandscape &&
-            constraints.maxWidth >= MapPanelLayout.sidePanelBreakpoint) {
-          return _buildSidePanel(context, constraints);
-        }
-
-        return _buildBottomPanel(context, colors);
+    return MapContextPanelShell(
+      compactRequestId: compactRequestId,
+      onClose: onClose,
+      contentBuilder: (context, scrollController, showDragHandle) {
+        return _buildContent(
+          context,
+          scrollController: scrollController,
+          showDragHandle: showDragHandle,
+        );
       },
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Bottom panel
-  // ---------------------------------------------------------------------------
-
-  Widget _buildBottomPanel(BuildContext context, ColorScheme colors) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: NotificationListener<DraggableScrollableNotification>(
-        onNotification: (notification) {
-          // Ignore notifications from nested draggable sheets.
-          if (notification.depth != 0) {
-            return false;
-          }
-
-          // Dismiss when the user drags the panel almost completely down.
-          if (notification.extent <= 0.02) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && context.mounted) {
-                widget.onClose();
-              }
-            });
-          }
-
-          return false;
-        },
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: DraggableScrollableSheet(
-            controller: _sheetController,
-            initialChildSize: MapPanelLayout.initialExtent,
-            minChildSize: MapPanelLayout.closedExtent,
-            maxChildSize: MapPanelLayout.expandedExtent,
-            snap: true,
-            snapSizes: const [
-              MapPanelLayout.compactExtent,
-              MapPanelLayout.initialExtent,
-            ],
-            snapAnimationDuration: const Duration(milliseconds: 320),
-            expand: false,
-            builder: (context, scrollController) {
-              return Material(
-                color: colors.surfaceContainerLow,
-                elevation: 16,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  side: BorderSide(
-                    color: colors.outlineVariant.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: _buildContent(
-                  context,
-                  scrollController: scrollController,
-                  showDragHandle: true,
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Responsive side panel
-  // ---------------------------------------------------------------------------
-
-  Widget _buildSidePanel(BuildContext context, BoxConstraints constraints) {
-    final colors = Theme.of(context).colorScheme;
-    final safeArea = MediaQuery.paddingOf(context);
-
-    final width = (constraints.maxWidth * MapPanelLayout.sidePanelWidthFraction)
-        .clamp(
-          MapPanelLayout.minSidePanelWidth,
-          MapPanelLayout.maxSidePanelWidth,
-        )
-        .toDouble();
-
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          0,
-          safeArea.top + 12,
-          safeArea.right + 12,
-          safeArea.bottom + 12,
-        ),
-        child: SizedBox(
-          width: width,
-          height: double.infinity,
-          child: Material(
-            color: colors.surfaceContainerLow,
-            elevation: 12,
-            clipBehavior: Clip.antiAlias,
-            borderRadius: BorderRadius.circular(24),
-            child: _buildContent(
-              context,
-              scrollController: ScrollController(),
-              showDragHandle: false,
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -226,9 +67,6 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    final preview = widget.preview;
-    final relatedState = widget.relatedState;
-
     return CustomScrollView(
       controller: scrollController,
       slivers: [
@@ -238,6 +76,9 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ---------------------------------------------------------
+                // Drag handle
+                // ---------------------------------------------------------
                 if (showDragHandle) ...[
                   Center(
                     child: Container(
@@ -286,7 +127,7 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
 
                               TextButton(
                                 key: const Key('mapCountryViewDetails'),
-                                onPressed: widget.onViewDetails,
+                                onPressed: onViewDetails,
                                 style: TextButton.styleFrom(
                                   foregroundColor: colors.onSurfaceVariant,
                                   minimumSize: const Size(0, 44),
@@ -308,7 +149,9 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
                                             fontWeight: FontWeight.w500,
                                           ),
                                     ),
+
                                     const SizedBox(width: 4),
+
                                     Icon(
                                       Icons.chevron_right_rounded,
                                       size: 18,
@@ -326,7 +169,7 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
                     IconButton(
                       key: const Key('mapCountryPanelClose'),
                       tooltip: 'Close country panel',
-                      onPressed: widget.onClose,
+                      onPressed: onClose,
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
@@ -458,6 +301,9 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
                     ),
                   )
                 else if (relatedState.hasData) ...[
+                  // -------------------------------------------------------
+                  // Related cities
+                  // -------------------------------------------------------
                   if (relatedState.cities.isNotEmpty) ...[
                     Text(
                       'Cities',
@@ -478,6 +324,9 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
                     const SizedBox(height: 16),
                   ],
 
+                  // -------------------------------------------------------
+                  // Related Trips
+                  // -------------------------------------------------------
                   if (relatedState.trips.isNotEmpty) ...[
                     Text(
                       'Trips',
@@ -509,8 +358,6 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
   // ---------------------------------------------------------------------------
 
   Widget _buildStatusBadges(BuildContext context) {
-    final preview = widget.preview;
-
     final statuses = <String>[
       if (preview.hasVisited) 'Visited',
       if (preview.hasLived) 'Lived',
@@ -521,7 +368,8 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
       statuses.add('Not visited');
     }
 
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return Wrap(
       spacing: 6,
@@ -536,7 +384,7 @@ class _MapCountryPanelState extends State<MapCountryPanel> {
             ),
             child: Text(
               status,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: colors.primary,
                 fontWeight: FontWeight.w700,
               ),
@@ -570,7 +418,9 @@ class _Statistic extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
+
         const SizedBox(height: 4),
+
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
