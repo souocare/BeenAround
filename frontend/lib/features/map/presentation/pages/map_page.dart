@@ -312,6 +312,7 @@ class _MapViewState extends State<_MapView> {
                     selectedSearchDestination: state.selectedSearchDestination,
                     searchFocusDestination: _searchFocusDestination,
                     searchFocusRequestId: _searchFocusRequestId,
+                    airports: state.airports.values.toList(growable: false),
                     onCitySelected: (cityId) {
                       _closeSearch();
 

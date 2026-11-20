@@ -16,13 +16,15 @@ import '../../domain/map_city_data.dart';
 import '../../application/map_city_camera_target.dart';
 import '../../application/map_search_selection_geojson.dart';
 import '../../domain/map_search_destination.dart';
-import 'package:beenaround/features/map/application/map_country_camera_bounds.dart';
+import '../../application/map_airport_geojson_projection.dart';
+import '../../domain/map_airport_data.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
     this.worldRepository,
     this.highlightedCountryCodes = const <String>{},
     this.cities = const <MapCityData>[],
+    this.airports = const <MapAirportData>[],
     this.onCountrySelected,
     this.selectedCountryCode,
     this.onCitySelected,
@@ -31,6 +33,7 @@ class TravelMap extends StatefulWidget {
     this.searchFocusDestination,
     this.searchFocusRequestId = 0,
     this.onSearchDestinationSelected,
+
     super.key,
   });
 
@@ -40,6 +43,11 @@ class TravelMap extends StatefulWidget {
 
   /// Cities currently visible according to the map application state.
   final List<MapCityData> cities;
+
+  /// Airports used in completed personal flights.
+  ///
+  /// These are independent of visited countries and cities.
+  final List<MapAirportData> airports;
 
   /// Reports the tapped country code, or null when tapping outside a country.
   final ValueChanged<String?>? onCountrySelected;
@@ -87,6 +95,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _citySourceId = 'travel-map-city-source';
   static const _selectedCitySourceId = 'travel-map-selected-city-source';
   static const _searchSelectionSourceId = 'travel-map-search-selection-source';
+  static const _airportSourceId = 'travel-map-flight-airports-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -99,6 +108,11 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectionBorderLayerId = 'travel-map-selection-border';
   static const _cityCircleLayerId = 'travel-map-city-circles';
   static const _selectedCityCircleLayerId = 'travel-map-selected-city-circle';
+  static const _airportSymbolLayerId = 'travel-map-flight-airports-symbol';
+  static const _airportIconId = 'travel-map-flight-airports-icon';
+  static const _airportOutlineLayerId = 'travel-map-flight-airports-outline';
+  static const _airportOutlineIconId =
+      'travel-map-flight-airports-outline-icon';
   // ---------------------------------------------------------------------------
   // Temporary search-selection layer IDs
   // ---------------------------------------------------------------------------
@@ -145,6 +159,13 @@ class _TravelMapState extends State<TravelMap> {
   Object? _error;
 
   // ---------------------------------------------------------------------------
+  // Airports used in completed flights
+  // ---------------------------------------------------------------------------
+  late String _airportGeoJson;
+  String? _appliedAirportGeoJson;
+  bool _airportUpdating = false;
+
+  // ---------------------------------------------------------------------------
   // MapLibre lifecycle
   // ---------------------------------------------------------------------------
 
@@ -180,6 +201,7 @@ class _TravelMapState extends State<TravelMap> {
         );
 
     _cityGeoJson = buildMapCityGeoJson(cities: widget.cities);
+    _airportGeoJson = buildMapAirportGeoJson(airports: widget.airports);
 
     _selectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
@@ -217,6 +239,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedCityGeoJson = null;
     _appliedSelectedCityGeoJson = null;
     _appliedSearchSelectionGeoJson = null;
+    _appliedAirportGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -462,6 +485,22 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Flight airport source
+      //
+      // Contains airports derived from completed personal flights.
+      //
+      // Independent of country/city visits and visualization filters.
+      // ---------------------------------------------------------------------
+
+      final initialAirportGeoJson = _airportGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(id: _airportSourceId, data: initialAirportGeoJson),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // Selected city source
       // ---------------------------------------------------------------------
 
@@ -504,6 +543,30 @@ class _TravelMapState extends State<TravelMap> {
         iconData: Icons.flight_rounded,
         size: 96,
         color: colors.onSurface,
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Completed-flight airport icon
+      //
+      // Uses the same airplane shape as geographic search,
+      // but the primary color communicates recorded flight history.
+      // ---------------------------------------------------------------------
+
+      await style.addImageFromIconData(
+        id: _airportOutlineIconId,
+        iconData: Icons.flight_rounded,
+        size: 96,
+        color: colors.surface,
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+      await style.addImageFromIconData(
+        id: _airportIconId,
+        iconData: Icons.flight_rounded,
+        size: 96,
+        color: colors.primary,
       );
 
       if (!_isCurrentStyle(style, generation)) return;
@@ -617,6 +680,45 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Airports used in completed flights
+      //
+      // These markers are independent of visited/lived/wishlist filters.
+      //
+      // Zoom-dependent visibility will be implemented in M7.3G.2.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        SymbolStyleLayer(
+          id: _airportOutlineLayerId,
+          sourceId: _airportSourceId,
+          layout: {
+            'icon-image': _airportOutlineIconId,
+            'icon-size': 0.36,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+      await style.addLayer(
+        SymbolStyleLayer(
+          id: _airportSymbolLayerId,
+          sourceId: _airportSourceId,
+          layout: {
+            'icon-image': _airportIconId,
+            'icon-size': 0.28,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // Selected city marker
       // ---------------------------------------------------------------------
 
@@ -707,6 +809,7 @@ class _TravelMapState extends State<TravelMap> {
       _appliedCityGeoJson = initialCityGeoJson;
       _appliedSelectedCityGeoJson = initialSelectedCityGeoJson;
       _appliedSearchSelectionGeoJson = initialSearchSelectionGeoJson;
+      _appliedAirportGeoJson = initialAirportGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -721,6 +824,7 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeHighlights());
       unawaited(_synchronizeSelection());
       unawaited(_synchronizeCities());
+      unawaited(_synchronizeAirports());
       unawaited(_synchronizeSelectedCity());
       unawaited(_synchronizeSearchSelection());
 
@@ -764,6 +868,23 @@ class _TravelMapState extends State<TravelMap> {
 
       unawaited(_synchronizeCities());
     }
+
+    // ---------------------------------------------------------------------
+
+    // Completed-flight airport updates
+
+    // ---------------------------------------------------------------------
+
+    final nextAirportGeoJson = buildMapAirportGeoJson(
+      airports: widget.airports,
+    );
+
+    if (nextAirportGeoJson != _airportGeoJson) {
+      _airportGeoJson = nextAirportGeoJson;
+
+      unawaited(_synchronizeAirports());
+    }
+
     final nextSelectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
     );
@@ -936,6 +1057,59 @@ class _TravelMapState extends State<TravelMap> {
           _layersReady &&
           _styleController != null) {
         unawaited(_synchronizeCities());
+      }
+    }
+  }
+
+  Future<void> _synchronizeAirports() async {
+    if (_airportUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _airportUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _airportGeoJson;
+
+        if (desiredGeoJson == _appliedAirportGeoJson) {
+          break;
+        }
+
+        await style.updateGeoJsonSource(
+          id: _airportSourceId,
+          data: desiredGeoJson,
+        );
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedAirportGeoJson = desiredGeoJson;
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint('TravelMap: unable to update flight airports: $error');
+
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _airportUpdating = false;
+
+      // A previous style update must not block the replacement style.
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeAirports());
       }
     }
   }
