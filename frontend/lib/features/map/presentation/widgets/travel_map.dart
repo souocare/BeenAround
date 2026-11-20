@@ -841,9 +841,9 @@ class _TravelMapState extends State<TravelMap> {
           id: _flightRoutesLayerId,
           sourceId: _flightRoutesSourceId,
           paint: {
-            'line-color': CountryMapStyle.colorToHex(colors.primary),
+            'line-color': CountryMapStyle.colorToHex(Colors.white),
             'line-width': 1.8,
-            'line-opacity': 0.65,
+            'line-opacity': 0.75,
           },
         ),
       );
