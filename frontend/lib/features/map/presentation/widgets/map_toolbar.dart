@@ -4,6 +4,12 @@ import '../../domain/map_destination_status.dart';
 import 'map_search_control.dart';
 import 'map_status_filter.dart';
 
+/// Responsive toolbar for geographic search and status filtering.
+///
+/// The available width is controlled by the MapPage overlay layout.
+///
+/// This widget only decides how its controls should be presented
+/// within those constraints.
 class MapToolbar extends StatelessWidget {
   const MapToolbar({
     required this.selectedStatus,
@@ -15,6 +21,11 @@ class MapToolbar extends StatelessWidget {
     super.key,
   });
 
+  /// Below this width, use shorter filter labels.
+  ///
+  /// The search field keeps the remaining horizontal space.
+  static const double compactBreakpoint = 390;
+
   final MapDestinationStatus selectedStatus;
   final ValueChanged<MapDestinationStatus> onStatusSelected;
 
@@ -25,24 +36,37 @@ class MapToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: MapSearchControl(
-            isOpen: isSearchOpen,
-            onOpen: onSearchOpen,
-            onClose: onSearchClose,
-            onQueryChanged: onSearchChanged,
-          ),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useCompactFilter = constraints.maxWidth < compactBreakpoint;
 
-        const SizedBox(width: 8),
+        return Row(
+          children: [
+            // ---------------------------------------------------------------
+            // Geographic search
+            // ---------------------------------------------------------------
+            Expanded(
+              child: MapSearchControl(
+                isOpen: isSearchOpen,
+                onOpen: onSearchOpen,
+                onClose: onSearchClose,
+                onQueryChanged: onSearchChanged,
+              ),
+            ),
 
-        MapStatusFilter(
-          selectedStatus: selectedStatus,
-          onSelected: onStatusSelected,
-        ),
-      ],
+            const SizedBox(width: 8),
+
+            // ---------------------------------------------------------------
+            // Destination status filter
+            // ---------------------------------------------------------------
+            MapStatusFilter(
+              selectedStatus: selectedStatus,
+              compact: useCompactFilter,
+              onSelected: onStatusSelected,
+            ),
+          ],
+        );
+      },
     );
   }
 }
