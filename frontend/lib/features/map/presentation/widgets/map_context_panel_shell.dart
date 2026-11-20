@@ -239,12 +239,7 @@ class _MapContextPanelShellState extends State<MapContextPanelShell> {
     final colors = Theme.of(context).colorScheme;
     final safeArea = MediaQuery.paddingOf(context);
 
-    final width = (constraints.maxWidth * MapPanelLayout.sidePanelWidthFraction)
-        .clamp(
-          MapPanelLayout.minSidePanelWidth,
-          MapPanelLayout.maxSidePanelWidth,
-        )
-        .toDouble();
+    final width = MapPanelLayout.sidePanelWidth(constraints.maxWidth);
 
     return Align(
       alignment: Alignment.centerRight,

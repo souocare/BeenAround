@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:beenaround/features/map/application/map_country_focus_padding.dart';
 import 'package:beenaround/features/map/map_panel_layout.dart';
+import 'package:beenaround/features/map/application/map_camera_focus_frame.dart';
 
 void main() {
   group('calculateCountryFocusPadding', () {
@@ -69,6 +70,45 @@ void main() {
       );
 
       expect(MapPanelLayout.expandedExtent, lessThanOrEqualTo(1.0));
+    });
+    test('matches shared contextual framing in landscape', () {
+      const viewport = Size(1000, 600);
+      const topSafeArea = 20.0;
+
+      final countryPadding = calculateCountryFocusPadding(
+        viewportSize: viewport,
+        topSafeArea: topSafeArea,
+      );
+
+      final frame = calculateMapCameraFocusFrame(
+        viewportSize: viewport,
+        topSafeArea: topSafeArea,
+      );
+
+      expect(countryPadding, frame.padding);
+
+      expect(countryPadding.left, 55);
+      expect(countryPadding.right, 418);
+      expect(countryPadding.top, 75);
+      expect(countryPadding.bottom, 55);
+    });
+
+    test('matches shared contextual framing in portrait', () {
+      const viewport = Size(390, 844);
+      const topSafeArea = 62.0;
+
+      final countryPadding = calculateCountryFocusPadding(
+        viewportSize: viewport,
+        topSafeArea: topSafeArea,
+      );
+
+      final frame = calculateMapCameraFocusFrame(
+        viewportSize: viewport,
+        topSafeArea: topSafeArea,
+      );
+
+      expect(countryPadding, frame.padding);
+      expect(countryPadding.bottom, closeTo(378.48, 0.001));
     });
   });
 }

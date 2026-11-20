@@ -1675,13 +1675,40 @@ class _TravelMapState extends State<TravelMap> {
     );
 
     for (final feature in airportFeatures) {
-      final airportId = feature.properties['airport_id'];
+      final rawAirportId = feature.properties['airport_id'];
 
-      if (airportId is! int || airportId <= 0) {
+      if (rawAirportId is! num || rawAirportId <= 0 || rawAirportId % 1 != 0) {
         continue;
       }
 
+      final airportId = rawAirportId.toInt();
+
+      // -------------------------------------------------------
+      // Update the geographic selection.
+      // -------------------------------------------------------
+
       widget.onAirportSelected?.call(airportId);
+
+      // -------------------------------------------------------
+      // Focus the selected airport within the usable viewport.
+      //
+      // This uses the same camera framing as cities and
+      // airport destinations selected through search.
+      // -------------------------------------------------------
+
+      final airport = widget.airports
+          .where((candidate) => candidate.airportId == airportId)
+          .firstOrNull;
+
+      if (airport != null) {
+        unawaited(
+          _focusCoordinates(
+            latitude: airport.latitude,
+            longitude: airport.longitude,
+          ),
+        );
+      }
+
       return;
     }
 
