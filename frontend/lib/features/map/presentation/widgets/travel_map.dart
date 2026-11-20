@@ -114,6 +114,8 @@ class _TravelMapState extends State<TravelMap> {
   static const _countryHighlightLayerId = 'travel-map-country-highlight';
   static const _selectionFillLayerId = 'travel-map-selection-fill';
   static const _selectionBorderLayerId = 'travel-map-selection-border';
+  static const _selectionBorderCasingLayerId =
+      'travel-map-selection-border-casing';
   static const _cityCircleLayerId = 'travel-map-city-circles';
   static const _selectedCityCircleLayerId = 'travel-map-selected-city-circle';
   static const _airportSymbolLayerId = 'travel-map-flight-airports-symbol';
@@ -663,6 +665,11 @@ class _TravelMapState extends State<TravelMap> {
 
       // ---------------------------------------------------------------------
       // 7. Selected country fill
+      //
+      // Selection must not alter the country's travel-state color.
+      //
+      // The underlying country and destination-state layers remain
+      // responsible for geographic status visualization.
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -671,7 +678,7 @@ class _TravelMapState extends State<TravelMap> {
           sourceId: _selectionSourceId,
           paint: {
             'fill-color': CountryMapStyle.colorToHex(colors.primary),
-            'fill-opacity': 0.25,
+            'fill-opacity': 0.0,
           },
         ),
       );
@@ -696,7 +703,33 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // 9. Selected country border
+      // 9. Selected country border casing
+      //
+      // A subtle dark exterior provides contrast when the selected
+      // country is surrounded by light-colored geographic features.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _selectionBorderCasingLayerId,
+          sourceId: _selectionSourceId,
+          paint: {
+            'line-color': '#24252B',
+            'line-width': 4.5,
+            'line-opacity': 0.85,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // 10. Selected country border
+      //
+      // White identifies the active geographic selection.
+      //
+      // The underlying country fill continues to represent the
+      // user's travel history and active destination-state filter.
       // ---------------------------------------------------------------------
 
       await style.addLayer(
@@ -704,8 +737,8 @@ class _TravelMapState extends State<TravelMap> {
           id: _selectionBorderLayerId,
           sourceId: _selectionSourceId,
           paint: {
-            'line-color': CountryMapStyle.colorToHex(colors.onSurface),
-            'line-width': 2.5,
+            'line-color': CountryMapStyle.colorToHex(Colors.white),
+            'line-width': 2.8,
             'line-opacity': 1.0,
           },
         ),
