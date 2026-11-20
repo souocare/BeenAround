@@ -76,5 +76,47 @@ void main() {
 
       expect(find.byType(CustomScrollView), findsOneWidget);
     });
+    testWidgets('preserves shell state when geographic selection changes', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      Widget buildSelectedPanel(String selectionKey) {
+        return MaterialApp(
+          home: Scaffold(
+            body: MapContextPanelShell(
+              key: const ValueKey('persistentMapPanel'),
+              selectionKey: selectionKey,
+              onClose: () {},
+              contentBuilder: (context, scrollController, showDragHandle) {
+                return CustomScrollView(
+                  controller: scrollController,
+                  slivers: [SliverToBoxAdapter(child: Text(selectionKey))],
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildSelectedPanel('country:PT'));
+
+      final initialState = tester.state(find.byType(MapContextPanelShell));
+
+      expect(find.text('country:PT'), findsOneWidget);
+
+      await tester.pumpWidget(buildSelectedPanel('city:10'));
+
+      final updatedState = tester.state(find.byType(MapContextPanelShell));
+
+      expect(identical(initialState, updatedState), isTrue);
+
+      expect(find.text('city:10'), findsOneWidget);
+      expect(find.text('country:PT'), findsNothing);
+    });
   });
 }

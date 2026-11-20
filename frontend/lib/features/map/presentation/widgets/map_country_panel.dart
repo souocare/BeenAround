@@ -19,6 +19,8 @@ class MapCountryPanel extends StatelessWidget {
     required this.onClose,
     required this.onViewDetails,
     this.compactRequestId = 0,
+    this.panelScrollController,
+    this.showDragHandle = true,
     super.key,
   });
 
@@ -36,12 +38,33 @@ class MapCountryPanel extends StatelessWidget {
   /// repeated rebuilds with the same request identifier.
   final int compactRequestId;
 
+  /// When provided, the panel renders only its content.
+  ///
+  /// The parent MapContextPanelShell owns the responsive
+  /// presentation and scroll lifecycle.
+  final ScrollController? panelScrollController;
+
+  /// Whether to display the drag handle in embedded mode.
+  final bool showDragHandle;
+
   // ---------------------------------------------------------------------------
   // Presentation
   // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
+    final externalController = panelScrollController;
+
+    // Embedded mode: the parent already owns the shell.
+    if (externalController != null) {
+      return _buildContent(
+        context,
+        scrollController: externalController,
+        showDragHandle: showDragHandle,
+      );
+    }
+
+    // Standalone mode: preserve existing widget behavior.
     return MapContextPanelShell(
       compactRequestId: compactRequestId,
       onClose: onClose,

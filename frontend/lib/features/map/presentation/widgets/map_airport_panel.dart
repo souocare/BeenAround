@@ -23,6 +23,8 @@ class MapAirportPanel extends StatelessWidget {
     this.airportPhase = MapAirportPhase.ready,
     this.airportErrorMessage,
     this.compactRequestId = 0,
+    this.panelScrollController,
+    this.showDragHandle = true,
     super.key,
   });
 
@@ -48,6 +50,12 @@ class MapAirportPanel extends StatelessWidget {
 
   /// Optional failure message from the airport projection.
   final String? airportErrorMessage;
+
+  /// Optional controller provided by a shared panel shell.
+  final ScrollController? panelScrollController;
+
+  /// Controls the drag handle in embedded mode.
+  final bool showDragHandle;
 
   bool get _hasRecordedFlights =>
       airportPhase == MapAirportPhase.ready &&
@@ -100,6 +108,17 @@ class MapAirportPanel extends StatelessWidget {
       destination.type == MapSearchDestinationType.airport,
       'MapAirportPanel requires an airport destination.',
     );
+
+    final externalController = panelScrollController;
+
+    if (externalController != null) {
+      return _buildContent(
+        context,
+        scrollController: externalController,
+        showDragHandle: showDragHandle,
+      );
+    }
+
     return MapContextPanelShell(
       compactRequestId: compactRequestId,
       onClose: onClose,

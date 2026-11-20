@@ -32,6 +32,7 @@ import '../../../flights/application/flight_catalog_resolver.dart';
 import '../../../flights/domain/airline_repository.dart';
 import '../../../flights/domain/flight_repository.dart';
 import '../../application/map_context_panel_selection.dart';
+import '../widgets/map_context_panel_shell.dart';
 
 // -----------------------------------------------------------------------------
 // Map page
@@ -285,18 +286,16 @@ class _MapViewState extends State<_MapView> {
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // Contextual geographic panel
+  // Contextual geographic panel content
   // ---------------------------------------------------------------------------
 
   Widget _buildContextPanel(
     BuildContext context,
     MapState state,
-    MapContextPanelSelection? selection,
-  ) {
-    if (selection == null) {
-      return const SizedBox.shrink(key: ValueKey('mapContextPanelClosed'));
-    }
-
+    MapContextPanelSelection selection, {
+    required ScrollController scrollController,
+    required bool showDragHandle,
+  }) {
     switch (selection) {
       // -----------------------------------------------------------------------
       // Country
@@ -306,17 +305,16 @@ class _MapViewState extends State<_MapView> {
         final preview = state.countryPreviews[countryCode];
 
         if (preview == null) {
-          return const SizedBox.shrink(key: ValueKey('mapContextPanelClosed'));
+          return const SizedBox.shrink();
         }
 
         return BlocBuilder<MapCountryRelatedCubit, MapCountryRelatedState>(
-          key: ValueKey('country:$countryCode'),
+          key: ValueKey(selection.key),
           builder: (context, relatedState) {
             final matchingState = relatedState.countryCode == countryCode;
 
             return MapCountryPanel(
               preview: preview,
-              compactRequestId: _panelCompactRequestId,
               relatedState: matchingState
                   ? relatedState
                   : MapCountryRelatedState(
@@ -326,6 +324,8 @@ class _MapViewState extends State<_MapView> {
               onClose: context.read<MapCubit>().clearSelection,
               onViewDetails: () =>
                   _openSelectedCountryDetails(context, countryCode),
+              panelScrollController: scrollController,
+              showDragHandle: showDragHandle,
             );
           },
         );
@@ -338,8 +338,9 @@ class _MapViewState extends State<_MapView> {
         return MapCityPanel(
           key: ValueKey(selection.key),
           data: data,
-          compactRequestId: _panelCompactRequestId,
           onClose: context.read<MapCubit>().clearSelection,
+          panelScrollController: scrollController,
+          showDragHandle: showDragHandle,
         );
 
       // -----------------------------------------------------------------------
@@ -357,8 +358,9 @@ class _MapViewState extends State<_MapView> {
           airport: airport,
           airportPhase: airportPhase,
           airportErrorMessage: state.airportErrorMessage,
-          compactRequestId: _panelCompactRequestId,
           onClose: context.read<MapCubit>().clearSelection,
+          panelScrollController: scrollController,
+          showDragHandle: showDragHandle,
         );
     }
   }
@@ -477,10 +479,7 @@ class _MapViewState extends State<_MapView> {
                 ),
 
                 // ---------------------------------------------------------
-                // Selected country panel
-                // ---------------------------------------------------------
-                // ---------------------------------------------------------
-                // Contextual geographic panel
+                // Persistent contextual geographic panel
                 // ---------------------------------------------------------
                 Positioned.fill(
                   child: AnimatedSwitcher(
@@ -499,7 +498,26 @@ class _MapViewState extends State<_MapView> {
                         child: child,
                       );
                     },
-                    child: _buildContextPanel(context, state, panelSelection),
+                    child: panelSelection == null
+                        ? const SizedBox.shrink(
+                            key: ValueKey('mapContextPanelClosed'),
+                          )
+                        : MapContextPanelShell(
+                            key: const ValueKey('mapContextPanelOpen'),
+                            selectionKey: panelSelection.key,
+                            compactRequestId: _panelCompactRequestId,
+                            onClose: context.read<MapCubit>().clearSelection,
+                            contentBuilder:
+                                (context, scrollController, showDragHandle) {
+                                  return _buildContextPanel(
+                                    context,
+                                    state,
+                                    panelSelection,
+                                    scrollController: scrollController,
+                                    showDragHandle: showDragHandle,
+                                  );
+                                },
+                          ),
                   ),
                 ),
 

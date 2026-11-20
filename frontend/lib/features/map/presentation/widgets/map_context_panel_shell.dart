@@ -30,6 +30,7 @@ class MapContextPanelShell extends StatefulWidget {
   const MapContextPanelShell({
     required this.contentBuilder,
     required this.onClose,
+    this.selectionKey,
     this.compactRequestId = 0,
     super.key,
   });
@@ -43,11 +44,17 @@ class MapContextPanelShell extends StatefulWidget {
   /// Rebuilds with the same value do not trigger new animations.
   final int compactRequestId;
 
+  /// Identity of the currently displayed geographic entity.
+  ///
+  /// Changes reset content scroll without resizing the panel.
+  final String? selectionKey;
+
   @override
   State<MapContextPanelShell> createState() => _MapContextPanelShellState();
 }
 
 class _MapContextPanelShellState extends State<MapContextPanelShell> {
+  ScrollController? _bottomScrollController;
   static const _compactAnimationDuration = Duration(milliseconds: 420);
 
   final DraggableScrollableController _sheetController =
@@ -64,6 +71,33 @@ class _MapContextPanelShellState extends State<MapContextPanelShell> {
     if (oldWidget.compactRequestId != widget.compactRequestId) {
       _scheduleCompaction();
     }
+
+    if (oldWidget.selectionKey != widget.selectionKey) {
+      _scheduleScrollReset();
+    }
+  }
+  // ---------------------------------------------------------------------------
+  // Content scroll reset
+  // ---------------------------------------------------------------------------
+
+  void _scheduleScrollReset() {
+    final selectionKey = widget.selectionKey;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || selectionKey != widget.selectionKey) {
+        return;
+      }
+
+      final controller = _bottomScrollController;
+
+      if (controller != null && controller.hasClients) {
+        controller.jumpTo(0);
+      }
+
+      if (_sideScrollController.hasClients) {
+        _sideScrollController.jumpTo(0);
+      }
+    });
   }
 
   @override
@@ -176,6 +210,8 @@ class _MapContextPanelShellState extends State<MapContextPanelShell> {
             snapAnimationDuration: const Duration(milliseconds: 320),
             expand: false,
             builder: (context, scrollController) {
+              _bottomScrollController = scrollController;
+
               return Material(
                 color: colors.surfaceContainerLow,
                 elevation: 16,

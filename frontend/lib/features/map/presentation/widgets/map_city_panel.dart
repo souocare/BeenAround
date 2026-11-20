@@ -19,6 +19,8 @@ class MapCityPanel extends StatelessWidget {
     required this.data,
     required this.onClose,
     this.compactRequestId = 0,
+    this.panelScrollController,
+    this.showDragHandle = true,
     super.key,
   });
 
@@ -32,12 +34,28 @@ class MapCityPanel extends StatelessWidget {
   /// [MapContextPanelShell].
   final int compactRequestId;
 
+  /// Optional controller provided by a shared panel shell.
+  final ScrollController? panelScrollController;
+
+  /// Controls the drag handle in embedded mode.
+  final bool showDragHandle;
+
   // ---------------------------------------------------------------------------
   // Presentation
   // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
+    final externalController = panelScrollController;
+
+    if (externalController != null) {
+      return _buildContent(
+        context,
+        scrollController: externalController,
+        showDragHandle: showDragHandle,
+      );
+    }
+
     return MapContextPanelShell(
       compactRequestId: compactRequestId,
       onClose: onClose,
