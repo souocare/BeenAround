@@ -99,7 +99,9 @@ class _TravelMapState extends State<TravelMap> {
 
   static const _searchCityCircleLayerId = 'travel-map-search-city-circle';
 
-  static const _searchAirportCircleLayerId = 'travel-map-search-airport-circle';
+  static const _searchAirportSymbolLayerId = 'travel-map-search-airport-symbol';
+
+  static const _searchAirportIconId = 'travel-map-search-airport-icon';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -484,6 +486,23 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Airport search icon
+      //
+      // Registered in the active MapLibre style.
+      //
+      // This icon must be registered again whenever the map style changes.
+      // ---------------------------------------------------------------------
+
+      await style.addImageFromIconData(
+        id: _searchAirportIconId,
+        iconData: Icons.flight_rounded,
+        size: 96,
+        color: colors.onSurface,
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // 5. Neutral country fills
       // ---------------------------------------------------------------------
 
@@ -647,27 +666,26 @@ class _TravelMapState extends State<TravelMap> {
       // ---------------------------------------------------------------------
       // Temporary airport search marker
       //
-      // Airports currently retain the existing circle appearance.
+      // Airport destinations use a recognizable airplane symbol.
       //
-      // M7.3F.4c will replace this representation with an airplane
-      // symbol while preserving the same geographic source.
+      // The symbol is independent of the user's flight history.
       // ---------------------------------------------------------------------
 
       await style.addLayer(
-        CircleStyleLayer(
-          id: _searchAirportCircleLayerId,
+        SymbolStyleLayer(
+          id: _searchAirportSymbolLayerId,
           sourceId: _searchSelectionSourceId,
           filter: [
             '==',
             ['get', 'destination_type'],
             'airport',
           ],
-          paint: {
-            'circle-radius': 8.0,
-            'circle-color': CountryMapStyle.colorToHex(colors.primary),
-            'circle-opacity': 1.0,
-            'circle-stroke-width': 2.5,
-            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+          layout: {
+            'icon-image': _searchAirportIconId,
+            'icon-size': 0.28,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
           },
         ),
       );
