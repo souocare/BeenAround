@@ -362,6 +362,35 @@ void main() {
 
       expect(cubit.state, same(previousState));
     });
+    test('selects a flight airport without marking its country visited', () {
+      const destination = MapSearchDestination(
+        type: MapSearchDestinationType.airport,
+        id: 'airport:123',
+        title: 'Humberto Delgado Airport',
+        subtitle: 'LIS',
+        countryCode: 'PT',
+        latitude: 38.7742,
+        longitude: -9.1342,
+        airportCode: 'LIS',
+      );
+
+      cubit.selectCountry('ES');
+
+      final previousCountryData = cubit.state.countryData;
+      final previousCities = cubit.state.cities;
+      final previousAirports = cubit.state.airports;
+
+      cubit.selectSearchDestination(destination);
+
+      expect(cubit.state.selectedSearchDestination, same(destination));
+
+      expect(cubit.state.selectedCountryCode, isNull);
+      expect(cubit.state.selectedCityId, isNull);
+
+      expect(cubit.state.countryData, same(previousCountryData));
+      expect(cubit.state.cities, same(previousCities));
+      expect(cubit.state.airports, same(previousAirports));
+    });
   });
 
   group('MapCubit', () {

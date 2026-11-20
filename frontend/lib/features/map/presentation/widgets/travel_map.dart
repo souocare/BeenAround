@@ -34,7 +34,7 @@ class TravelMap extends StatefulWidget {
     this.searchFocusDestination,
     this.searchFocusRequestId = 0,
     this.onSearchDestinationSelected,
-
+    this.onAirportSelected,
     super.key,
   });
 
@@ -80,6 +80,12 @@ class TravelMap extends StatefulWidget {
   ///
   /// Does not modify travel records or perform repository requests.
   final ValueChanged<MapSearchDestination>? onSearchDestinationSelected;
+
+  /// Reports the catalog ID of an airport selected directly
+  /// from the user's completed-flight airport markers.
+  ///
+  /// Selection does not modify flight history or geographic visits.
+  final ValueChanged<int>? onAirportSelected;
 
   @override
   State<TravelMap> createState() => _TravelMapState();
@@ -1397,6 +1403,31 @@ class _TravelMapState extends State<TravelMap> {
         widget.onSearchDestinationSelected?.call(destination);
         return;
       }
+    }
+
+    // ---------------------------------------------------------
+    // 2. Airports used in completed flights.
+    //
+    // Both the airplane and its outline belong to the
+    // same airport GeoJSON source.
+    //
+    // Airport markers take priority over country polygons.
+    // ---------------------------------------------------------
+
+    final airportFeatures = controller.featuresAtPoint(
+      event.screenPoint,
+      layerIds: [_airportSymbolLayerId, _airportOutlineLayerId],
+    );
+
+    for (final feature in airportFeatures) {
+      final airportId = feature.properties['airport_id'];
+
+      if (airportId is! int || airportId <= 0) {
+        continue;
+      }
+
+      widget.onAirportSelected?.call(airportId);
+      return;
     }
 
     // ---------------------------------------------------------

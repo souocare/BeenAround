@@ -318,6 +318,30 @@ class _MapViewState extends State<_MapView> {
 
                       context.read<MapCubit>().selectCity(cityId);
                     },
+                    onAirportSelected: (airportId) {
+                      _closeSearch();
+
+                      final cubit = context.read<MapCubit>();
+
+                      final airport = cubit.state.airports[airportId];
+
+                      if (airport == null) {
+                        return;
+                      }
+
+                      final destination = MapSearchDestination(
+                        type: MapSearchDestinationType.airport,
+                        id: 'airport:${airport.airportId}',
+                        title: airport.name,
+                        subtitle: airport.code,
+                        countryCode: airport.countryCode,
+                        latitude: airport.latitude,
+                        longitude: airport.longitude,
+                        airportCode: airport.code,
+                      );
+
+                      cubit.selectSearchDestination(destination);
+                    },
 
                     onCountrySelected: (countryCode) {
                       _closeSearch();
