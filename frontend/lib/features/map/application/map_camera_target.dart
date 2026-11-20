@@ -91,6 +91,73 @@ MapCameraTarget calculateMapCameraTarget({
   );
 }
 
+/// Calculates a camera target that places a geographic point at a
+/// requested screen position.
+///
+/// The targetScreenOffset is measured from the viewport center:
+///
+/// - Negative dx places the geographic point further left.
+/// - Positive dx places the geographic point further right.
+/// - Negative dy places the geographic point higher on screen.
+/// - Positive dy places the geographic point lower on screen.
+///
+/// Uses the same Web Mercator projection as country camera framing.
+///
+/// Assumes an unrotated, unpitched map.
+///
+/// This function does not access MapLibre rendering or mutate state.
+MapCameraTarget calculateMapPointCameraTarget({
+  required double latitude,
+  required double longitude,
+  required double zoom,
+  Offset targetScreenOffset = Offset.zero,
+}) {
+  if (!latitude.isFinite ||
+      !longitude.isFinite ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !zoom.isFinite ||
+      zoom < 0 ||
+      !targetScreenOffset.dx.isFinite ||
+      !targetScreenOffset.dy.isFinite) {
+    throw ArgumentError('Invalid geographic camera point or offset.');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Project the selected geographic point into normalized Web Mercator.
+  // ---------------------------------------------------------------------------
+
+  final targetX = _longitudeToX(longitude);
+  final targetY = _latitudeToY(latitude);
+
+  // MapLibre uses a 512 px world at zoom zero.
+  //
+  // This matches calculateMapCameraTarget().
+  const tileSize = 512.0;
+
+  final worldPixels = tileSize * math.pow(2, zoom).toDouble();
+
+  // ---------------------------------------------------------------------------
+  // Shift the camera center so that the selected point appears at
+  // the requested screen position.
+  //
+  // The geographic point stays unchanged. Only the camera moves.
+  // ---------------------------------------------------------------------------
+
+  final cameraX = targetX - targetScreenOffset.dx / worldPixels;
+  final cameraY = targetY - targetScreenOffset.dy / worldPixels;
+
+  return MapCameraTarget(
+    center: Geographic(
+      lon: _xToLongitude(cameraX),
+      lat: _yToLatitude(cameraY.clamp(0.0, 1.0).toDouble()),
+    ),
+    zoom: zoom,
+  );
+}
+
 double _longitudeToX(double longitude) {
   return (longitude + 180) / 360;
 }

@@ -20,6 +20,8 @@ import '../../application/map_airport_geojson_projection.dart';
 import '../../domain/map_airport_data.dart';
 import '../../application/map_airport_visibility.dart';
 import '../../application/map_selected_airport_visibility.dart';
+import '../../application/map_camera_focus_frame.dart';
+import '../../map_panel_layout.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -431,10 +433,56 @@ class _TravelMapState extends State<TravelMap> {
       return;
     }
 
+    final size = context.size;
+
+    if (size == null || size.width <= 0 || size.height <= 0) {
+      return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Calculate the visible area available after the contextual panel opens.
+    //
+    // This uses the expected panel geometry, avoiding a second camera
+    // animation after the panel becomes visible.
+    // -------------------------------------------------------------------------
+
+    final frame = calculateMapCameraFocusFrame(
+      viewportSize: size,
+      topSafeArea: MediaQuery.paddingOf(context).top,
+    );
+
+    // -------------------------------------------------------------------------
+    // In landscape, move the geographic destination into the space
+    // available to the left of the contextual side panel.
+    //
+    // Portrait intentionally preserves the existing point-focus behavior.
+    // Country framing continues to account for the bottom panel separately.
+    // -------------------------------------------------------------------------
+
+    final hasSidePanel = MapPanelLayout.usesSidePanel(
+      viewportWidth: size.width,
+      viewportHeight: size.height,
+    );
+
+    final screenOffset = hasSidePanel ? frame.targetScreenOffset : Offset.zero;
+
+    // -------------------------------------------------------------------------
+    // Calculate the camera center using Web Mercator.
+    //
+    // The selected geographic coordinates are not modified.
+    // -------------------------------------------------------------------------
+
+    final target = calculateMapPointCameraTarget(
+      latitude: latitude,
+      longitude: longitude,
+      zoom: 4.5,
+      targetScreenOffset: screenOffset,
+    );
+
     try {
       await controller.animateCamera(
-        center: Geographic(lon: longitude, lat: latitude),
-        zoom: 4.5,
+        center: target.center,
+        zoom: target.zoom,
         nativeDuration: const Duration(milliseconds: 900),
       );
     } catch (error, stackTrace) {
