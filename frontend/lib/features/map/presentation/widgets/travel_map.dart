@@ -22,6 +22,7 @@ import '../../application/map_airport_visibility.dart';
 import '../../application/map_selected_airport_visibility.dart';
 import '../../application/map_camera_focus_frame.dart';
 import '../../map_panel_layout.dart';
+import '../../application/map_state.dart' show emptyFlightRoutesGeoJson;
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -29,6 +30,7 @@ class TravelMap extends StatefulWidget {
     this.highlightedCountryCodes = const <String>{},
     this.cities = const <MapCityData>[],
     this.airports = const <MapAirportData>[],
+    this.flightRoutesGeoJson = emptyFlightRoutesGeoJson,
     this.onCountrySelected,
     this.selectedCountryCode,
     this.onCitySelected,
@@ -90,6 +92,17 @@ class TravelMap extends StatefulWidget {
   /// Selection does not modify flight history or geographic visits.
   final ValueChanged<int>? onAirportSelected;
 
+  /// GeoJSON representation of the authenticated user's
+  /// unique completed-flight airport connections.
+  ///
+  /// Contains one geographic feature per unique airport pair.
+  ///
+  /// Repeated flights and opposite directions share the
+  /// same visual connection.
+  ///
+  /// This is read-only geographic presentation data.
+  final String flightRoutesGeoJson;
+
   @override
   State<TravelMap> createState() => _TravelMapState();
 }
@@ -106,6 +119,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectedCitySourceId = 'travel-map-selected-city-source';
   static const _searchSelectionSourceId = 'travel-map-search-selection-source';
   static const _airportSourceId = 'travel-map-flight-airports-source';
+  static const _flightRoutesSourceId = 'travel-map-flight-routes-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -132,6 +146,7 @@ class _TravelMapState extends State<TravelMap> {
   // Contrasting outline for an unused selected airport.
   static const _searchAirportOutlineIconId =
       'travel-map-search-airport-outline-icon';
+  static const _flightRoutesLayerId = 'travel-map-flight-routes-line';
   // ---------------------------------------------------------------------------
   // Temporary search-selection layer IDs
   // ---------------------------------------------------------------------------
@@ -191,6 +206,16 @@ class _TravelMapState extends State<TravelMap> {
   bool _airportUpdating = false;
 
   // ---------------------------------------------------------------------------
+  // Completed-flight routes
+  // ---------------------------------------------------------------------------
+
+  late String _flightRoutesGeoJson;
+
+  String? _appliedFlightRoutesGeoJson;
+
+  bool _flightRoutesUpdating = false;
+
+  // ---------------------------------------------------------------------------
   // MapLibre lifecycle
   // ---------------------------------------------------------------------------
 
@@ -236,6 +261,7 @@ class _TravelMapState extends State<TravelMap> {
 
     _cityGeoJson = buildMapCityGeoJson(cities: widget.cities);
     _airportGeoJson = buildMapAirportGeoJson(airports: widget.airports);
+    _flightRoutesGeoJson = widget.flightRoutesGeoJson;
 
     _selectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
@@ -274,6 +300,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedSelectedCityGeoJson = null;
     _appliedSearchSelectionGeoJson = null;
     _appliedAirportGeoJson = null;
+    _appliedFlightRoutesGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -348,6 +375,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedAirportGeoJson = null;
     _appliedSelectedCityGeoJson = null;
     _appliedSearchSelectionGeoJson = null;
+    _appliedFlightRoutesGeoJson = null;
 
     setState(() {
       _layersReady = false;
@@ -587,6 +615,28 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Completed-flight route source
+      //
+      // One GeoJSON feature represents one unique connection between
+      // two airports, regardless of the number or direction of flights.
+      //
+      // The geometry is already calculated by the application layer.
+      //
+      // This source is independent of country/city visualization filters.
+      // ---------------------------------------------------------------------
+
+      final initialFlightRoutesGeoJson = _flightRoutesGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(
+          id: _flightRoutesSourceId,
+          data: initialFlightRoutesGeoJson,
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // Selected city source
       // ---------------------------------------------------------------------
 
@@ -771,6 +821,34 @@ class _TravelMapState extends State<TravelMap> {
 
       if (!_isCurrentStyle(style, generation)) return;
 
+      // ---------------------------------------------------------------------
+      // Completed-flight routes
+      //
+      // Drawn above the geographic country layers but below
+      // selected country outlines, city markers and airport symbols.
+      //
+      // Each unique connection has exactly the same visual style.
+      //
+      // Flight frequency and direction do not affect line width,
+      // opacity or color.
+      //
+      // The route geometry uses great-circle arcs and is already
+      // split at the antimeridian by the application projection.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _flightRoutesLayerId,
+          sourceId: _flightRoutesSourceId,
+          paint: {
+            'line-color': CountryMapStyle.colorToHex(colors.primary),
+            'line-width': 1.8,
+            'line-opacity': 0.65,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
       // ---------------------------------------------------------------------
       // 10. Selected country border
       //
@@ -1055,6 +1133,7 @@ class _TravelMapState extends State<TravelMap> {
       _appliedSelectedCityGeoJson = initialSelectedCityGeoJson;
       _appliedSearchSelectionGeoJson = initialSearchSelectionGeoJson;
       _appliedAirportGeoJson = initialAirportGeoJson;
+      _appliedFlightRoutesGeoJson = initialFlightRoutesGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -1074,6 +1153,7 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeAirports());
       unawaited(_synchronizeSelectedCity());
       unawaited(_synchronizeSearchSelection());
+      unawaited(_synchronizeFlightRoutes());
 
       _scheduleSearchCameraFocus();
     } catch (error, stackTrace) {
@@ -1128,6 +1208,24 @@ class _TravelMapState extends State<TravelMap> {
       _selectedCityGeoJson = nextSelectedCityGeoJson;
 
       unawaited(_synchronizeSelectedCity());
+    }
+
+    // ---------------------------------------------------------------------
+    // Completed-flight route updates
+    //
+    // The application layer provides the complete read-only
+    // GeoJSON projection.
+    //
+    // Only synchronize when the serialized geometry changes.
+    //
+    // Selection, geographic filters and unrelated widget updates
+    // must not trigger unnecessary MapLibre source updates.
+    // ---------------------------------------------------------------------
+
+    if (oldWidget.flightRoutesGeoJson != widget.flightRoutesGeoJson) {
+      _flightRoutesGeoJson = widget.flightRoutesGeoJson;
+
+      unawaited(_synchronizeFlightRoutes());
     }
 
     // ---------------------------------------------------------------------
@@ -1455,6 +1553,89 @@ class _TravelMapState extends State<TravelMap> {
           _layersReady &&
           _styleController != null) {
         unawaited(_synchronizeAirports());
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Completed-flight route synchronization
+  // ---------------------------------------------------------------------------
+
+  Future<void> _synchronizeFlightRoutes() async {
+    if (_flightRoutesUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _flightRoutesUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _flightRoutesGeoJson;
+
+        // ---------------------------------------------------------------
+        // Avoid unnecessary native MapLibre updates.
+        // ---------------------------------------------------------------
+
+        if (desiredGeoJson == _appliedFlightRoutesGeoJson) {
+          break;
+        }
+
+        // ---------------------------------------------------------------
+        // Apply the latest route geometry.
+        //
+        // The source and layer were registered during style
+        // initialization.
+        // ---------------------------------------------------------------
+
+        await style.updateGeoJsonSource(
+          id: _flightRoutesSourceId,
+          data: desiredGeoJson,
+        );
+
+        // ---------------------------------------------------------------
+        // Ignore responses belonging to an obsolete style.
+        // ---------------------------------------------------------------
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedFlightRoutesGeoJson = desiredGeoJson;
+
+        // The loop checks again for changes received while
+        // the asynchronous native update was in progress.
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint(
+          'TravelMap: unable to update completed-flight routes: $error',
+        );
+
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _flightRoutesUpdating = false;
+
+      // ---------------------------------------------------------------
+      // Style replacement recovery.
+      //
+      // An update from an obsolete style must not block the
+      // synchronization of the replacement style.
+      // ---------------------------------------------------------------
+
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeFlightRoutes());
       }
     }
   }
