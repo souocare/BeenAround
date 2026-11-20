@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/map_search_results.dart';
 import '../../application/map_search_state.dart';
 import '../../domain/map_search_destination.dart';
+import '../../../../app/widgets/country_flag.dart';
 
 /// Displays geographic search results grouped by destination type.
 ///
@@ -136,9 +137,7 @@ class MapSearchResultsPanel extends StatelessWidget {
   Widget _buildDestinationTile(MapSearchDestination destination) {
     final icon = switch (destination.type) {
       MapSearchDestinationType.country => Icons.public_rounded,
-
       MapSearchDestinationType.city => Icons.location_city_rounded,
-
       MapSearchDestinationType.airport => Icons.flight_rounded,
     };
 
@@ -159,16 +158,121 @@ class MapSearchResultsPanel extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          subtitle: Text(
-            destination.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.onSurfaceVariant),
-          ),
+          subtitle: _buildDestinationSubtitle(context, destination),
           onTap: () => onDestinationSelected(destination),
         );
       },
     );
+  }
+
+  Widget _buildDestinationSubtitle(
+    BuildContext context,
+    MapSearchDestination destination,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant);
+
+    final countryCode = destination.countryCode?.trim();
+
+    final hasCountryCode =
+        countryCode != null && RegExp(r'^[A-Za-z]{2}$').hasMatch(countryCode);
+
+    Widget countryFlag() {
+      return CountryFlag(
+        countryCode: countryCode!,
+        size: 26,
+        showBackground: false,
+      );
+    }
+
+    Widget flexibleText(String text) {
+      return Flexible(
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          style: textStyle,
+        ),
+      );
+    }
+
+    switch (destination.type) {
+      // -----------------------------------------------------------------------
+      // Countries
+      // -----------------------------------------------------------------------
+
+      case MapSearchDestinationType.country:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasCountryCode) ...[countryFlag(), const SizedBox(width: 8)],
+            flexibleText(destination.subtitle),
+          ],
+        );
+
+      // -----------------------------------------------------------------------
+      // Cities
+      // -----------------------------------------------------------------------
+
+      case MapSearchDestinationType.city:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasCountryCode) ...[countryFlag(), const SizedBox(width: 8)],
+            flexibleText(destination.subtitle),
+          ],
+        );
+
+      // -----------------------------------------------------------------------
+      // Airports
+      // -----------------------------------------------------------------------
+
+      case MapSearchDestinationType.airport:
+        final airportCode = destination.airportCode;
+        final airportLocation = destination.airportLocation;
+
+        // Older manually constructed destinations may not have
+        // the structured airport fields populated.
+        //
+        // Keep their existing subtitle instead of attempting
+        // to parse a formatted string.
+        if (airportCode == null || airportLocation == null) {
+          return Text(
+            destination.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle,
+          );
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              airportCode,
+              maxLines: 1,
+              style: textStyle?.copyWith(fontWeight: FontWeight.w600),
+            ),
+
+            if (hasCountryCode) ...[
+              const SizedBox(width: 6),
+              Text('·', style: textStyle),
+              const SizedBox(width: 6),
+              countryFlag(),
+            ],
+
+            const SizedBox(width: 6),
+            Text('·', style: textStyle),
+            const SizedBox(width: 6),
+
+            flexibleText(airportLocation),
+          ],
+        );
+    }
   }
 
   Widget _buildMessage(

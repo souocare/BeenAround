@@ -19,6 +19,8 @@ class MapSearchDestination {
     this.countryCode,
     this.latitude,
     this.longitude,
+    this.airportCode,
+    this.airportLocation,
   });
 
   final MapSearchDestinationType type;
@@ -39,6 +41,12 @@ class MapSearchDestination {
 
   final double? latitude;
   final double? longitude;
+
+  /// Airport code displayed in search results (IATA or fallback).
+  final String? airportCode;
+
+  /// Human-readable airport location.
+  final String? airportLocation;
 
   /// Whether the destination has usable geographic coordinates.
   bool get hasCoordinates =>
@@ -92,6 +100,8 @@ class MapSearchDestination {
       countryCode: airport.countryCode,
       latitude: airport.latitude,
       longitude: airport.longitude,
+      airportCode: airport.displayCode,
+      airportLocation: airport.displayLocation,
     );
   }
 }
