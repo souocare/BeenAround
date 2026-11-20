@@ -315,6 +315,13 @@ class _MapViewState extends State<_MapView> {
                         cubit.selectCountry(countryCode);
                       }
                     },
+                    onSearchDestinationSelected: (destination) {
+                      _closeSearch();
+
+                      context.read<MapCubit>().selectSearchDestination(
+                        destination,
+                      );
+                    },
                   ),
                 ),
 

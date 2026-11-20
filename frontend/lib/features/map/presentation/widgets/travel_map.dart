@@ -30,6 +30,7 @@ class TravelMap extends StatefulWidget {
     this.selectedSearchDestination,
     this.searchFocusDestination,
     this.searchFocusRequestId = 0,
+    this.onSearchDestinationSelected,
     super.key,
   });
 
@@ -65,6 +66,11 @@ class TravelMap extends StatefulWidget {
   ///
   /// Allows the same destination to be focused more than once.
   final int searchFocusRequestId;
+
+  /// Reports a tap on the currently visible temporary catalog marker.
+  ///
+  /// Does not modify travel records or perform repository requests.
+  final ValueChanged<MapSearchDestination>? onSearchDestinationSelected;
 
   @override
   State<TravelMap> createState() => _TravelMapState();
@@ -1102,6 +1108,31 @@ class _TravelMapState extends State<TravelMap> {
 
     if (controller == null) {
       return;
+    }
+
+    // ---------------------------------------------------------
+    // 1. Temporary search markers have highest priority.
+    // ---------------------------------------------------------
+
+    final destination = widget.selectedSearchDestination;
+
+    if (destination != null &&
+        destination.type != MapSearchDestinationType.country) {
+      final temporaryFeatures = controller.featuresAtPoint(
+        event.screenPoint,
+        layerIds: [_searchCityCircleLayerId, _searchAirportSymbolLayerId],
+      );
+
+      for (final feature in temporaryFeatures) {
+        final destinationId = feature.properties['destination_id'];
+
+        if (destinationId != destination.id) {
+          continue;
+        }
+
+        widget.onSearchDestinationSelected?.call(destination);
+        return;
+      }
     }
 
     // ---------------------------------------------------------
