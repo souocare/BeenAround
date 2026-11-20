@@ -10,6 +10,7 @@ void main() {
     required double width,
     MapDestinationStatus status = MapDestinationStatus.visited,
     bool isSearchOpen = false,
+    bool allowCompactFilter = true,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -20,6 +21,7 @@ void main() {
             child: MapToolbar(
               selectedStatus: status,
               isSearchOpen: isSearchOpen,
+              allowCompactFilter: allowCompactFilter,
               onSearchOpen: () {},
               onSearchClose: () {},
               onSearchChanged: (_) {},
@@ -110,6 +112,53 @@ void main() {
         expect(filter.compact, isTrue);
         expect(tester.takeException(), isNull);
       }
+    });
+    testWidgets('preserves full filter labels in portrait mode', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildToolbar(width: 358, allowCompactFilter: false),
+      );
+
+      final filter = tester.widget<MapStatusFilter>(
+        find.byType(MapStatusFilter),
+      );
+
+      expect(filter.compact, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('compacts filter in constrained landscape mode', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildToolbar(width: 320, allowCompactFilter: true),
+      );
+
+      final filter = tester.widget<MapStatusFilter>(
+        find.byType(MapStatusFilter),
+      );
+
+      expect(filter.compact, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('supports expanded search with full filter label', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildToolbar(width: 358, isSearchOpen: true, allowCompactFilter: false),
+      );
+
+      expect(find.byKey(const Key('mapSearchField')), findsOneWidget);
+
+      expect(find.byKey(const Key('mapSearchClose')), findsOneWidget);
+
+      final filter = tester.widget<MapStatusFilter>(
+        find.byType(MapStatusFilter),
+      );
+
+      expect(filter.compact, isFalse);
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

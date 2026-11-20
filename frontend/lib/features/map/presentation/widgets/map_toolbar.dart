@@ -18,6 +18,7 @@ class MapToolbar extends StatelessWidget {
     required this.onSearchOpen,
     required this.onSearchClose,
     required this.onSearchChanged,
+    this.allowCompactFilter = true,
     super.key,
   });
 
@@ -34,11 +35,17 @@ class MapToolbar extends StatelessWidget {
   final VoidCallback onSearchClose;
   final ValueChanged<String> onSearchChanged;
 
+  /// Allows compact filter labels when horizontal space is constrained.
+  ///
+  /// Portrait layouts can disable compaction to preserve full labels.
+  final bool allowCompactFilter;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useCompactFilter = constraints.maxWidth < compactBreakpoint;
+        final useCompactFilter =
+            allowCompactFilter && constraints.maxWidth < compactBreakpoint;
 
         return Row(
           children: [

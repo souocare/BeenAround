@@ -543,7 +543,9 @@ class _MapViewState extends State<_MapView> {
                 // In landscape, its horizontal area excludes the
                 // contextual side panel.
                 // ---------------------------------------------------------
-                Positioned(
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeInOutCubic,
                   top: overlayLayout.toolbarTop,
                   left: overlayLayout.left,
                   right: overlayLayout.right,
@@ -555,6 +557,7 @@ class _MapViewState extends State<_MapView> {
                       onSearchOpen: _openSearch,
                       onSearchClose: _closeSearch,
                       onSearchChanged: _onSearchChanged,
+                      allowCompactFilter: overlayLayout.hasSidePanel,
                       onStatusSelected: (status) {
                         _closeSearch();
 
@@ -578,7 +581,9 @@ class _MapViewState extends State<_MapView> {
                 // The search list remains independently scrollable.
                 // ---------------------------------------------------------
                 if (_isSearchOpen && overlayLayout.resultsMaxHeight > 0)
-                  Positioned(
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 380),
+                    curve: Curves.easeInOutCubic,
                     top: overlayLayout.resultsTop,
                     left: overlayLayout.left,
                     right: overlayLayout.right,
