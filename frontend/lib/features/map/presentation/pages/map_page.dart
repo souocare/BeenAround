@@ -106,6 +106,9 @@ class _MapViewState extends State<_MapView> {
 
   bool _isSearchOpen = false;
 
+  MapSearchDestination? _searchFocusDestination;
+  int _searchFocusRequestId = 0;
+
   // ---------------------------------------------------------------------------
   // Contextual panel compaction
   // ---------------------------------------------------------------------------
@@ -187,15 +190,35 @@ class _MapViewState extends State<_MapView> {
   // ---------------------------------------------------------------------------
 
   void _onSearchDestinationSelected(MapSearchDestination destination) {
+    // Cities and airports need valid coordinates.
+    // Country navigation uses its geographic geometry.
+    if (destination.type != MapSearchDestinationType.country &&
+        !destination.hasCoordinates) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Location unavailable for ${destination.title}.'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      return;
+    }
+
+    // Update the geographic selection without creating
+    // or modifying personal travel records.
+    context.read<MapCubit>().selectSearchDestination(destination);
+
+    // Close the search without changing the selected
+    // destination or the country panel extent.
     _closeSearch();
 
-    // Geographic navigation will be implemented in M7.3F.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Map navigation to ${destination.title} is coming next.'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // Request camera navigation independently from the
+    // selected state, so the same destination can be
+    // focused repeatedly.
+    setState(() {
+      _searchFocusDestination = destination;
+      _searchFocusRequestId++;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -273,6 +296,8 @@ class _MapViewState extends State<_MapView> {
                     cities: state.visibleCities,
                     selectedCity: state.selectedCity,
                     selectedSearchDestination: state.selectedSearchDestination,
+                    searchFocusDestination: _searchFocusDestination,
+                    searchFocusRequestId: _searchFocusRequestId,
                     onCitySelected: (cityId) {
                       _closeSearch();
 

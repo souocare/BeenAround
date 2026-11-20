@@ -27,6 +27,8 @@ class TravelMap extends StatefulWidget {
     this.onCitySelected,
     this.selectedCity,
     this.selectedSearchDestination,
+    this.searchFocusDestination,
+    this.searchFocusRequestId = 0,
     super.key,
   });
 
@@ -52,6 +54,16 @@ class TravelMap extends StatefulWidget {
   ///
   /// This does not represent a persisted travel record.
   final MapSearchDestination? selectedSearchDestination;
+
+  /// Destination requested for camera navigation.
+  ///
+  /// This is a presentation request, not a travel record.
+  final MapSearchDestination? searchFocusDestination;
+
+  /// Incremented for every explicit search navigation request.
+  ///
+  /// Allows the same destination to be focused more than once.
+  final int searchFocusRequestId;
 
   @override
   State<TravelMap> createState() => _TravelMapState();
@@ -132,6 +144,12 @@ class _TravelMapState extends State<TravelMap> {
 
   // Invalidates asynchronous initialization belonging to an older style.
   int _styleGeneration = 0;
+
+  // ---------------------------------------------------------------------------
+  // Search camera navigation
+  // ---------------------------------------------------------------------------
+
+  int _lastHandledSearchFocusRequestId = 0;
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -263,6 +281,87 @@ class _TravelMapState extends State<TravelMap> {
     });
 
     await _initializeLayers();
+  }
+
+  void _scheduleSearchCameraFocus() {
+    final requestId = widget.searchFocusRequestId;
+
+    if (requestId == 0 || requestId == _lastHandledSearchFocusRequestId) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_layersReady ||
+          requestId != widget.searchFocusRequestId ||
+          requestId == _lastHandledSearchFocusRequestId) {
+        return;
+      }
+
+      final destination = widget.searchFocusDestination;
+
+      if (destination == null) {
+        return;
+      }
+
+      _lastHandledSearchFocusRequestId = requestId;
+
+      unawaited(_focusSearchDestination(destination));
+    });
+  }
+
+  Future<void> _focusSearchDestination(MapSearchDestination destination) async {
+    switch (destination.type) {
+      case MapSearchDestinationType.country:
+        // Country search focus will reuse _focusCountry()
+        // after adapting its geographic anchor.
+        return;
+
+      case MapSearchDestinationType.city:
+      case MapSearchDestinationType.airport:
+        if (!destination.hasCoordinates) {
+          return;
+        }
+
+        await _focusCoordinates(
+          latitude: destination.latitude!,
+          longitude: destination.longitude!,
+        );
+    }
+  }
+
+  Future<void> _focusCoordinates({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final controller = _mapController;
+
+    if (controller == null || !_layersReady || !mounted) {
+      return;
+    }
+
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return;
+    }
+
+    try {
+      await controller.animateCamera(
+        center: Geographic(lon: longitude, lat: latitude),
+        zoom: 4.5,
+        nativeDuration: const Duration(milliseconds: 900),
+      );
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+
+      debugPrint('TravelMap: unable to focus geographic destination: $error');
+
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -541,6 +640,8 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeCities());
       unawaited(_synchronizeSelectedCity());
       unawaited(_synchronizeSearchSelection());
+
+      _scheduleSearchCameraFocus();
     } catch (error, stackTrace) {
       if (!_isCurrentStyle(style, generation)) return;
 
@@ -568,6 +669,10 @@ class _TravelMapState extends State<TravelMap> {
   @override
   void didUpdateWidget(covariant TravelMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.searchFocusRequestId != widget.searchFocusRequestId) {
+      _scheduleSearchCameraFocus();
+    }
 
     final nextCityGeoJson = buildMapCityGeoJson(cities: widget.cities);
 
@@ -1039,27 +1144,11 @@ class _TravelMapState extends State<TravelMap> {
     }
   }
 
-  Future<void> _focusCity(MapCityData city) async {
-    final controller = _mapController;
-
-    if (controller == null || !_layersReady || !mounted) {
-      return;
-    }
-
-    try {
-      final center = calculateMapCityCameraCenter(city);
-
-      await controller.animateCamera(
-        center: center,
-        zoom: 4.5,
-        nativeDuration: const Duration(milliseconds: 900),
-      );
-    } catch (error, stackTrace) {
-      if (!mounted) return;
-
-      debugPrint('TravelMap: unable to focus city: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    }
+  Future<void> _focusCity(MapCityData city) {
+    return _focusCoordinates(
+      latitude: city.latitude,
+      longitude: city.longitude,
+    );
   }
 
   // ---------------------------------------------------------------------------
