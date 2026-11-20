@@ -19,6 +19,7 @@ import '../../domain/map_search_destination.dart';
 import '../../application/map_airport_geojson_projection.dart';
 import '../../domain/map_airport_data.dart';
 import '../../application/map_airport_visibility.dart';
+import '../../application/map_selected_airport_visibility.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -129,6 +130,10 @@ class _TravelMapState extends State<TravelMap> {
   static const _searchAirportSymbolLayerId = 'travel-map-search-airport-symbol';
 
   static const _searchAirportIconId = 'travel-map-search-airport-icon';
+  static const _selectedUsedAirportOutlineLayerId =
+      'travel-map-selected-used-airport-outline';
+  static const _selectedUsedAirportSymbolLayerId =
+      'travel-map-selected-used-airport-symbol';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -806,13 +811,87 @@ class _TravelMapState extends State<TravelMap> {
           id: _searchAirportSymbolLayerId,
           sourceId: _searchSelectionSourceId,
           filter: [
-            '==',
-            ['get', 'destination_type'],
-            'airport',
+            'all',
+            [
+              '==',
+              ['get', 'destination_type'],
+              'airport',
+            ],
+            [
+              '==',
+              ['get', 'is_used_airport'],
+              false,
+            ],
           ],
           layout: {
             'icon-image': _searchAirportIconId,
-            'icon-size': 0.28,
+            'icon-size': 0.34,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Selected airport from completed flight history: outline
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        SymbolStyleLayer(
+          id: _selectedUsedAirportOutlineLayerId,
+          sourceId: _searchSelectionSourceId,
+          filter: [
+            'all',
+            [
+              '==',
+              ['get', 'destination_type'],
+              'airport',
+            ],
+            [
+              '==',
+              ['get', 'is_used_airport'],
+              true,
+            ],
+          ],
+          layout: {
+            'icon-image': _airportOutlineIconId,
+            'icon-size': 0.44,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Selected airport from completed flight history: primary icon
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        SymbolStyleLayer(
+          id: _selectedUsedAirportSymbolLayerId,
+          sourceId: _searchSelectionSourceId,
+          filter: [
+            'all',
+            [
+              '==',
+              ['get', 'destination_type'],
+              'airport',
+            ],
+            [
+              '==',
+              ['get', 'is_used_airport'],
+              true,
+            ],
+          ],
+          layout: {
+            'icon-image': _airportIconId,
+            'icon-size': 0.34,
             'icon-anchor': 'center',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
@@ -918,7 +997,9 @@ class _TravelMapState extends State<TravelMap> {
 
     if (!identical(oldWidget.airports, widget.airports) ||
         !identical(oldWidget.cities, widget.cities) ||
-        oldWidget.selectedCity?.cityId != widget.selectedCity?.cityId) {
+        oldWidget.selectedCity?.cityId != widget.selectedCity?.cityId ||
+        oldWidget.selectedSearchDestination?.id !=
+            widget.selectedSearchDestination?.id) {
       _refreshAirportVisibility();
     }
 
@@ -967,11 +1048,8 @@ class _TravelMapState extends State<TravelMap> {
     final selectedCity = widget.selectedCity;
 
     // ---------------------------------------------------------
-    // Reuse the existing selected-city marker whenever the
+    // Reuse the existing selected-city marker when the
     // catalog city already belongs to the personal projection.
-    //
-    // The selected-city layer already provides the visual
-    // emphasis required by the Map.
     // ---------------------------------------------------------
 
     if (destination?.type == MapSearchDestinationType.city &&
@@ -981,11 +1059,21 @@ class _TravelMapState extends State<TravelMap> {
     }
 
     // ---------------------------------------------------------
-    // Cities without a personal projection and airports use
-    // the temporary search-selection source.
+    // Determine whether the selected airport belongs to the
+    // user's completed-flight history.
+    //
+    // This changes presentation only.
     // ---------------------------------------------------------
 
-    return buildMapSearchSelectionGeoJson(destination: destination);
+    final usedAirportId = selectedUsedAirportId(
+      selectedDestination: destination,
+      usedAirports: widget.airports,
+    );
+
+    return buildMapSearchSelectionGeoJson(
+      destination: destination,
+      isUsedAirport: usedAirportId != null,
+    );
   }
 
   Future<void> _synchronizeSelection() async {
@@ -1139,10 +1227,27 @@ class _TravelMapState extends State<TravelMap> {
     );
 
     // ---------------------------------------------------------
+    // Exclude a selected airport from the normal airport source.
+    //
+    // The selected marker is rendered separately and remains
+    // visible regardless of zoom or nearby city markers.
+    // ---------------------------------------------------------
+
+    final selectedAirportId = selectedUsedAirportId(
+      selectedDestination: widget.selectedSearchDestination,
+      usedAirports: widget.airports,
+    );
+
+    final normalAirports = excludeSelectedMapAirport(
+      airports: visibleAirports,
+      selectedAirportId: selectedAirportId,
+    );
+
+    // ---------------------------------------------------------
     // 3. Build deterministic GeoJSON
     // ---------------------------------------------------------
 
-    final nextGeoJson = buildMapAirportGeoJson(airports: visibleAirports);
+    final nextGeoJson = buildMapAirportGeoJson(airports: normalAirports);
 
     // ---------------------------------------------------------
     // 4. Update only when the visible airport set changes
@@ -1390,7 +1495,12 @@ class _TravelMapState extends State<TravelMap> {
         destination.type != MapSearchDestinationType.country) {
       final temporaryFeatures = controller.featuresAtPoint(
         event.screenPoint,
-        layerIds: [_searchCityCircleLayerId, _searchAirportSymbolLayerId],
+        layerIds: [
+          _searchCityCircleLayerId,
+          _searchAirportSymbolLayerId,
+          _selectedUsedAirportSymbolLayerId,
+          _selectedUsedAirportOutlineLayerId,
+        ],
       );
 
       for (final feature in temporaryFeatures) {

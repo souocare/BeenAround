@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:beenaround/features/map/application/map_search_selection_geojson.dart';
 import 'package:beenaround/features/map/domain/map_search_destination.dart';
+import 'dart:convert';
 
 void main() {
   Map<String, dynamic> decode(String geoJson) {
@@ -169,6 +170,62 @@ void main() {
             as Map<String, dynamic>)['destination_type'],
         'airport',
       );
+    });
+  });
+  group('airport usage presentation metadata', () {
+    const airport = MapSearchDestination(
+      type: MapSearchDestinationType.airport,
+      id: 'airport:10',
+      title: 'Humberto Delgado Airport',
+      subtitle: 'LIS',
+      latitude: 38.7742,
+      longitude: -9.1342,
+      airportCode: 'LIS',
+    );
+
+    test('marks a completed-flight airport as used', () {
+      final geoJson = buildMapSearchSelectionGeoJson(
+        destination: airport,
+        isUsedAirport: true,
+      );
+
+      final collection = jsonDecode(geoJson) as Map<String, dynamic>;
+
+      final feature = (collection['features'] as List<dynamic>).single;
+
+      expect(feature['properties']['is_used_airport'], isTrue);
+    });
+
+    test('keeps an unused airport neutral', () {
+      final geoJson = buildMapSearchSelectionGeoJson(destination: airport);
+
+      final collection = jsonDecode(geoJson) as Map<String, dynamic>;
+
+      final feature = (collection['features'] as List<dynamic>).single;
+
+      expect(feature['properties']['is_used_airport'], isFalse);
+    });
+
+    test('does not classify a city as a used airport', () {
+      const city = MapSearchDestination(
+        type: MapSearchDestinationType.city,
+        id: 'city:20',
+        title: 'Lisbon',
+        subtitle: 'Portugal',
+        latitude: 38.7223,
+        longitude: -9.1393,
+      );
+
+      final geoJson = buildMapSearchSelectionGeoJson(
+        destination: city,
+        isUsedAirport: true,
+      );
+
+      final collection = jsonDecode(geoJson) as Map<String, dynamic>;
+
+      final feature = (collection['features'] as List<dynamic>).single;
+
+      expect(feature['properties']['is_used_airport'], isFalse);
     });
   });
 }
