@@ -3,7 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../explore/data/countries_repository.dart';
 import '../../../explore/presentation/navigation/open_country_details.dart';
+import '../../../flights/application/flight_catalog_resolver.dart';
+import '../../../flights/domain/airline_repository.dart';
 import '../../../flights/domain/airport_repository.dart';
+import '../../../flights/domain/flight_repository.dart';
 import '../../../geography/domain/city_repository.dart';
 import '../../../geography/domain/city_visits_repository.dart';
 import '../../../residences/domain/residence_repository.dart';
@@ -11,6 +14,7 @@ import '../../../trips/domain/trip_repository.dart';
 import '../../../wishlist/domain/wishlist_repository.dart';
 
 import '../../application/map_city_projection.dart';
+import '../../application/map_context_panel_selection.dart';
 import '../../application/map_country_projection.dart';
 import '../../application/map_country_related_cubit.dart';
 import '../../application/map_country_related_state.dart';
@@ -22,17 +26,14 @@ import '../../application/map_state.dart';
 
 import '../../domain/map_search_destination.dart';
 
+import '../map_overlay_layout.dart';
+import '../widgets/map_airport_panel.dart';
+import '../widgets/map_city_panel.dart';
+import '../widgets/map_context_panel_shell.dart';
 import '../widgets/map_country_panel.dart';
 import '../widgets/map_search_results_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
-import '../widgets/map_airport_panel.dart';
-import '../widgets/map_city_panel.dart';
-import '../../../flights/application/flight_catalog_resolver.dart';
-import '../../../flights/domain/airline_repository.dart';
-import '../../../flights/domain/flight_repository.dart';
-import '../../application/map_context_panel_selection.dart';
-import '../widgets/map_context_panel_shell.dart';
 
 // -----------------------------------------------------------------------------
 // Map page
@@ -159,18 +160,18 @@ class _MapViewState extends State<_MapView> {
   void _onSearchChanged(String value) {
     context.read<MapSearchCubit>().queryChanged(value);
 
-    // Opening the search alone must not compact the country panel.
+    // Opening search alone must not compact the contextual panel.
     //
     // Compaction starts when the user enters a non-empty query,
-    // which is when the search results panel becomes visible.
+    // which is when the search results become visible.
     if (!_isSearchOpen || value.trim().isEmpty || _compactedForCurrentSearch) {
       return;
     }
 
     // Compact the currently selected geographic panel.
     //
-    // Search compaction must not change selection, map status,
-    // geographic records or camera position.
+    // Search compaction must not change the selection,
+    // map status, geographic records or camera position.
     final mapState = context.read<MapCubit>().state;
 
     final selection = resolveMapContextPanelSelection(mapState);
@@ -201,9 +202,9 @@ class _MapViewState extends State<_MapView> {
       _compactedForCurrentSearch = false;
     });
 
-    // Deliberately do not change the country panel extent.
+    // Deliberately preserve the contextual panel extent.
     //
-    // Closing search must preserve the current panel position.
+    // Closing search must not resize the panel.
   }
 
   // ---------------------------------------------------------------------------
@@ -211,8 +212,8 @@ class _MapViewState extends State<_MapView> {
   // ---------------------------------------------------------------------------
 
   void _onSearchDestinationSelected(MapSearchDestination destination) {
-    // Cities and airports need valid coordinates.
-    // Country navigation uses its geographic geometry.
+    // Cities and airports require valid coordinates.
+    // Country navigation uses geographic geometry.
     if (destination.type != MapSearchDestinationType.country &&
         !destination.hasCoordinates) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,13 +230,13 @@ class _MapViewState extends State<_MapView> {
     // or modifying personal travel records.
     context.read<MapCubit>().selectSearchDestination(destination);
 
-    // Close the search without changing the selected
-    // destination or the country panel extent.
+    // Close search without modifying the selected destination
+    // or contextual panel extent.
     _closeSearch();
 
-    // Request camera navigation independently from the
-    // selected state, so the same destination can be
-    // focused repeatedly.
+    // Request camera navigation independently from selection state.
+    //
+    // This allows the same destination to be focused repeatedly.
     setState(() {
       _searchFocusDestination = destination;
       _searchFocusRequestId++;
@@ -280,10 +281,6 @@ class _MapViewState extends State<_MapView> {
       await relatedCubit.load(selectedCode);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Presentation
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // Contextual geographic panel content
@@ -365,6 +362,10 @@ class _MapViewState extends State<_MapView> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Presentation
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<MapCubit, MapState>(
@@ -387,6 +388,24 @@ class _MapViewState extends State<_MapView> {
           builder: (context, state) {
             final panelSelection = resolveMapContextPanelSelection(state);
 
+            final mediaQuery = MediaQuery.of(context);
+
+            // ---------------------------------------------------------------
+            // Shared responsive overlay layout
+            //
+            // When a contextual side panel is visible, the toolbar and
+            // geographic search results occupy the remaining map area.
+            //
+            // In portrait, the existing full-width layout is preserved.
+            // ---------------------------------------------------------------
+
+            final overlayLayout = calculateMapOverlayLayout(
+              viewportSize: mediaQuery.size,
+              safePadding: mediaQuery.padding,
+              hasSelection: panelSelection != null,
+              keyboardInset: mediaQuery.viewInsets.bottom,
+            );
+
             return Stack(
               children: [
                 // ---------------------------------------------------------
@@ -402,11 +421,19 @@ class _MapViewState extends State<_MapView> {
                     searchFocusDestination: _searchFocusDestination,
                     searchFocusRequestId: _searchFocusRequestId,
                     airports: state.airports.values.toList(growable: false),
+
+                    // -----------------------------------------------------
+                    // City selection
+                    // -----------------------------------------------------
                     onCitySelected: (cityId) {
                       _closeSearch();
 
                       context.read<MapCubit>().selectCity(cityId);
                     },
+
+                    // -----------------------------------------------------
+                    // Airport selection
+                    // -----------------------------------------------------
                     onAirportSelected: (airportId) {
                       _closeSearch();
 
@@ -432,6 +459,9 @@ class _MapViewState extends State<_MapView> {
                       cubit.selectSearchDestination(destination);
                     },
 
+                    // -----------------------------------------------------
+                    // Country selection
+                    // -----------------------------------------------------
                     onCountrySelected: (countryCode) {
                       _closeSearch();
 
@@ -443,6 +473,10 @@ class _MapViewState extends State<_MapView> {
                         cubit.selectCountry(countryCode);
                       }
                     },
+
+                    // -----------------------------------------------------
+                    // Existing temporary catalog markers
+                    // -----------------------------------------------------
                     onSearchDestinationSelected: (destination) {
                       _closeSearch();
 
@@ -454,32 +488,12 @@ class _MapViewState extends State<_MapView> {
                 ),
 
                 // ---------------------------------------------------------
-                // Map toolbar
-                // ---------------------------------------------------------
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 12,
-                  left: MediaQuery.paddingOf(context).left + 16,
-                  right: MediaQuery.paddingOf(context).right + 16,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    child: MapToolbar(
-                      selectedStatus: state.activeStatus,
-                      isSearchOpen: _isSearchOpen,
-                      onSearchOpen: _openSearch,
-                      onSearchClose: _closeSearch,
-                      onSearchChanged: _onSearchChanged,
-
-                      onStatusSelected: (status) {
-                        _closeSearch();
-
-                        context.read<MapCubit>().selectStatus(status);
-                      },
-                    ),
-                  ),
-                ),
-
-                // ---------------------------------------------------------
                 // Persistent contextual geographic panel
+                //
+                // Rendered below the toolbar and search results.
+                //
+                // The shared shell remains mounted when selection
+                // changes between countries, cities and airports.
                 // ---------------------------------------------------------
                 Positioned.fill(
                   child: AnimatedSwitcher(
@@ -522,15 +536,54 @@ class _MapViewState extends State<_MapView> {
                 ),
 
                 // ---------------------------------------------------------
-                // Geographic search results
+                // Map toolbar
+                //
+                // Rendered above the contextual panel.
+                //
+                // In landscape, its horizontal area excludes the
+                // contextual side panel.
                 // ---------------------------------------------------------
-                if (_isSearchOpen)
+                Positioned(
+                  top: overlayLayout.toolbarTop,
+                  left: overlayLayout.left,
+                  right: overlayLayout.right,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: MapToolbar(
+                      selectedStatus: state.activeStatus,
+                      isSearchOpen: _isSearchOpen,
+                      onSearchOpen: _openSearch,
+                      onSearchClose: _closeSearch,
+                      onSearchChanged: _onSearchChanged,
+                      onStatusSelected: (status) {
+                        _closeSearch();
+
+                        context.read<MapCubit>().selectStatus(status);
+                      },
+                    ),
+                  ),
+                ),
+
+                // ---------------------------------------------------------
+                // Geographic search results
+                //
+                // Share the same horizontal area as the toolbar.
+                //
+                // The maximum height accounts for:
+                // - Actual viewport dimensions.
+                // - Safe areas.
+                // - Keyboard.
+                // - Bottom margin.
+                //
+                // The search list remains independently scrollable.
+                // ---------------------------------------------------------
+                if (_isSearchOpen && overlayLayout.resultsMaxHeight > 0)
                   Positioned(
-                    top: MediaQuery.paddingOf(context).top + 66,
-                    left: MediaQuery.paddingOf(context).left + 16,
-                    right: MediaQuery.paddingOf(context).right + 16,
+                    top: overlayLayout.resultsTop,
+                    left: overlayLayout.left,
+                    right: overlayLayout.right,
                     child: Align(
-                      alignment: Alignment.topRight,
+                      alignment: Alignment.topLeft,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 520),
                         child: BlocBuilder<MapSearchCubit, MapSearchState>(
@@ -541,22 +594,12 @@ class _MapViewState extends State<_MapView> {
                               return const SizedBox.shrink();
                             }
 
-                            final mediaQuery = MediaQuery.of(context);
-
-                            final availableHeight =
-                                mediaQuery.size.height -
-                                mediaQuery.viewInsets.bottom -
-                                mediaQuery.padding.top -
-                                90;
-
-                            final panelHeight = availableHeight.clamp(
-                              0.0,
-                              420.0,
-                            );
-
-                            if (panelHeight <= 0) {
-                              return const SizedBox.shrink();
-                            }
+                            // Height is calculated by the shared
+                            // responsive overlay layout.
+                            //
+                            // Do not recompute viewport and keyboard
+                            // constraints inside the search panel.
+                            final panelHeight = overlayLayout.resultsMaxHeight;
 
                             return SizedBox(
                               width: double.infinity,
