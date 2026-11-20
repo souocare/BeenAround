@@ -93,8 +93,13 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectionBorderLayerId = 'travel-map-selection-border';
   static const _cityCircleLayerId = 'travel-map-city-circles';
   static const _selectedCityCircleLayerId = 'travel-map-selected-city-circle';
-  static const _searchSelectionCircleLayerId =
-      'travel-map-search-selection-circle';
+  // ---------------------------------------------------------------------------
+  // Temporary search-selection layer IDs
+  // ---------------------------------------------------------------------------
+
+  static const _searchCityCircleLayerId = 'travel-map-search-city-circle';
+
+  static const _searchAirportCircleLayerId = 'travel-map-search-airport-circle';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -607,13 +612,56 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
-      // Temporary geographic search marker
+      // Temporary city search marker
+      //
+      // Only cities without a personal geographic projection reach
+      // this layer.
+      //
+      // Their neutral appearance distinguishes catalog destinations
+      // from destinations represented in the user's travel history.
       // ---------------------------------------------------------------------
 
       await style.addLayer(
         CircleStyleLayer(
-          id: _searchSelectionCircleLayerId,
+          id: _searchCityCircleLayerId,
           sourceId: _searchSelectionSourceId,
+          filter: [
+            '==',
+            ['get', 'destination_type'],
+            'city',
+          ],
+          paint: {
+            'circle-radius': 8.0,
+            'circle-color': CountryMapStyle.colorToHex(
+              colors.surfaceContainerHighest,
+            ),
+            'circle-opacity': 1.0,
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Temporary airport search marker
+      //
+      // Airports currently retain the existing circle appearance.
+      //
+      // M7.3F.4c will replace this representation with an airplane
+      // symbol while preserving the same geographic source.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        CircleStyleLayer(
+          id: _searchAirportCircleLayerId,
+          sourceId: _searchSelectionSourceId,
+          filter: [
+            '==',
+            ['get', 'destination_type'],
+            'airport',
+          ],
           paint: {
             'circle-radius': 8.0,
             'circle-color': CountryMapStyle.colorToHex(colors.primary),
