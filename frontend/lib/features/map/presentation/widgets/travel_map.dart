@@ -14,6 +14,8 @@ import '../../application/map_country_focus_padding.dart';
 import '../../application/map_city_geojson_projection.dart';
 import '../../domain/map_city_data.dart';
 import '../../application/map_city_camera_target.dart';
+import '../../application/map_search_selection_geojson.dart';
+import '../../domain/map_search_destination.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -24,6 +26,7 @@ class TravelMap extends StatefulWidget {
     this.selectedCountryCode,
     this.onCitySelected,
     this.selectedCity,
+    this.selectedSearchDestination,
     super.key,
   });
 
@@ -45,6 +48,11 @@ class TravelMap extends StatefulWidget {
   /// Currently selected city, independently of the active map filter.
   final MapCityData? selectedCity;
 
+  /// Temporary destination selected from the geographic catalog.
+  ///
+  /// This does not represent a persisted travel record.
+  final MapSearchDestination? selectedSearchDestination;
+
   @override
   State<TravelMap> createState() => _TravelMapState();
 }
@@ -59,6 +67,7 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectionSourceId = 'travel-map-selection-source';
   static const _citySourceId = 'travel-map-city-source';
   static const _selectedCitySourceId = 'travel-map-selected-city-source';
+  static const _searchSelectionSourceId = 'travel-map-search-selection-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -71,6 +80,8 @@ class _TravelMapState extends State<TravelMap> {
   static const _selectionBorderLayerId = 'travel-map-selection-border';
   static const _cityCircleLayerId = 'travel-map-city-circles';
   static const _selectedCityCircleLayerId = 'travel-map-selected-city-circle';
+  static const _searchSelectionCircleLayerId =
+      'travel-map-search-selection-circle';
 
   // ---------------------------------------------------------------------------
   // Data
@@ -93,6 +104,14 @@ class _TravelMapState extends State<TravelMap> {
   String? _appliedSelectedCityGeoJson;
 
   bool _selectedCityUpdating = false;
+  // ---------------------------------------------------------------------------
+  // Temporary geographic search selection
+  // ---------------------------------------------------------------------------
+
+  late String _searchSelectionGeoJson;
+  String? _appliedSearchSelectionGeoJson;
+
+  bool _searchSelectionUpdating = false;
 
   bool _selectionUpdating = false;
 
@@ -133,6 +152,7 @@ class _TravelMapState extends State<TravelMap> {
     _selectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
     );
+    _searchSelectionGeoJson = _buildSearchSelectionGeoJson();
 
     _loadWorld();
   }
@@ -164,6 +184,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedHighlightGeoJson = null;
     _appliedCityGeoJson = null;
     _appliedSelectedCityGeoJson = null;
+    _appliedSearchSelectionGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -234,6 +255,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedHighlightGeoJson = null;
     _appliedCityGeoJson = null;
     _appliedSelectedCityGeoJson = null;
+    _appliedSearchSelectionGeoJson = null;
 
     setState(() {
       _layersReady = false;
@@ -326,6 +348,21 @@ class _TravelMapState extends State<TravelMap> {
         GeoJsonSource(
           id: _selectedCitySourceId,
           data: initialSelectedCityGeoJson,
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Temporary geographic search selection source
+      // ---------------------------------------------------------------------
+
+      final initialSearchSelectionGeoJson = _searchSelectionGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(
+          id: _searchSelectionSourceId,
+          data: initialSearchSelectionGeoJson,
         ),
       );
 
@@ -460,6 +497,26 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Temporary geographic search marker
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        CircleStyleLayer(
+          id: _searchSelectionCircleLayerId,
+          sourceId: _searchSelectionSourceId,
+          paint: {
+            'circle-radius': 8.0,
+            'circle-color': CountryMapStyle.colorToHex(colors.primary),
+            'circle-opacity': 1.0,
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // 9. Mark sources as synchronized
       // ---------------------------------------------------------------------
 
@@ -467,6 +524,7 @@ class _TravelMapState extends State<TravelMap> {
       _appliedSelectionGeoJson = initialSelectionGeoJson;
       _appliedCityGeoJson = initialCityGeoJson;
       _appliedSelectedCityGeoJson = initialSelectedCityGeoJson;
+      _appliedSearchSelectionGeoJson = initialSearchSelectionGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -482,6 +540,7 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeSelection());
       unawaited(_synchronizeCities());
       unawaited(_synchronizeSelectedCity());
+      unawaited(_synchronizeSearchSelection());
     } catch (error, stackTrace) {
       if (!_isCurrentStyle(style, generation)) return;
 
@@ -527,6 +586,18 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeSelectedCity());
     }
 
+    // ---------------------------------------------------------------------
+    // Temporary search-selection updates
+    // ---------------------------------------------------------------------
+
+    final nextSearchSelectionGeoJson = _buildSearchSelectionGeoJson();
+
+    if (nextSearchSelectionGeoJson != _searchSelectionGeoJson) {
+      _searchSelectionGeoJson = nextSearchSelectionGeoJson;
+
+      unawaited(_synchronizeSearchSelection());
+    }
+
     final worldGeoJson = _worldGeoJson;
 
     if (worldGeoJson == null) return;
@@ -553,6 +624,32 @@ class _TravelMapState extends State<TravelMap> {
 
       unawaited(_synchronizeSelection());
     }
+  }
+
+  String _buildSearchSelectionGeoJson() {
+    final destination = widget.selectedSearchDestination;
+    final selectedCity = widget.selectedCity;
+
+    // ---------------------------------------------------------
+    // Reuse the existing selected-city marker whenever the
+    // catalog city already belongs to the personal projection.
+    //
+    // The selected-city layer already provides the visual
+    // emphasis required by the Map.
+    // ---------------------------------------------------------
+
+    if (destination?.type == MapSearchDestinationType.city &&
+        selectedCity != null &&
+        destination?.id == 'city:${selectedCity.cityId}') {
+      return buildMapSearchSelectionGeoJson(destination: null);
+    }
+
+    // ---------------------------------------------------------
+    // Cities without a personal projection and airports use
+    // the temporary search-selection source.
+    // ---------------------------------------------------------
+
+    return buildMapSearchSelectionGeoJson(destination: destination);
   }
 
   Future<void> _synchronizeSelection() async {
@@ -756,6 +853,61 @@ class _TravelMapState extends State<TravelMap> {
 
       // If the style was replaced while an update was running,
       // initialization of the new style will restore the highlights.
+    }
+  }
+
+  Future<void> _synchronizeSearchSelection() async {
+    if (_searchSelectionUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _searchSelectionUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _searchSelectionGeoJson;
+
+        if (desiredGeoJson == _appliedSearchSelectionGeoJson) {
+          break;
+        }
+
+        await style.updateGeoJsonSource(
+          id: _searchSelectionSourceId,
+          data: desiredGeoJson,
+        );
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedSearchSelectionGeoJson = desiredGeoJson;
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint('TravelMap: unable to update search selection: $error');
+
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _searchSelectionUpdating = false;
+
+      // A replacement style must receive the latest selection
+      // after an asynchronous update belonging to the previous
+      // style finishes.
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeSearchSelection());
+      }
     }
   }
 

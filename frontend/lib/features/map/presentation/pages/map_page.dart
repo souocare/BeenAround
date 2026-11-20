@@ -272,7 +272,7 @@ class _MapViewState extends State<_MapView> {
                     selectedCountryCode: state.selectedCountryCode,
                     cities: state.visibleCities,
                     selectedCity: state.selectedCity,
-
+                    selectedSearchDestination: state.selectedSearchDestination,
                     onCitySelected: (cityId) {
                       _closeSearch();
 
