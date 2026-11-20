@@ -121,6 +121,13 @@ class _TravelMapState extends State<TravelMap> {
   static const _airportOutlineLayerId = 'travel-map-flight-airports-outline';
   static const _airportOutlineIconId =
       'travel-map-flight-airports-outline-icon';
+  // White outline for a selected airport with completed flights.
+  static const _selectedAirportOutlineIconId =
+      'travel-map-selected-airport-outline-icon';
+
+  // Contrasting outline for an unused selected airport.
+  static const _searchAirportOutlineIconId =
+      'travel-map-search-airport-outline-icon';
   // ---------------------------------------------------------------------------
   // Temporary search-selection layer IDs
   // ---------------------------------------------------------------------------
@@ -128,6 +135,8 @@ class _TravelMapState extends State<TravelMap> {
   static const _searchCityCircleLayerId = 'travel-map-search-city-circle';
 
   static const _searchAirportSymbolLayerId = 'travel-map-search-airport-symbol';
+  static const _searchAirportOutlineLayerId =
+      'travel-map-search-airport-outline';
 
   static const _searchAirportIconId = 'travel-map-search-airport-icon';
   static const _selectedUsedAirportOutlineLayerId =
@@ -569,7 +578,16 @@ class _TravelMapState extends State<TravelMap> {
         id: _searchAirportIconId,
         iconData: Icons.flight_rounded,
         size: 96,
-        color: colors.onSurface,
+        color: Colors.white,
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      await style.addImageFromIconData(
+        id: _searchAirportOutlineIconId,
+        iconData: Icons.flight_rounded,
+        size: 96,
+        color: const Color(0xFF24252B),
       );
 
       if (!_isCurrentStyle(style, generation)) return;
@@ -594,6 +612,15 @@ class _TravelMapState extends State<TravelMap> {
         iconData: Icons.flight_rounded,
         size: 96,
         color: colors.primary,
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      await style.addImageFromIconData(
+        id: _selectedAirportOutlineIconId,
+        iconData: Icons.flight_rounded,
+        size: 96,
+        color: Colors.white,
       );
 
       if (!_isCurrentStyle(style, generation)) return;
@@ -754,11 +781,11 @@ class _TravelMapState extends State<TravelMap> {
           id: _selectedCityCircleLayerId,
           sourceId: _selectedCitySourceId,
           paint: {
-            'circle-radius': 8.0,
+            'circle-radius': 7.5,
             'circle-color': CountryMapStyle.colorToHex(colors.primary),
             'circle-opacity': 1.0,
-            'circle-stroke-width': 2.5,
-            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+            'circle-stroke-width': 3.0,
+            'circle-stroke-color': CountryMapStyle.colorToHex(Colors.white),
           },
         ),
       );
@@ -785,13 +812,49 @@ class _TravelMapState extends State<TravelMap> {
             'city',
           ],
           paint: {
-            'circle-radius': 8.0,
-            'circle-color': CountryMapStyle.colorToHex(
-              colors.surfaceContainerHighest,
-            ),
+            'circle-radius': 7.5,
+            'circle-color': CountryMapStyle.colorToHex(Colors.white),
             'circle-opacity': 1.0,
             'circle-stroke-width': 2.5,
-            'circle-stroke-color': CountryMapStyle.colorToHex(colors.onSurface),
+            'circle-stroke-color': '#24252B',
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Selected airport without completed flights: contrasting outline
+      //
+      // Rendered beneath the white airplane icon.
+      //
+      // This keeps temporary airport selections visible in both
+      // Dark and Light Mode.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        SymbolStyleLayer(
+          id: _searchAirportOutlineLayerId,
+          sourceId: _searchSelectionSourceId,
+          filter: [
+            'all',
+            [
+              '==',
+              ['get', 'destination_type'],
+              'airport',
+            ],
+            [
+              '==',
+              ['get', 'is_used_airport'],
+              false,
+            ],
+          ],
+          layout: {
+            'icon-image': _searchAirportOutlineIconId,
+            'icon-size': 0.43,
+            'icon-anchor': 'center',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
           },
         ),
       );
@@ -857,8 +920,8 @@ class _TravelMapState extends State<TravelMap> {
             ],
           ],
           layout: {
-            'icon-image': _airportOutlineIconId,
-            'icon-size': 0.44,
+            'icon-image': _selectedAirportOutlineIconId,
+            'icon-size': 0.46,
             'icon-anchor': 'center',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
@@ -1498,6 +1561,7 @@ class _TravelMapState extends State<TravelMap> {
         layerIds: [
           _searchCityCircleLayerId,
           _searchAirportSymbolLayerId,
+          _searchAirportOutlineLayerId,
           _selectedUsedAirportSymbolLayerId,
           _selectedUsedAirportOutlineLayerId,
         ],
