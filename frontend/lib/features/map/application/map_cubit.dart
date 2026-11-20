@@ -15,6 +15,12 @@ import 'map_country_projection.dart';
 import 'map_state.dart';
 import '../domain/map_search_destination.dart';
 
+import '../../flights/application/flight_catalog_resolver.dart';
+import '../../flights/domain/flight.dart';
+import '../../flights/domain/flight_repository.dart';
+
+import 'map_airport_projection.dart';
+
 /// Manages the authenticated user's geographic travel visualization.
 ///
 /// Country and city projections are derived from existing travel records.
@@ -23,19 +29,15 @@ import '../domain/map_search_destination.dart';
 /// Data loading and geographic projection are independent of MapLibre.
 class MapCubit extends Cubit<MapState> {
   MapCubit({
-    required CountriesRepository countriesRepository,
-    required CityVisitsRepository cityVisitsRepository,
-    required ResidenceRepository residenceRepository,
-    required WishlistRepository wishlistRepository,
-    required MapCountryProjection countryProjection,
-    required MapCityProjection cityProjection,
-  }) : _countriesRepository = countriesRepository,
-       _cityVisitsRepository = cityVisitsRepository,
-       _residenceRepository = residenceRepository,
-       _wishlistRepository = wishlistRepository,
-       _countryProjection = countryProjection,
-       _cityProjection = cityProjection,
-       super(const MapState());
+    required this._countriesRepository,
+    required this._cityVisitsRepository,
+    required this._residenceRepository,
+    required this._wishlistRepository,
+    required this._countryProjection,
+    required this._cityProjection,
+    required this._flightRepository,
+    required this._flightCatalogResolver,
+  }) : super(const MapState());
 
   final CountriesRepository _countriesRepository;
   final CityVisitsRepository _cityVisitsRepository;
@@ -44,6 +46,12 @@ class MapCubit extends Cubit<MapState> {
 
   final MapCountryProjection _countryProjection;
   final MapCityProjection _cityProjection;
+  final FlightRepository _flightRepository;
+  final FlightCatalogResolver _flightCatalogResolver;
+
+  int _airportRequestGeneration = 0;
+
+  static const int _flightPageSize = 20;
 
   int _requestGeneration = 0;
 
@@ -180,6 +188,138 @@ class MapCubit extends Cubit<MapState> {
         ),
       );
     }
+  }
+
+  // ---------------------------------------------------------
+  // Flight airport projection
+  // ---------------------------------------------------------
+
+  /// Loads airports used in the authenticated user's
+  /// completed flight history.
+  ///
+  /// This operation is independent of the country/city map load.
+  ///
+  /// A failure preserves the last successfully loaded airport
+  /// projection without affecting the main geographic map.
+  Future<void> loadAirports() async {
+    if (isClosed) return;
+
+    final generation = ++_airportRequestGeneration;
+
+    emit(
+      state.copyWith(
+        airportPhase: MapAirportPhase.loading,
+        clearAirportError: true,
+      ),
+    );
+
+    try {
+      final flights = <Flight>[];
+
+      var offset = 0;
+
+      // -------------------------------------------------------
+      // 1. Load all completed flights
+      //
+      // Never project only the first page.
+      // -------------------------------------------------------
+
+      while (true) {
+        final page = await _flightRepository.getFlights(
+          limit: _flightPageSize,
+          offset: offset,
+          status: FlightStatus.flown,
+        );
+
+        if (!_isCurrentAirportRequest(generation)) return;
+
+        // Prevent a malformed pagination response from
+        // producing an infinite request loop.
+        if (page.items.isEmpty && page.hasMore) {
+          throw StateError('Invalid flight pagination response.');
+        }
+
+        flights.addAll(page.items);
+
+        if (!page.hasMore) {
+          break;
+        }
+
+        offset += page.items.length;
+      }
+
+      // -------------------------------------------------------
+      // 2. Collect unique airport IDs
+      // -------------------------------------------------------
+
+      final airportIds = <int>{};
+
+      for (final flight in flights) {
+        if (!flight.isFlown) continue;
+
+        airportIds.add(flight.departureAirportId);
+        airportIds.add(flight.arrivalAirportId);
+      }
+
+      // -------------------------------------------------------
+      // 3. Resolve airport catalog metadata
+      // -------------------------------------------------------
+
+      final airports = await _flightCatalogResolver.resolveAirports(airportIds);
+
+      if (!_isCurrentAirportRequest(generation)) return;
+
+      // -------------------------------------------------------
+      // 4. Build the geographic projection
+      //
+      // The projection itself handles:
+      // - Planned flight exclusion.
+      // - Duplicate flight IDs.
+      // - Airport aggregation.
+      // - Invalid coordinates.
+      // -------------------------------------------------------
+
+      final projection = buildMapAirportProjection(
+        flights: flights,
+        airports: airports,
+      );
+
+      if (!_isCurrentAirportRequest(generation)) return;
+
+      // -------------------------------------------------------
+      // 5. Publish the complete projection atomically
+      // -------------------------------------------------------
+
+      emit(
+        state.copyWith(
+          airports: projection,
+          airportPhase: MapAirportPhase.ready,
+          clearAirportError: true,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!_isCurrentAirportRequest(generation)) return;
+
+      emit(
+        state.copyWith(
+          airportPhase: MapAirportPhase.failure,
+          airportErrorMessage: error.message,
+        ),
+      );
+    } catch (_) {
+      if (!_isCurrentAirportRequest(generation)) return;
+
+      emit(
+        state.copyWith(
+          airportPhase: MapAirportPhase.failure,
+          airportErrorMessage: 'Unable to load your flight airports.',
+        ),
+      );
+    }
+  }
+
+  bool _isCurrentAirportRequest(int generation) {
+    return !isClosed && generation == _airportRequestGeneration;
   }
 
   // ---------------------------------------------------------

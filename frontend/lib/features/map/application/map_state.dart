@@ -3,8 +3,11 @@ import '../domain/map_destination_status.dart';
 import '../domain/map_country_preview.dart';
 import '../domain/map_city_data.dart';
 import '../domain/map_search_destination.dart';
+import '../domain/map_airport_data.dart';
 
 enum MapPhase { initial, loading, ready, failure }
+
+enum MapAirportPhase { initial, loading, ready, failure }
 
 class MapState {
   const MapState({
@@ -16,6 +19,9 @@ class MapState {
     this.selectedCityId,
     this.cities = const {},
     this.selectedSearchDestination,
+    this.airports = const {},
+    this.airportPhase = MapAirportPhase.initial,
+    this.airportErrorMessage,
     this.errorMessage,
   });
 
@@ -52,6 +58,18 @@ class MapState {
   /// Country and city selections retain their existing identifiers.
   /// Airports are represented exclusively by this destination.
   final MapSearchDestination? selectedSearchDestination;
+
+  /// Airports used in completed personal flights.
+  ///
+  /// Indexed by the shared airport catalog ID.
+  /// This projection does not imply country or city visits.
+  final Map<int, MapAirportData> airports;
+
+  /// Independent loading status of the flight airport projection.
+  final MapAirportPhase airportPhase;
+
+  /// Last airport loading error, if any.
+  final String? airportErrorMessage;
 
   bool get hasData => countryData != null;
 
@@ -104,6 +122,10 @@ class MapState {
     bool clearError = false,
     MapSearchDestination? selectedSearchDestination,
     bool clearSelectedSearchDestination = false,
+    Map<int, MapAirportData>? airports,
+    MapAirportPhase? airportPhase,
+    String? airportErrorMessage,
+    bool clearAirportError = false,
   }) {
     return MapState(
       phase: phase ?? this.phase,
@@ -120,6 +142,11 @@ class MapState {
       selectedSearchDestination: clearSelectedSearchDestination
           ? null
           : selectedSearchDestination ?? this.selectedSearchDestination,
+      airports: airports ?? this.airports,
+      airportPhase: airportPhase ?? this.airportPhase,
+      airportErrorMessage: clearAirportError
+          ? null
+          : airportErrorMessage ?? this.airportErrorMessage,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }

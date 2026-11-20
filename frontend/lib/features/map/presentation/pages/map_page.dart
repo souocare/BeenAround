@@ -26,6 +26,9 @@ import '../widgets/map_country_panel.dart';
 import '../widgets/map_search_results_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
+import '../../../flights/application/flight_catalog_resolver.dart';
+import '../../../flights/domain/airline_repository.dart';
+import '../../../flights/domain/flight_repository.dart';
 
 // -----------------------------------------------------------------------------
 // Map page
@@ -45,16 +48,27 @@ class MapPage extends StatelessWidget {
           create: (context) {
             final cityRepository = context.read<CityRepository>();
 
+            final flightCatalogResolver = FlightCatalogResolver(
+              airportRepository: context.read<AirportRepository>(),
+              airlineRepository: context.read<AirlineRepository>(),
+            );
+
             return MapCubit(
-              countriesRepository: context.read<CountriesRepository>(),
-              cityVisitsRepository: context.read<CityVisitsRepository>(),
-              residenceRepository: context.read<ResidenceRepository>(),
-              wishlistRepository: context.read<WishlistRepository>(),
-              countryProjection: MapCountryProjection(
-                cityRepository: cityRepository,
-              ),
-              cityProjection: MapCityProjection(cityRepository: cityRepository),
-            )..load();
+                countriesRepository: context.read<CountriesRepository>(),
+                cityVisitsRepository: context.read<CityVisitsRepository>(),
+                residenceRepository: context.read<ResidenceRepository>(),
+                wishlistRepository: context.read<WishlistRepository>(),
+                countryProjection: MapCountryProjection(
+                  cityRepository: cityRepository,
+                ),
+                cityProjection: MapCityProjection(
+                  cityRepository: cityRepository,
+                ),
+                flightRepository: context.read<FlightRepository>(),
+                flightCatalogResolver: flightCatalogResolver,
+              )
+              ..load()
+              ..loadAirports();
           },
         ),
 

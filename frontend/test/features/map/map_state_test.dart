@@ -105,5 +105,31 @@ void main() {
 
       expect(state.selectedCountryPreview, isNull);
     });
+    test('airport loading is independent of geographic loading', () {
+      const initial = MapState();
+
+      final loadingAirports = initial.copyWith(
+        airportPhase: MapAirportPhase.loading,
+      );
+
+      expect(loadingAirports.airportPhase, MapAirportPhase.loading);
+      expect(loadingAirports.phase, MapPhase.initial);
+      expect(loadingAirports.airports, isEmpty);
+
+      final failedAirports = loadingAirports.copyWith(
+        airportPhase: MapAirportPhase.failure,
+        airportErrorMessage: 'Flight API unavailable',
+      );
+
+      expect(failedAirports.airportPhase, MapAirportPhase.failure);
+      expect(failedAirports.airportErrorMessage, 'Flight API unavailable');
+
+      final retry = failedAirports.copyWith(
+        airportPhase: MapAirportPhase.loading,
+        clearAirportError: true,
+      );
+
+      expect(retry.airportErrorMessage, isNull);
+    });
   });
 }

@@ -96,6 +96,29 @@ class FlightCatalogResolver {
     );
   }
 
+  /// Resolves only airport catalog entries.
+  ///
+  /// Reuses the existing airport cache and shares concurrent
+  /// requests for the same airport ID.
+  ///
+  /// Missing catalog entries are omitted from the result.
+  /// No airline requests are performed.
+  Future<Map<int, Airport>> resolveAirports(Iterable<int> airportIds) async {
+    final uniqueIds = airportIds.toSet();
+
+    await Future.wait<void>([
+      for (final id in uniqueIds)
+        _resolveAirport(
+          id,
+        ).then((_) {}, onError: (Object error, StackTrace stackTrace) {}),
+    ]);
+
+    return Map<int, Airport>.unmodifiable({
+      for (final id in uniqueIds)
+        if (_airports[id] != null) id: _airports[id]!,
+    });
+  }
+
   Future<Airport> _resolveAirport(int airportId) {
     final cached = _airports[airportId];
 

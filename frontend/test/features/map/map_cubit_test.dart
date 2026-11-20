@@ -18,6 +18,12 @@ import 'package:beenaround/features/geography/domain/city_visits_repository.dart
 import 'package:beenaround/features/geography/domain/city_visit.dart';
 import 'package:beenaround/features/map/application/map_city_projection.dart';
 import 'package:beenaround/features/map/domain/map_search_destination.dart';
+import 'package:beenaround/features/flights/application/flight_catalog_resolver.dart';
+import 'package:beenaround/features/flights/domain/airline_repository.dart';
+import 'package:beenaround/features/flights/domain/airport.dart';
+import 'package:beenaround/features/flights/domain/airport_repository.dart';
+import 'package:beenaround/features/flights/domain/flight.dart';
+import 'package:beenaround/features/flights/domain/flight_repository.dart';
 
 final _now = DateTime.utc(2026, 11, 18);
 
@@ -130,11 +136,76 @@ class FakeCityVisitsRepository extends Fake implements CityVisitsRepository {
   }
 }
 
+class FakeFlightRepository extends Fake implements FlightRepository {
+  List<Flight> flights = [];
+
+  int loadCount = 0;
+
+  Future<FlightPage> Function({
+    required int limit,
+    required int offset,
+    FlightStatus? status,
+  })?
+  onLoad;
+
+  @override
+  Future<FlightPage> getFlights({
+    int limit = 20,
+    int offset = 0,
+    FlightStatus? status,
+  }) {
+    loadCount++;
+
+    if (onLoad != null) {
+      return onLoad!(limit: limit, offset: offset, status: status);
+    }
+
+    final filtered = flights
+        .where((flight) => status == null || flight.status == status)
+        .toList();
+
+    final start = offset.clamp(0, filtered.length);
+    final end = (start + limit).clamp(0, filtered.length);
+
+    return Future.value(
+      FlightPage(
+        items: filtered.sublist(start, end),
+        total: filtered.length,
+        limit: limit,
+        offset: offset,
+      ),
+    );
+  }
+}
+
+class FakeAirportRepository extends Fake implements AirportRepository {
+  Map<int, Airport> airports = {};
+
+  int loadCount = 0;
+
+  @override
+  Future<Airport> getAirport({required int airportId}) async {
+    loadCount++;
+
+    final airport = airports[airportId];
+
+    if (airport == null) {
+      throw StateError('Airport not found: $airportId');
+    }
+
+    return airport;
+  }
+}
+
+class FakeAirlineRepository extends Fake implements AirlineRepository {}
+
 void main() {
   late FakeCountriesRepository countriesRepository;
   late FakeCityVisitsRepository cityVisitsRepository;
   late FakeResidencesRepository residencesRepository;
   late FakeWishlistRepository wishlistRepository;
+  late FakeFlightRepository flightRepository;
+  late FakeAirportRepository airportRepository;
   late MapCubit cubit;
 
   setUp(() {
@@ -142,8 +213,14 @@ void main() {
     cityVisitsRepository = FakeCityVisitsRepository();
     residencesRepository = FakeResidencesRepository();
     wishlistRepository = FakeWishlistRepository();
+    flightRepository = FakeFlightRepository();
+    airportRepository = FakeAirportRepository();
 
     final cityRepository = FakeCityRepository();
+    final flightCatalogResolver = FlightCatalogResolver(
+      airportRepository: airportRepository,
+      airlineRepository: FakeAirlineRepository(),
+    );
 
     cubit = MapCubit(
       countriesRepository: countriesRepository,
@@ -152,6 +229,8 @@ void main() {
       wishlistRepository: wishlistRepository,
       countryProjection: MapCountryProjection(cityRepository: cityRepository),
       cityProjection: MapCityProjection(cityRepository: cityRepository),
+      flightRepository: flightRepository,
+      flightCatalogResolver: flightCatalogResolver,
     );
   });
 
@@ -569,6 +648,187 @@ void main() {
       cubit.selectCity(-1);
 
       expect(cubit.state, same(previousState));
+    });
+    group('Flight airport loading', () {
+      Flight makeFlight({
+        required String id,
+        required int departureAirportId,
+        required int arrivalAirportId,
+        FlightStatus status = FlightStatus.flown,
+      }) {
+        return Flight(
+          id: id,
+          departureAirportId: departureAirportId,
+          arrivalAirportId: arrivalAirportId,
+          departureOn: '2026-01-01',
+          status: status,
+          createdAt: _now,
+          updatedAt: _now,
+        );
+      }
+
+      Airport makeAirport(int id, String code) {
+        return Airport(
+          id: id,
+          ident: code,
+          iataCode: code,
+          name: '$code Airport',
+          type: 'large_airport',
+          scheduledService: true,
+          latitude: 38.7742,
+          longitude: -9.1342,
+          countryCode: 'PT',
+        );
+      }
+
+      test('loads airports from completed flights', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+          makeFlight(
+            id: 'flight-2',
+            departureAirportId: 1,
+            arrivalAirportId: 3,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'LHR'),
+          3: makeAirport(3, 'FNC'),
+        };
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airportPhase, MapAirportPhase.ready);
+        expect(cubit.state.airports, hasLength(3));
+
+        expect(cubit.state.airports[1]!.code, 'LIS');
+        expect(cubit.state.airports[1]!.departureCount, 2);
+        expect(cubit.state.airports[1]!.flightCount, 2);
+
+        expect(airportRepository.loadCount, 3);
+      });
+
+      test('loads all pages instead of only the first page', () async {
+        flightRepository.flights = List.generate(
+          25,
+          (index) => makeFlight(
+            id: 'flight-$index',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        );
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'LHR'),
+        };
+
+        await cubit.loadAirports();
+
+        expect(flightRepository.loadCount, 2);
+        expect(cubit.state.airports[1]!.flightCount, 25);
+        expect(cubit.state.airports[2]!.flightCount, 25);
+      });
+
+      test('excludes planned flights', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'planned',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+            status: FlightStatus.planned,
+          ),
+        ];
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airportPhase, MapAirportPhase.ready);
+        expect(cubit.state.airports, isEmpty);
+        expect(airportRepository.loadCount, 0);
+      });
+
+      test('keeps geographic map available when flights fail', () async {
+        flightRepository.onLoad =
+            ({
+              required int limit,
+              required int offset,
+              FlightStatus? status,
+            }) async {
+              throw StateError('Flight API unavailable');
+            };
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airportPhase, MapAirportPhase.failure);
+        expect(cubit.state.airports, isEmpty);
+
+        // The independent geographic load state is untouched.
+        expect(cubit.state.phase, MapPhase.initial);
+        expect(cubit.state.errorMessage, isNull);
+      });
+
+      test('preserves the previous airport projection after failure', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'FNC'),
+        };
+
+        await cubit.loadAirports();
+
+        final previousAirports = cubit.state.airports;
+
+        flightRepository.onLoad =
+            ({
+              required int limit,
+              required int offset,
+              FlightStatus? status,
+            }) async {
+              throw StateError('Temporary failure');
+            };
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airportPhase, MapAirportPhase.failure);
+        expect(cubit.state.airports, same(previousAirports));
+        expect(cubit.state.airports, hasLength(2));
+      });
+
+      test('refreshes airports after a flight is added', () async {
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'FNC'),
+        };
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airports, isEmpty);
+
+        flightRepository.flights = [
+          makeFlight(
+            id: 'new-flight',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airports, hasLength(2));
+        expect(cubit.state.airports[1]!.flightCount, 1);
+      });
     });
   });
 }
