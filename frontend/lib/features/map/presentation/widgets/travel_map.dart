@@ -18,6 +18,7 @@ import '../../application/map_search_selection_geojson.dart';
 import '../../domain/map_search_destination.dart';
 import '../../application/map_airport_geojson_projection.dart';
 import '../../domain/map_airport_data.dart';
+import '../../application/map_airport_visibility.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -181,6 +182,15 @@ class _TravelMapState extends State<TravelMap> {
   int _styleGeneration = 0;
 
   // ---------------------------------------------------------------------------
+  // Zoom-aware airport visibility
+  // ---------------------------------------------------------------------------
+
+  /// Most recently observed map zoom.
+  ///
+  /// Camera state belongs to the renderer, not MapCubit.
+  double? _lastObservedZoom;
+
+  // ---------------------------------------------------------------------------
   // Search camera navigation
   // ---------------------------------------------------------------------------
 
@@ -300,6 +310,8 @@ class _TravelMapState extends State<TravelMap> {
 
   void _onMapCreated(MapController controller) {
     _mapController = controller;
+
+    _refreshAirportVisibility();
   }
 
   Future<void> _onStyleLoaded(StyleController style) async {
@@ -309,6 +321,7 @@ class _TravelMapState extends State<TravelMap> {
     _styleController = style;
     _appliedHighlightGeoJson = null;
     _appliedCityGeoJson = null;
+    _appliedAirportGeoJson = null;
     _appliedSelectedCityGeoJson = null;
     _appliedSearchSelectionGeoJson = null;
 
@@ -434,6 +447,9 @@ class _TravelMapState extends State<TravelMap> {
 
     final generation = _styleGeneration;
     final colors = Theme.of(context).colorScheme;
+    // Calculate airport visibility before registering the
+    // GeoJSON source in the newly initialized map style.
+    _refreshAirportVisibility();
 
     try {
       // ---------------------------------------------------------------------
@@ -821,6 +837,8 @@ class _TravelMapState extends State<TravelMap> {
       });
 
       // Apply any changes received while the style was initializing.
+      _refreshAirportVisibility();
+
       unawaited(_synchronizeHighlights());
       unawaited(_synchronizeSelection());
       unawaited(_synchronizeCities());
@@ -870,20 +888,8 @@ class _TravelMapState extends State<TravelMap> {
     }
 
     // ---------------------------------------------------------------------
-
     // Completed-flight airport updates
-
-    // ---------------------------------------------------------------------
-
-    final nextAirportGeoJson = buildMapAirportGeoJson(
-      airports: widget.airports,
-    );
-
-    if (nextAirportGeoJson != _airportGeoJson) {
-      _airportGeoJson = nextAirportGeoJson;
-
-      unawaited(_synchronizeAirports());
-    }
+    // --------------------------------------------------------------------
 
     final nextSelectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
@@ -893,6 +899,21 @@ class _TravelMapState extends State<TravelMap> {
       _selectedCityGeoJson = nextSelectedCityGeoJson;
 
       unawaited(_synchronizeSelectedCity());
+    }
+
+    // ---------------------------------------------------------------------
+    // Recalculate airport visibility when geographic data changes.
+    //
+    // This includes:
+    // - Updated completed-flight airports.
+    // - Changes to the active city visualization filter.
+    // - Changes to the selected city marker.
+    // ---------------------------------------------------------------------
+
+    if (!identical(oldWidget.airports, widget.airports) ||
+        !identical(oldWidget.cities, widget.cities) ||
+        oldWidget.selectedCity?.cityId != widget.selectedCity?.cityId) {
+      _refreshAirportVisibility();
     }
 
     // ---------------------------------------------------------------------
@@ -1059,6 +1080,75 @@ class _TravelMapState extends State<TravelMap> {
         unawaited(_synchronizeCities());
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Zoom-aware airport visibility
+  // ---------------------------------------------------------------------------
+
+  /// Recalculates the airport markers that should be visible
+  /// at the current map zoom.
+  ///
+  /// Only completed-flight airport markers are affected.
+  ///
+  /// Search-selected destinations remain independent and
+  /// are never hidden by this calculation.
+  void _refreshAirportVisibility() {
+    if (!mounted) return;
+
+    final zoom = _mapController?.camera?.zoom ?? _lastObservedZoom;
+
+    if (zoom == null || !zoom.isFinite) {
+      return;
+    }
+
+    _lastObservedZoom = zoom;
+
+    // ---------------------------------------------------------
+    // 1. Collect cities currently rendered on the map
+    // ---------------------------------------------------------
+
+    final visibleCities = <MapCityData>[...widget.cities];
+
+    // The selected city can remain visible even when it does
+    // not match the current Visited / Lived / Wishlist filter.
+    //
+    // Include it in collision detection without duplicating
+    // a city already present in the visible projection.
+    final selectedCity = widget.selectedCity;
+
+    if (selectedCity != null &&
+        !visibleCities.any((city) => city.cityId == selectedCity.cityId)) {
+      visibleCities.add(selectedCity);
+    }
+
+    // ---------------------------------------------------------
+    // 2. Calculate which airports have sufficient separation
+    // ---------------------------------------------------------
+
+    final visibleAirports = calculateVisibleMapAirports(
+      airports: widget.airports,
+      visibleCities: visibleCities,
+      zoom: zoom,
+    );
+
+    // ---------------------------------------------------------
+    // 3. Build deterministic GeoJSON
+    // ---------------------------------------------------------
+
+    final nextGeoJson = buildMapAirportGeoJson(airports: visibleAirports);
+
+    // ---------------------------------------------------------
+    // 4. Update only when the visible airport set changes
+    // ---------------------------------------------------------
+
+    if (nextGeoJson == _airportGeoJson) {
+      return;
+    }
+
+    _airportGeoJson = nextGeoJson;
+
+    unawaited(_synchronizeAirports());
   }
 
   Future<void> _synchronizeAirports() async {
@@ -1544,6 +1634,9 @@ class _TravelMapState extends State<TravelMap> {
               onEvent: (event) {
                 if (event is MapEventClick) {
                   _onMapClick(event);
+                }
+                if (event is MapEventCameraIdle) {
+                  _refreshAirportVisibility();
                 }
               },
               layers: const [],

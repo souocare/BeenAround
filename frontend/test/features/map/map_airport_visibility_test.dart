@@ -159,5 +159,45 @@ void main() {
 
       expect(distanceAt(12), greaterThan(distanceAt(4)));
     });
+    test('shows an airport when its nearby city is not visible', () {
+      final airport = makeAirport(
+        id: 10,
+        latitude: 38.7742,
+        longitude: -9.1342,
+      );
+
+      final result = calculateVisibleMapAirports(
+        airports: [airport],
+        visibleCities: const [],
+        zoom: 4,
+      );
+
+      expect(result, [airport]);
+    });
+    test('hides an airport near a selected city outside the active filter', () {
+      final selectedCity = makeCity(
+        id: 1,
+        latitude: 38.7223,
+        longitude: -9.1393,
+      );
+
+      final airport = makeAirport(
+        id: 10,
+        latitude: 38.7742,
+        longitude: -9.1342,
+      );
+
+      // The selected city remains rendered even though
+      // it is absent from the regular filtered city list.
+      final renderedCities = [selectedCity];
+
+      final result = calculateVisibleMapAirports(
+        airports: [airport],
+        visibleCities: renderedCities,
+        zoom: 4,
+      );
+
+      expect(result, isEmpty);
+    });
   });
 }
