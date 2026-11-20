@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -696,7 +697,13 @@ void main() {
         );
       }
 
-      Airport makeAirport(int id, String code) {
+      Airport makeAirport(
+        int id,
+        String code, {
+        double? latitude = 38.7742,
+        double? longitude = -9.1342,
+        String countryCode = 'PT',
+      }) {
         return Airport(
           id: id,
           ident: code,
@@ -704,10 +711,19 @@ void main() {
           name: '$code Airport',
           type: 'large_airport',
           scheduledService: true,
-          latitude: 38.7742,
-          longitude: -9.1342,
-          countryCode: 'PT',
+          latitude: latitude,
+          longitude: longitude,
+          countryCode: countryCode,
         );
+      }
+
+      List<dynamic> routeFeatures(MapState state) {
+        final geoJson =
+            jsonDecode(state.flightRoutesGeoJson) as Map<String, dynamic>;
+
+        expect(geoJson['type'], 'FeatureCollection');
+
+        return geoJson['features'] as List<dynamic>;
       }
 
       test('loads airports from completed flights', () async {
@@ -857,6 +873,357 @@ void main() {
 
         expect(cubit.state.airports, hasLength(2));
         expect(cubit.state.airports[1]!.flightCount, 1);
+      });
+      test(
+        'loads airport and route projections from one completed flight',
+        () async {
+          flightRepository.flights = [
+            makeFlight(
+              id: 'flight-1',
+              departureAirportId: 1,
+              arrivalAirportId: 2,
+            ),
+          ];
+
+          airportRepository.airports = {
+            1: makeAirport(1, 'LIS'),
+            2: makeAirport(
+              2,
+              'MAD',
+              latitude: 40.4983,
+              longitude: -3.5676,
+              countryCode: 'ES',
+            ),
+          };
+
+          await cubit.loadAirports();
+
+          final state = cubit.state;
+
+          expect(state.airportPhase, MapAirportPhase.ready);
+
+          // Both airports are represented.
+          expect(state.airports, hasLength(2));
+
+          // One unique connection.
+          expect(state.flightRoutes, hasLength(1));
+
+          final route = state.flightRoutes.single;
+
+          expect(route.id, '1:2');
+          expect(route.flightCount, 1);
+          expect(route.flights.single.flightId, 'flight-1');
+
+          // One drawable geographic feature.
+          final features = routeFeatures(state);
+
+          expect(features, hasLength(1));
+
+          final feature = features.single as Map<String, dynamic>;
+
+          final properties = feature['properties'] as Map<String, dynamic>;
+
+          expect(properties['route_id'], '1:2');
+
+          final geometry = feature['geometry'] as Map<String, dynamic>;
+
+          expect(geometry['type'], 'MultiLineString');
+
+          // Only one page request and two catalog lookups.
+          expect(flightRepository.loadCount, 1);
+          expect(airportRepository.loadCount, 2);
+        },
+      );
+      test('aggregates repeated and reverse flights into one route', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+          makeFlight(
+            id: 'flight-2',
+            departureAirportId: 2,
+            arrivalAirportId: 1,
+          ),
+          makeFlight(
+            id: 'flight-3',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        final state = cubit.state;
+
+        expect(state.airports, hasLength(2));
+        expect(state.flightRoutes, hasLength(1));
+
+        final route = state.flightRoutes.single;
+
+        expect(route.id, '1:2');
+        expect(route.flightCount, 3);
+
+        // Individual flight direction is preserved.
+        final reverseFlight = route.flights.singleWhere(
+          (flight) => flight.flightId == 'flight-2',
+        );
+
+        expect(reverseFlight.departureAirportId, 2);
+        expect(reverseFlight.arrivalAirportId, 1);
+
+        // Despite three flights, only one visual feature exists.
+        final features = routeFeatures(state);
+
+        expect(features, hasLength(1));
+
+        final properties =
+            (features.single as Map<String, dynamic>)['properties']
+                as Map<String, dynamic>;
+
+        // Flight frequency must not influence line styling.
+        expect(properties.containsKey('flight_count'), isFalse);
+      });
+      test(
+        'preserves route metadata when an airport has no coordinates',
+        () async {
+          flightRepository.flights = [
+            makeFlight(
+              id: 'flight-1',
+              departureAirportId: 1,
+              arrivalAirportId: 2,
+            ),
+          ];
+
+          airportRepository.airports = {
+            1: makeAirport(1, 'LIS'),
+            2: makeAirport(2, 'UNK', latitude: null, longitude: null),
+          };
+
+          await cubit.loadAirports();
+
+          final state = cubit.state;
+
+          expect(state.airportPhase, MapAirportPhase.ready);
+
+          // Only the airport with valid coordinates can be mapped.
+          expect(state.airports, hasLength(1));
+          expect(state.airports.containsKey(1), isTrue);
+          expect(state.airports.containsKey(2), isFalse);
+
+          // The completed flight still contributes to route metadata.
+          expect(state.flightRoutes, hasLength(1));
+          expect(state.flightRoutes.single.id, '1:2');
+          expect(state.flightRoutes.single.flightCount, 1);
+
+          // The connection cannot be drawn without both coordinates.
+          expect(routeFeatures(state), isEmpty);
+        },
+      );
+      test('publishes airports and routes in one ready state', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        final emittedStates = <MapState>[];
+
+        final subscription = cubit.stream.listen(emittedStates.add);
+
+        try {
+          await cubit.loadAirports();
+
+          // Allow the Cubit's broadcast stream to deliver emissions.
+          await Future<void>.delayed(Duration.zero);
+
+          final flightStates = emittedStates
+              .where((state) => state.airportPhase != MapAirportPhase.initial)
+              .toList();
+
+          expect(flightStates, hasLength(2));
+
+          final loading = flightStates[0];
+          final ready = flightStates[1];
+
+          expect(loading.airportPhase, MapAirportPhase.loading);
+          expect(loading.airports, isEmpty);
+          expect(loading.flightRoutes, isEmpty);
+          expect(routeFeatures(loading), isEmpty);
+
+          expect(ready.airportPhase, MapAirportPhase.ready);
+          expect(ready.airports, hasLength(2));
+          expect(ready.flightRoutes, hasLength(1));
+          expect(routeFeatures(ready), hasLength(1));
+        } finally {
+          await subscription.cancel();
+        }
+      });
+      test('successful empty refresh clears airports and routes', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airports, hasLength(2));
+        expect(cubit.state.flightRoutes, hasLength(1));
+        expect(routeFeatures(cubit.state), hasLength(1));
+
+        // Simulate deletion of all completed personal flights.
+        flightRepository.flights = [];
+
+        await cubit.loadAirports();
+
+        expect(cubit.state.airportPhase, MapAirportPhase.ready);
+
+        expect(cubit.state.airports, isEmpty);
+        expect(cubit.state.flightRoutes, isEmpty);
+        expect(routeFeatures(cubit.state), isEmpty);
+      });
+      test('ignores stale flight geography loading results', () async {
+        final firstRequest = Completer<FlightPage>();
+        final secondRequest = Completer<FlightPage>();
+
+        var requestCount = 0;
+
+        flightRepository.onLoad =
+            ({required int limit, required int offset, FlightStatus? status}) {
+              requestCount++;
+
+              expect(status, FlightStatus.flown);
+
+              if (requestCount == 1) {
+                return firstRequest.future;
+              }
+
+              if (requestCount == 2) {
+                return secondRequest.future;
+              }
+
+              throw StateError('Unexpected additional request');
+            };
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+          3: makeAirport(3, 'LHR', latitude: 51.4700, longitude: -0.4543),
+        };
+
+        // Start an older request.
+        final firstLoad = cubit.loadAirports();
+
+        // Start a newer request before the first finishes.
+        final secondLoad = cubit.loadAirports();
+
+        expect(requestCount, 2);
+
+        // Complete the newest request first.
+        secondRequest.complete(
+          FlightPage(
+            items: [
+              makeFlight(
+                id: 'new-flight',
+                departureAirportId: 1,
+                arrivalAirportId: 3,
+              ),
+            ],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          ),
+        );
+
+        await secondLoad;
+
+        expect(cubit.state.airportPhase, MapAirportPhase.ready);
+        expect(cubit.state.flightRoutes, hasLength(1));
+        expect(cubit.state.flightRoutes.single.id, '1:3');
+        expect(routeFeatures(cubit.state), hasLength(1));
+
+        // The older request finishes after the latest state
+        // has already been published.
+        firstRequest.complete(
+          FlightPage(
+            items: [
+              makeFlight(
+                id: 'old-flight',
+                departureAirportId: 1,
+                arrivalAirportId: 2,
+              ),
+            ],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          ),
+        );
+
+        await firstLoad;
+
+        // The stale request must not replace any projection.
+        expect(cubit.state.airportPhase, MapAirportPhase.ready);
+
+        expect(cubit.state.airports.containsKey(3), isTrue);
+        expect(cubit.state.airports.containsKey(2), isFalse);
+
+        expect(cubit.state.flightRoutes, hasLength(1));
+        expect(cubit.state.flightRoutes.single.id, '1:3');
+
+        expect(routeFeatures(cubit.state), hasLength(1));
+      });
+      test('map filters preserve flight route projections', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        final previousRoutes = cubit.state.flightRoutes;
+        final previousGeoJson = cubit.state.flightRoutesGeoJson;
+        final previousLoadCount = flightRepository.loadCount;
+
+        cubit.selectStatus(MapDestinationStatus.wishlist);
+
+        expect(cubit.state.flightRoutes, same(previousRoutes));
+        expect(cubit.state.flightRoutesGeoJson, previousGeoJson);
+        expect(flightRepository.loadCount, previousLoadCount);
+
+        cubit.selectStatus(MapDestinationStatus.lived);
+
+        expect(cubit.state.flightRoutes, same(previousRoutes));
+        expect(cubit.state.flightRoutesGeoJson, previousGeoJson);
+        expect(flightRepository.loadCount, previousLoadCount);
       });
     });
   });
