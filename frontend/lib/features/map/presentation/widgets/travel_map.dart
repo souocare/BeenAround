@@ -16,6 +16,7 @@ import '../../domain/map_city_data.dart';
 import '../../application/map_city_camera_target.dart';
 import '../../application/map_search_selection_geojson.dart';
 import '../../domain/map_search_destination.dart';
+import 'package:beenaround/features/map/application/map_country_camera_bounds.dart';
 
 class TravelMap extends StatefulWidget {
   const TravelMap({
@@ -312,11 +313,21 @@ class _TravelMapState extends State<TravelMap> {
 
   Future<void> _focusSearchDestination(MapSearchDestination destination) async {
     switch (destination.type) {
+      // ---------------------------------------------------------
+      // Country
+      // ---------------------------------------------------------
       case MapSearchDestinationType.country:
-        // Country search focus will reuse _focusCountry()
-        // after adapting its geographic anchor.
-        return;
+        final countryCode = destination.countryCode;
 
+        if (countryCode == null || countryCode.isEmpty) {
+          return;
+        }
+
+        await _focusSearchedCountry(countryCode);
+
+      // ---------------------------------------------------------
+      // City / Airport
+      // ---------------------------------------------------------
       case MapSearchDestinationType.city:
       case MapSearchDestinationType.airport:
         if (!destination.hasCoordinates) {
@@ -1091,15 +1102,19 @@ class _TravelMapState extends State<TravelMap> {
     }
   }
 
+  /// Focuses the geographic region selected by a direct map tap.
+  ///
+  /// The tapped coordinates determine which geographic polygon
+  /// should be framed, preserving the existing behavior for
+  /// countries with distant islands or territories.
   Future<void> _focusCountry({
     required String countryCode,
     required double tappedLatitude,
     required double tappedLongitude,
   }) async {
-    final controller = _mapController;
     final worldGeoJson = _worldGeoJson;
 
-    if (controller == null || worldGeoJson == null || !_layersReady) {
+    if (worldGeoJson == null || !_layersReady || !mounted) {
       return;
     }
 
@@ -1115,30 +1130,14 @@ class _TravelMapState extends State<TravelMap> {
         tappedLongitude: tappedLongitude,
       );
 
-      if (bounds == null || !mounted) return;
+      if (bounds == null || !mounted) {
+        return;
+      }
 
-      final size = context.size;
-
-      if (size == null) return;
-
-      final padding = calculateCountryFocusPadding(
-        viewportSize: size,
-        topSafeArea: MediaQuery.paddingOf(context).top,
-      );
-
-      final target = calculateMapCameraTarget(
-        bounds: bounds,
-        viewportSize: size,
-        padding: padding,
-        maxZoom: 5.0,
-      );
-
-      await controller.animateCamera(
-        center: target.center,
-        zoom: target.zoom - 0.35,
-        nativeDuration: const Duration(milliseconds: 1400),
-      );
+      await _animateCountryCamera(bounds);
     } catch (error, stackTrace) {
+      if (!mounted) return;
+
       debugPrint('TravelMap: unable to focus country: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
@@ -1148,6 +1147,82 @@ class _TravelMapState extends State<TravelMap> {
     return _focusCoordinates(
       latitude: city.latitude,
       longitude: city.longitude,
+    );
+  }
+
+  /// Focuses the representative geographic region of a country
+  /// selected through catalog search.
+  ///
+  /// Unlike map-tap selection, search has no tap coordinates.
+  ///
+  /// The main geographic region is determined by the shared
+  /// country camera-bounds projection.
+  Future<void> _focusSearchedCountry(String countryCode) async {
+    final worldGeoJson = _worldGeoJson;
+
+    if (worldGeoJson == null || !_layersReady || !mounted) {
+      return;
+    }
+
+    try {
+      final countryGeoJson = buildMapCountryHighlightGeoJson(
+        worldGeoJson: worldGeoJson,
+        countryCodes: {countryCode},
+      );
+
+      final bounds = calculateCountrySearchCameraBounds(
+        countryGeoJson: countryGeoJson,
+      );
+
+      if (bounds == null || !mounted) {
+        return;
+      }
+
+      await _animateCountryCamera(bounds);
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+
+      debugPrint('TravelMap: unable to focus searched country: $error');
+
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  /// Animates the map to geographic country bounds.
+  ///
+  /// Shared by direct map-tap selection and catalog search.
+  ///
+  /// Uses the existing country panel layout and contextual
+  /// zoom limits.
+  Future<void> _animateCountryCamera(LngLatBounds bounds) async {
+    final controller = _mapController;
+
+    if (controller == null || !_layersReady || !mounted) {
+      return;
+    }
+
+    final size = context.size;
+
+    if (size == null) {
+      return;
+    }
+
+    final padding = calculateCountryFocusPadding(
+      viewportSize: size,
+      topSafeArea: MediaQuery.paddingOf(context).top,
+    );
+
+    final target = calculateMapCameraTarget(
+      bounds: bounds,
+      viewportSize: size,
+      padding: padding,
+      maxZoom: 5.0,
+    );
+
+    await controller.animateCamera(
+      center: target.center,
+      zoom: target.zoom - 0.35,
+      nativeDuration: const Duration(milliseconds: 1400),
     );
   }
 
