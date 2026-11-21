@@ -60,8 +60,14 @@ class MapSearchResultsPanel extends StatelessWidget {
         return const SizedBox.shrink();
 
       case MapSearchPhase.waiting:
-      case MapSearchPhase.loading:
         return const _MapSearchLoadingSkeleton();
+
+      case MapSearchPhase.loading:
+        if (!state.results.hasResults && !state.results.hasErrors) {
+          return const _MapSearchLoadingSkeleton();
+        }
+
+        return _buildResults(context);
 
       case MapSearchPhase.failure:
         return _buildError(context);
@@ -74,7 +80,7 @@ class MapSearchResultsPanel extends StatelessWidget {
   Widget _buildResults(BuildContext context) {
     final results = state.results;
 
-    if (results.hasNoResults) {
+    if (results.hasNoResults && !state.hasPendingCategories) {
       return _buildMessage(
         context,
         icon: Icons.search_off_rounded,
@@ -89,6 +95,12 @@ class MapSearchResultsPanel extends StatelessWidget {
     _addSection(children, title: 'Cities', destinations: results.cities);
 
     _addSection(children, title: 'Airports', destinations: results.airports);
+
+    if (state.isCategoryPending(MapSearchCategory.airports)) {
+      children.add(
+        _buildCategoryLoading(context, label: 'Searching airports...'),
+      );
+    }
 
     if (results.hasErrors) {
       children.add(_buildPartialError(context));
@@ -273,6 +285,34 @@ class MapSearchResultsPanel extends StatelessWidget {
           ],
         );
     }
+  }
+
+  Widget _buildCategoryLoading(BuildContext context, {required String label}) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      key: const Key('mapSearchAirportsLoading'),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMessage(

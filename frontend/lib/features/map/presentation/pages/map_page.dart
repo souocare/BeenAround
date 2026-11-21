@@ -99,7 +99,10 @@ class MapPage extends StatelessWidget {
               airportRepository: context.read<AirportRepository>(),
             );
 
-            return MapSearchCubit(search: service.search);
+            return MapSearchCubit(
+              search: service.search,
+              progressiveSearch: service.searchProgressively,
+            );
           },
         ),
       ],

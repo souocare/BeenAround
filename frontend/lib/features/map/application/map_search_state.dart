@@ -12,7 +12,8 @@ class MapSearchState {
     required this.query,
     required this.phase,
     required this.results,
-  });
+    Set<MapSearchCategory> pendingCategories = const {},
+  }) : pendingCategories = Set.unmodifiable(pendingCategories);
 
   factory MapSearchState.initial() {
     return MapSearchState(
@@ -26,6 +27,12 @@ class MapSearchState {
   final MapSearchPhase phase;
   final MapSearchResults results;
 
+  /// Catalog categories that have not completed their requests.
+  ///
+  /// Available results remain visible while other categories
+  /// are still pending.
+  final Set<MapSearchCategory> pendingCategories;
+
   bool get isIdle => phase == MapSearchPhase.idle;
 
   bool get isSearching =>
@@ -34,4 +41,9 @@ class MapSearchState {
   bool get hasResults => results.hasResults;
 
   bool get hasErrors => results.hasErrors;
+
+  bool get hasPendingCategories => pendingCategories.isNotEmpty;
+
+  bool isCategoryPending(MapSearchCategory category) =>
+      pendingCategories.contains(category);
 }

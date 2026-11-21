@@ -7,6 +7,15 @@ import '../../geography/domain/city_sort.dart';
 import '../domain/map_search_destination.dart';
 import 'map_search_results.dart';
 
+/// Called whenever one geographic catalog finishes searching.
+///
+/// The completed set includes successful and failed categories.
+typedef MapSearchProgressCallback =
+    void Function(
+      MapSearchResults results,
+      Set<MapSearchCategory> completedCategories,
+    );
+
 /// Searches the shared geographic catalogs used by the Map.
 ///
 /// The service is independent of MapLibre, user travel records,
@@ -32,11 +41,32 @@ class MapSearchService {
   /// are removed from the cache so a later search can retry.
   Future<List<Country>>? _countriesRequest;
 
-  /// Searches countries, cities and airports independently.
+  /// Searches all catalogs and returns their combined results.
   ///
-  /// Catalog failures are reported per category while preserving
-  /// successful results from the remaining catalogs.
-  Future<MapSearchResults> search(String query) async {
+  /// Existing consumers can continue using this method.
+  Future<MapSearchResults> search(String query) {
+    return _searchInternal(query);
+  }
+
+  /// Searches all catalogs concurrently and reports completed
+  /// categories as soon as their results become available.
+  ///
+  /// The callback is invoked after each category completes,
+  /// including when its repository request fails.
+  ///
+  /// The returned Future still completes only after all
+  /// categories finish.
+  Future<MapSearchResults> searchProgressively(
+    String query,
+    MapSearchProgressCallback onProgress,
+  ) {
+    return _searchInternal(query, onProgress: onProgress);
+  }
+
+  Future<MapSearchResults> _searchInternal(
+    String query, {
+    MapSearchProgressCallback? onProgress,
+  }) async {
     final normalizedQuery = query.trim();
 
     if (normalizedQuery.isEmpty) {
@@ -48,16 +78,38 @@ class MapSearchService {
     var airports = <MapSearchDestination>[];
 
     final failedCategories = <MapSearchCategory>{};
+    final completedCategories = <MapSearchCategory>{};
 
-    // The three independent catalogs are searched concurrently.
+    MapSearchResults currentResults() {
+      return MapSearchResults(
+        countries: countries,
+        cities: cities,
+        airports: airports,
+        failedCategories: failedCategories,
+      );
+    }
+
+    void categoryCompleted(MapSearchCategory category) {
+      completedCategories.add(category);
+
+      onProgress?.call(currentResults(), Set.unmodifiable(completedCategories));
+    }
+
+    // All catalog requests start concurrently.
+    //
+    // Results are reported independently, without waiting
+    // for the slowest catalog.
     await Future.wait<void>([
       () async {
         try {
           countries = await _searchCountries(normalizedQuery);
         } catch (_) {
           failedCategories.add(MapSearchCategory.countries);
+        } finally {
+          categoryCompleted(MapSearchCategory.countries);
         }
       }(),
+
       () async {
         try {
           final result = await _cityRepository.search(
@@ -72,8 +124,11 @@ class MapSearchService {
           ];
         } catch (_) {
           failedCategories.add(MapSearchCategory.cities);
+        } finally {
+          categoryCompleted(MapSearchCategory.cities);
         }
       }(),
+
       () async {
         try {
           final result = await _airportRepository.search(
@@ -88,19 +143,16 @@ class MapSearchService {
           ];
         } catch (_) {
           failedCategories.add(MapSearchCategory.airports);
+        } finally {
+          categoryCompleted(MapSearchCategory.airports);
         }
       }(),
     ]);
 
-    return MapSearchResults(
-      countries: countries,
-      cities: cities,
-      airports: airports,
-      failedCategories: failedCategories,
-    );
+    return currentResults();
   }
 
-  /// Searches the country catalog by name, ISO alpha-2 or alpha-3.
+  /// Searches the country catalog by name and ISO codes.
   Future<List<MapSearchDestination>> _searchCountries(String query) async {
     final countries = await _getCountries();
 
@@ -112,7 +164,6 @@ class MapSearchService {
           country.alpha3Code.toLowerCase().contains(normalizedQuery);
     }).toList();
 
-    // Exact code/name matches appear before partial matches.
     int relevance(Country country) {
       if (country.code.toLowerCase() == normalizedQuery ||
           country.alpha3Code.toLowerCase() == normalizedQuery ||
@@ -153,7 +204,7 @@ class MapSearchService {
 
   /// Loads the country catalog once per service instance.
   ///
-  /// In-flight requests are reused. A failed request is not cached.
+  /// In-flight requests are reused. Failed requests are not cached.
   Future<List<Country>> _getCountries() async {
     final request = _countriesRequest ??= _countriesRepository.getCountries();
 

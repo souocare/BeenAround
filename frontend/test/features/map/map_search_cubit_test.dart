@@ -240,5 +240,44 @@ void main() {
 
       expect(cubit.isClosed, isTrue);
     });
+    testWidgets('shows progressive results while airports remain pending', (
+      tester,
+    ) async {
+      final airportRequest = Completer<MapSearchResults>();
+
+      final cubit = MapSearchCubit(
+        search: (_) async => MapSearchResults(),
+        progressiveSearch: (query, onProgress) async {
+          final countries = MapSearchResults();
+
+          onProgress(countries, {MapSearchCategory.countries});
+
+          onProgress(countries, {
+            MapSearchCategory.countries,
+            MapSearchCategory.cities,
+          });
+
+          return airportRequest.future;
+        },
+      );
+
+      cubit.queryChanged('port');
+
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(cubit.state.phase, MapSearchPhase.loading);
+
+      expect(cubit.state.pendingCategories, {MapSearchCategory.airports});
+
+      airportRequest.complete(MapSearchResults());
+
+      await tester.pump();
+
+      expect(cubit.state.phase, MapSearchPhase.ready);
+
+      expect(cubit.state.pendingCategories, isEmpty);
+
+      await cubit.close();
+    });
   });
 }
