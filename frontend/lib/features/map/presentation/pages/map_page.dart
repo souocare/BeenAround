@@ -442,6 +442,7 @@ class _MapViewState extends State<_MapView> {
                     searchFocusRequestId: _searchFocusRequestId,
                     airports: state.airports.values.toList(growable: false),
                     flightRoutesGeoJson: state.flightRoutesGeoJson,
+                    selectedFlightRouteId: state.selectedFlightRouteId,
 
                     // -----------------------------------------------------
                     // City selection

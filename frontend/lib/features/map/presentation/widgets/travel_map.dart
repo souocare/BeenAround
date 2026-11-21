@@ -22,6 +22,7 @@ import '../../application/map_airport_visibility.dart';
 import '../../application/map_selected_airport_visibility.dart';
 import '../../application/map_camera_focus_frame.dart';
 import '../../map_panel_layout.dart';
+import '../../application/map_selected_flight_route_geojson.dart';
 import '../../application/map_state.dart' show emptyFlightRoutesGeoJson;
 
 class TravelMap extends StatefulWidget {
@@ -31,6 +32,7 @@ class TravelMap extends StatefulWidget {
     this.cities = const <MapCityData>[],
     this.airports = const <MapAirportData>[],
     this.flightRoutesGeoJson = emptyFlightRoutesGeoJson,
+    this.selectedFlightRouteId,
     this.onCountrySelected,
     this.selectedCountryCode,
     this.onCitySelected,
@@ -112,6 +114,14 @@ class TravelMap extends StatefulWidget {
   /// Selection is read-only and does not modify flight records.
   final ValueChanged<String>? onFlightRouteSelected;
 
+  /// Currently selected completed-flight connection.
+  ///
+  /// Uses the stable direction-independent route ID.
+  ///
+  /// This controls visual highlighting only.
+  /// It does not modify route geometry or personal flight records.
+  final String? selectedFlightRouteId;
+
   @override
   State<TravelMap> createState() => _TravelMapState();
 }
@@ -129,6 +139,8 @@ class _TravelMapState extends State<TravelMap> {
   static const _searchSelectionSourceId = 'travel-map-search-selection-source';
   static const _airportSourceId = 'travel-map-flight-airports-source';
   static const _flightRoutesSourceId = 'travel-map-flight-routes-source';
+  static const _selectedFlightRouteSourceId =
+      'travel-map-selected-flight-route-source';
 
   // ---------------------------------------------------------------------------
   // Layer IDs
@@ -161,6 +173,11 @@ class _TravelMapState extends State<TravelMap> {
   ///
   /// Its visual appearance must not communicate flight frequency.
   static const _flightRoutesHitLayerId = 'travel-map-flight-routes-hit';
+  static const _selectedFlightRouteGlowLayerId =
+      'travel-map-selected-flight-route-glow';
+
+  static const _selectedFlightRouteLineLayerId =
+      'travel-map-selected-flight-route-line';
   // ---------------------------------------------------------------------------
   // Temporary search-selection layer IDs
   // ---------------------------------------------------------------------------
@@ -228,6 +245,11 @@ class _TravelMapState extends State<TravelMap> {
   String? _appliedFlightRoutesGeoJson;
 
   bool _flightRoutesUpdating = false;
+  late String _selectedFlightRouteGeoJson;
+
+  String? _appliedSelectedFlightRouteGeoJson;
+
+  bool _selectedFlightRouteUpdating = false;
 
   // ---------------------------------------------------------------------------
   // MapLibre lifecycle
@@ -276,6 +298,10 @@ class _TravelMapState extends State<TravelMap> {
     _cityGeoJson = buildMapCityGeoJson(cities: widget.cities);
     _airportGeoJson = buildMapAirportGeoJson(airports: widget.airports);
     _flightRoutesGeoJson = widget.flightRoutesGeoJson;
+    _selectedFlightRouteGeoJson = buildMapSelectedFlightRouteGeoJson(
+      flightRoutesGeoJson: widget.flightRoutesGeoJson,
+      selectedRouteId: widget.selectedFlightRouteId,
+    );
 
     _selectedCityGeoJson = buildMapCityGeoJson(
       cities: [if (widget.selectedCity != null) widget.selectedCity!],
@@ -283,6 +309,25 @@ class _TravelMapState extends State<TravelMap> {
     _searchSelectionGeoJson = _buildSearchSelectionGeoJson();
 
     _loadWorld();
+  }
+
+  List<Object> _selectedFlightRouteFilter() {
+    final selectedId = widget.selectedFlightRouteId;
+
+    if (selectedId == null || selectedId.isEmpty) {
+      // Valid filter matching no route.
+      return [
+        '==',
+        ['get', 'route_id'],
+        '',
+      ];
+    }
+
+    return [
+      '==',
+      ['get', 'route_id'],
+      selectedId,
+    ];
   }
 
   @override
@@ -315,6 +360,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedSearchSelectionGeoJson = null;
     _appliedAirportGeoJson = null;
     _appliedFlightRoutesGeoJson = null;
+    _appliedSelectedFlightRouteGeoJson = null;
 
     // This changes the style without rebuilding the MapLibre renderer,
     // preserving the current camera.
@@ -390,6 +436,7 @@ class _TravelMapState extends State<TravelMap> {
     _appliedSelectedCityGeoJson = null;
     _appliedSearchSelectionGeoJson = null;
     _appliedFlightRoutesGeoJson = null;
+    _appliedSelectedFlightRouteGeoJson = null;
 
     setState(() {
       _layersReady = false;
@@ -651,6 +698,24 @@ class _TravelMapState extends State<TravelMap> {
       if (!_isCurrentStyle(style, generation)) return;
 
       // ---------------------------------------------------------------------
+      // Selected completed-flight route source
+      //
+      // Contains at most one unique airport connection.
+      // Reuses geometry from the complete route projection.
+      // ---------------------------------------------------------------------
+
+      final initialSelectedFlightRouteGeoJson = _selectedFlightRouteGeoJson;
+
+      await style.addSource(
+        GeoJsonSource(
+          id: _selectedFlightRouteSourceId,
+          data: initialSelectedFlightRouteGeoJson,
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
       // Selected city source
       // ---------------------------------------------------------------------
 
@@ -888,6 +953,53 @@ class _TravelMapState extends State<TravelMap> {
             'line-color': CountryMapStyle.colorToHex(Colors.white),
             'line-width': 1.8,
             'line-opacity': 0.75,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+      // ---------------------------------------------------------------------
+      // Selected flight route glow
+      //
+      // A soft, wider line provides visual emphasis without changing
+      // the appearance of other completed-flight routes.
+      //
+      // The effect represents active selection, never flight frequency.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _selectedFlightRouteGlowLayerId,
+          sourceId: _selectedFlightRouteSourceId,
+          layout: {'line-cap': 'round', 'line-join': 'round'},
+          paint: {
+            'line-color': CountryMapStyle.colorToHex(Colors.white),
+            'line-width': 8.0,
+            'line-opacity': 0.18,
+            'line-blur': 2.5,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+      // ---------------------------------------------------------------------
+      // Selected flight route highlight
+      //
+      // Stronger white line rendered over the glow.
+      //
+      // All selected routes use the same styling regardless
+      // of the number of associated completed flights.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _selectedFlightRouteLineLayerId,
+          sourceId: _selectedFlightRouteSourceId,
+          layout: {'line-cap': 'round', 'line-join': 'round'},
+          paint: {
+            'line-color': CountryMapStyle.colorToHex(Colors.white),
+            'line-width': 3.2,
+            'line-opacity': 1.0,
           },
         ),
       );
@@ -1178,6 +1290,7 @@ class _TravelMapState extends State<TravelMap> {
       _appliedSearchSelectionGeoJson = initialSearchSelectionGeoJson;
       _appliedAirportGeoJson = initialAirportGeoJson;
       _appliedFlightRoutesGeoJson = initialFlightRoutesGeoJson;
+      _appliedSelectedFlightRouteGeoJson = initialSelectedFlightRouteGeoJson;
 
       // ---------------------------------------------------------------------
       // 10. Initialization complete
@@ -1198,6 +1311,7 @@ class _TravelMapState extends State<TravelMap> {
       unawaited(_synchronizeSelectedCity());
       unawaited(_synchronizeSearchSelection());
       unawaited(_synchronizeFlightRoutes());
+      unawaited(_synchronizeSelectedFlightRoute());
 
       _scheduleSearchCameraFocus();
     } catch (error, stackTrace) {
@@ -1270,6 +1384,20 @@ class _TravelMapState extends State<TravelMap> {
       _flightRoutesGeoJson = widget.flightRoutesGeoJson;
 
       unawaited(_synchronizeFlightRoutes());
+    }
+
+    if (oldWidget.selectedFlightRouteId != widget.selectedFlightRouteId ||
+        oldWidget.flightRoutesGeoJson != widget.flightRoutesGeoJson) {
+      final nextGeoJson = buildMapSelectedFlightRouteGeoJson(
+        flightRoutesGeoJson: widget.flightRoutesGeoJson,
+        selectedRouteId: widget.selectedFlightRouteId,
+      );
+
+      if (nextGeoJson != _selectedFlightRouteGeoJson) {
+        _selectedFlightRouteGeoJson = nextGeoJson;
+
+        unawaited(_synchronizeSelectedFlightRoute());
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -1405,6 +1533,62 @@ class _TravelMapState extends State<TravelMap> {
           _layersReady &&
           _styleController != null) {
         unawaited(_synchronizeSelection());
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Selected flight route styling synchronization
+  // ---------------------------------------------------------------------------
+
+  Future<void> _synchronizeSelectedFlightRoute() async {
+    if (_selectedFlightRouteUpdating || !_layersReady) {
+      return;
+    }
+
+    final style = _styleController;
+
+    if (style == null) {
+      return;
+    }
+
+    _selectedFlightRouteUpdating = true;
+
+    final generation = _styleGeneration;
+
+    try {
+      while (_isCurrentStyle(style, generation) && _layersReady) {
+        final desiredGeoJson = _selectedFlightRouteGeoJson;
+
+        if (desiredGeoJson == _appliedSelectedFlightRouteGeoJson) {
+          break;
+        }
+
+        await style.updateGeoJsonSource(
+          id: _selectedFlightRouteSourceId,
+          data: desiredGeoJson,
+        );
+
+        if (!_isCurrentStyle(style, generation)) {
+          break;
+        }
+
+        _appliedSelectedFlightRouteGeoJson = desiredGeoJson;
+      }
+    } catch (error, stackTrace) {
+      if (_isCurrentStyle(style, generation)) {
+        debugPrint('TravelMap: unable to update selected flight route: $error');
+
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    } finally {
+      _selectedFlightRouteUpdating = false;
+
+      if (mounted &&
+          generation != _styleGeneration &&
+          _layersReady &&
+          _styleController != null) {
+        unawaited(_synchronizeSelectedFlightRoute());
       }
     }
   }
