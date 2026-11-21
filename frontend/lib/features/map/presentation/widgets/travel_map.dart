@@ -156,6 +156,11 @@ class _TravelMapState extends State<TravelMap> {
   static const _searchAirportOutlineIconId =
       'travel-map-search-airport-outline-icon';
   static const _flightRoutesLayerId = 'travel-map-flight-routes-line';
+
+  /// Wider, nearly invisible layer used exclusively for route hit testing.
+  ///
+  /// Its visual appearance must not communicate flight frequency.
+  static const _flightRoutesHitLayerId = 'travel-map-flight-routes-hit';
   // ---------------------------------------------------------------------------
   // Temporary search-selection layer IDs
   // ---------------------------------------------------------------------------
@@ -824,6 +829,36 @@ class _TravelMapState extends State<TravelMap> {
             'line-color': '#24252B',
             'line-width': 4.5,
             'line-opacity': 0.85,
+          },
+        ),
+      );
+
+      if (!_isCurrentStyle(style, generation)) return;
+
+      // ---------------------------------------------------------------------
+      // Completed-flight route interaction layer
+      //
+      // Provides a larger touch target without changing the visible
+      // width of any flight route.
+      //
+      // Uses exactly the same GeoJSON source as the visible line layer.
+      //
+      // This layer is only used for querying route interactions.
+      // It is not intended to communicate route frequency.
+      //
+      // Registered beneath the visible flight routes and geographic
+      // markers so the visual appearance remains unchanged.
+      // ---------------------------------------------------------------------
+
+      await style.addLayer(
+        LineStyleLayer(
+          id: _flightRoutesHitLayerId,
+          sourceId: _flightRoutesSourceId,
+          layout: {'line-cap': 'round', 'line-join': 'round'},
+          paint: {
+            'line-color': CountryMapStyle.colorToHex(Colors.white),
+            'line-width': 20.0,
+            'line-opacity': 0.01,
           },
         ),
       );
@@ -1938,24 +1973,30 @@ class _TravelMapState extends State<TravelMap> {
     // ---------------------------------------------------------
     // 4. Completed-flight routes
     //
-    // Routes are queried after airport and city markers so
-    // those destinations keep interaction priority.
+    // Query the wider interaction layer instead of requiring
+    // an exact touch on the 1.8 px visible line.
     //
-    // A route is one undirected geographic connection between
-    // two airports, independently of flight count or direction.
+    // Airport and city markers retain interaction priority.
     //
-    // The renderer reports only the stable route identity.
+    // Both layers reference the same GeoJSON features and
+    // therefore expose the same stable route_id property.
     // ---------------------------------------------------------
 
     final routeFeatures = controller.featuresAtPoint(
       event.screenPoint,
-      layerIds: [_flightRoutesLayerId],
+      layerIds: [_flightRoutesHitLayerId, _flightRoutesLayerId],
     );
 
     for (final feature in routeFeatures) {
-      final routeId = feature.properties['route_id'];
+      final rawRouteId = feature.properties['route_id'];
 
-      if (routeId is! String || routeId.isEmpty) {
+      if (rawRouteId is! String) {
+        continue;
+      }
+
+      final routeId = rawRouteId.trim();
+
+      if (routeId.isEmpty) {
         continue;
       }
 
