@@ -20,6 +20,8 @@ import '../../flights/domain/flight.dart';
 import '../../flights/domain/flight_repository.dart';
 
 import 'map_airport_projection.dart';
+import 'map_flight_route_projection.dart';
+import 'map_flight_route_geojson_projection.dart';
 
 /// Manages the authenticated user's geographic travel visualization.
 ///
@@ -270,31 +272,64 @@ class MapCubit extends Cubit<MapState> {
       if (!_isCurrentAirportRequest(generation)) return;
 
       // -------------------------------------------------------
-      // 4. Build the geographic projection
+      // 4. Build completed-flight geographic projections.
       //
-      // The projection itself handles:
-      // - Planned flight exclusion.
-      // - Duplicate flight IDs.
-      // - Airport aggregation.
-      // - Invalid coordinates.
+      // Both projections use the same completed-flight snapshot
+      // and the same resolved airport catalog.
+      //
+      // No additional repository requests are performed.
       // -------------------------------------------------------
 
-      final projection = buildMapAirportProjection(
+      final airportProjection = buildMapAirportProjection(
         flights: flights,
+        airports: airports,
+      );
+
+      final routeProjection = buildMapFlightRouteProjection(flights: flights);
+
+      // -------------------------------------------------------
+      // 5. Build antimeridian-safe route geometry.
+      //
+      // The geometry contains one feature per unique drawable
+      // airport connection.
+      //
+      // Repeated and reverse-direction flights share the same
+      // visual line. Flight counts never affect line styling.
+      //
+      // Routes without valid resolved coordinates are omitted
+      // from GeoJSON but remain in the route projection.
+      // -------------------------------------------------------
+
+      final routeGeoJson = buildMapFlightRouteGeoJson(
+        routes: routeProjection,
         airports: airports,
       );
 
       if (!_isCurrentAirportRequest(generation)) return;
 
       // -------------------------------------------------------
-      // 5. Publish the complete projection atomically
+      // 6. Publish complete flight geography atomically.
+      //
+      // Airports, route metadata and route geometry must belong
+      // to the same successful loading generation.
+      //
+      // Existing country and city data, geographic selection
+      // and active map filters remain unchanged.
       // -------------------------------------------------------
+      final selectedRouteId = state.selectedFlightRouteId;
 
+      final selectedRouteStillExists =
+          selectedRouteId != null &&
+          routeProjection.any((route) => route.id == selectedRouteId);
       emit(
         state.copyWith(
-          airports: projection,
+          airports: airportProjection,
+          flightRoutes: routeProjection,
+          flightRoutesGeoJson: routeGeoJson,
           airportPhase: MapAirportPhase.ready,
           clearAirportError: true,
+          clearSelectedFlightRoute:
+              selectedRouteId != null && !selectedRouteStillExists,
         ),
       );
     } on ApiException catch (error) {
@@ -341,13 +376,53 @@ class MapCubit extends Cubit<MapState> {
 
     if (state.selectedCountryCode == normalizedCode &&
         state.selectedCityId == null &&
-        state.selectedSearchDestination == null) {
+        state.selectedSearchDestination == null &&
+        state.selectedFlightRouteId == null) {
       return;
     }
 
     emit(
       state.copyWith(
         selectedCountryCode: normalizedCode,
+        clearSelectedCity: true,
+        clearSelectedSearchDestination: true,
+        clearSelectedFlightRoute: true,
+      ),
+    );
+  }
+
+  /// Selects a completed-flight connection for contextual inspection.
+  ///
+  /// Route IDs are direction-independent airport pairs.
+  ///
+  /// Only routes available in the current personal flight projection
+  /// may be selected.
+  ///
+  /// Selection does not modify flights, visits, wishlists or Trips.
+  void selectFlightRoute(String routeId) {
+    if (isClosed) return;
+
+    final normalizedId = routeId.trim();
+
+    if (normalizedId.isEmpty) return;
+
+    final exists = state.flightRoutes.any((route) => route.id == normalizedId);
+
+    if (!exists) {
+      return;
+    }
+
+    if (state.selectedFlightRouteId == normalizedId &&
+        state.selectedCountryCode == null &&
+        state.selectedCityId == null &&
+        state.selectedSearchDestination == null) {
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        selectedFlightRouteId: normalizedId,
+        clearSelectedCountry: true,
         clearSelectedCity: true,
         clearSelectedSearchDestination: true,
       ),
@@ -365,7 +440,8 @@ class MapCubit extends Cubit<MapState> {
 
     if (state.selectedCityId == cityId &&
         state.selectedCountryCode == null &&
-        state.selectedSearchDestination == null) {
+        state.selectedSearchDestination == null &&
+        state.selectedFlightRouteId == null) {
       return;
     }
 
@@ -374,6 +450,7 @@ class MapCubit extends Cubit<MapState> {
         selectedCityId: cityId,
         clearSelectedCountry: true,
         clearSelectedSearchDestination: true,
+        clearSelectedFlightRoute: true,
       ),
     );
   }
@@ -416,7 +493,8 @@ class MapCubit extends Cubit<MapState> {
 
     if (state.selectedCountryCode == null &&
         state.selectedCityId == null &&
-        state.selectedSearchDestination == null) {
+        state.selectedSearchDestination == null &&
+        state.selectedFlightRouteId == null) {
       return;
     }
 
@@ -425,6 +503,7 @@ class MapCubit extends Cubit<MapState> {
         clearSelectedCountry: true,
         clearSelectedCity: true,
         clearSelectedSearchDestination: true,
+        clearSelectedFlightRoute: true,
       ),
     );
   }
@@ -508,6 +587,7 @@ class MapCubit extends Cubit<MapState> {
           state.copyWith(
             selectedCityId: cityId,
             selectedSearchDestination: destination,
+            clearSelectedFlightRoute: true,
             clearSelectedCountry: true,
           ),
         );

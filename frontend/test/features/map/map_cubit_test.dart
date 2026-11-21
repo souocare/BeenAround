@@ -1225,6 +1225,140 @@ void main() {
         expect(cubit.state.flightRoutesGeoJson, previousGeoJson);
         expect(flightRepository.loadCount, previousLoadCount);
       });
+      test('selects an existing route without modifying flight data', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        final routes = cubit.state.flightRoutes;
+        final loadCount = flightRepository.loadCount;
+
+        cubit.selectFlightRoute('1:2');
+
+        expect(cubit.state.selectedFlightRouteId, '1:2');
+        expect(cubit.state.selectedFlightRoute?.flightCount, 1);
+
+        expect(cubit.state.selectedCountryCode, isNull);
+        expect(cubit.state.selectedCityId, isNull);
+        expect(cubit.state.selectedSearchDestination, isNull);
+
+        expect(cubit.state.flightRoutes, same(routes));
+        expect(flightRepository.loadCount, loadCount);
+      });
+      test(
+        'ignores selection of a route not present in personal history',
+        () async {
+          flightRepository.flights = [
+            makeFlight(
+              id: 'flight-1',
+              departureAirportId: 1,
+              arrivalAirportId: 2,
+            ),
+          ];
+
+          airportRepository.airports = {
+            1: makeAirport(1, 'LIS'),
+            2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+          };
+
+          await cubit.loadAirports();
+
+          cubit.selectCountry('PT');
+
+          cubit.selectFlightRoute('999:999');
+
+          expect(cubit.state.selectedCountryCode, 'PT');
+          expect(cubit.state.selectedFlightRouteId, isNull);
+        },
+      );
+      test('selecting a country clears a selected route', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        cubit.selectFlightRoute('1:2');
+        expect(cubit.state.selectedFlightRouteId, '1:2');
+
+        cubit.selectCountry('ES');
+
+        expect(cubit.state.selectedCountryCode, 'ES');
+        expect(cubit.state.selectedFlightRouteId, isNull);
+      });
+      test('clearSelection also clears a selected flight route', () async {
+        flightRepository.flights = [
+          makeFlight(
+            id: 'flight-1',
+            departureAirportId: 1,
+            arrivalAirportId: 2,
+          ),
+        ];
+
+        airportRepository.airports = {
+          1: makeAirport(1, 'LIS'),
+          2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+        };
+
+        await cubit.loadAirports();
+
+        cubit.selectFlightRoute('1:2');
+        cubit.clearSelection();
+
+        expect(cubit.state.selectedFlightRouteId, isNull);
+        expect(cubit.state.flightRoutes, hasLength(1));
+      });
+      test(
+        'clears selected route when successful refresh removes it',
+        () async {
+          flightRepository.flights = [
+            makeFlight(
+              id: 'flight-1',
+              departureAirportId: 1,
+              arrivalAirportId: 2,
+            ),
+          ];
+
+          airportRepository.airports = {
+            1: makeAirport(1, 'LIS'),
+            2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+          };
+
+          await cubit.loadAirports();
+
+          cubit.selectFlightRoute('1:2');
+
+          expect(cubit.state.selectedFlightRouteId, '1:2');
+
+          flightRepository.flights = [];
+
+          await cubit.loadAirports();
+
+          expect(cubit.state.flightRoutes, isEmpty);
+          expect(cubit.state.selectedFlightRouteId, isNull);
+          expect(cubit.state.airportPhase, MapAirportPhase.ready);
+        },
+      );
     });
   });
 }

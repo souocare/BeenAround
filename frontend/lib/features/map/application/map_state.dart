@@ -4,10 +4,18 @@ import '../domain/map_country_preview.dart';
 import '../domain/map_city_data.dart';
 import '../domain/map_search_destination.dart';
 import '../domain/map_airport_data.dart';
+import '../domain/map_flight_route.dart';
 
 enum MapPhase { initial, loading, ready, failure }
 
 enum MapAirportPhase { initial, loading, ready, failure }
+
+/// Valid empty GeoJSON used before flight geography is loaded.
+///
+/// Keeping a valid FeatureCollection allows the MapLibre source
+/// to initialize even when the user has no completed flights.
+const String emptyFlightRoutesGeoJson =
+    '{"type":"FeatureCollection","features":[]}';
 
 class MapState {
   const MapState({
@@ -22,6 +30,9 @@ class MapState {
     this.airports = const {},
     this.airportPhase = MapAirportPhase.initial,
     this.airportErrorMessage,
+    this.flightRoutes = const [],
+    this.flightRoutesGeoJson = emptyFlightRoutesGeoJson,
+    this.selectedFlightRouteId,
     this.errorMessage,
   });
 
@@ -71,7 +82,60 @@ class MapState {
   /// Last airport loading error, if any.
   final String? airportErrorMessage;
 
+  /// Unique undirected connections derived from completed flights.
+  ///
+  /// Each connection preserves the IDs and original directions
+  /// of its individual flight records.
+  ///
+  /// Repeated flights between the same airports produce one
+  /// connection, regardless of their direction.
+  ///
+  /// This is read-only presentation data.
+  final List<MapFlightRoute> flightRoutes;
+
+  /// Geographic representation of unique completed-flight routes.
+  ///
+  /// Produced from the same flight and airport catalog snapshot
+  /// as [airports] and [flightRoutes].
+  ///
+  /// Always contains a valid GeoJSON FeatureCollection.
+  ///
+  /// Repeated flights do not produce additional features or
+  /// change the visual weight of a route.
+  final String flightRoutesGeoJson;
+
+  /// Currently selected completed-flight connection.
+  ///
+  /// Uses the direction-independent route identity produced by
+  /// buildMapFlightRouteProjection(), e.g. "10:20".
+  ///
+  /// This is presentation state only and never represents
+  /// a persisted route record.
+  final String? selectedFlightRouteId;
+
   bool get hasData => countryData != null;
+
+  /// The currently selected unique flight connection.
+  ///
+  /// Returns null when no route is selected or when the selected
+  /// connection is no longer available in the loaded projection.
+  ///
+  /// Never performs repository requests.
+  MapFlightRoute? get selectedFlightRoute {
+    final routeId = selectedFlightRouteId;
+
+    if (routeId == null) {
+      return null;
+    }
+
+    for (final route in flightRoutes) {
+      if (route.id == routeId) {
+        return route;
+      }
+    }
+
+    return null;
+  }
 
   Set<String> get highlightedCountryCodes {
     return countryData?.countriesFor(activeStatus) ?? const <String>{};
@@ -123,7 +187,11 @@ class MapState {
     MapSearchDestination? selectedSearchDestination,
     bool clearSelectedSearchDestination = false,
     Map<int, MapAirportData>? airports,
+    List<MapFlightRoute>? flightRoutes,
+    String? flightRoutesGeoJson,
     MapAirportPhase? airportPhase,
+    String? selectedFlightRouteId,
+    bool clearSelectedFlightRoute = false,
     String? airportErrorMessage,
     bool clearAirportError = false,
   }) {
@@ -143,10 +211,15 @@ class MapState {
           ? null
           : selectedSearchDestination ?? this.selectedSearchDestination,
       airports: airports ?? this.airports,
+      flightRoutes: flightRoutes ?? this.flightRoutes,
+      flightRoutesGeoJson: flightRoutesGeoJson ?? this.flightRoutesGeoJson,
       airportPhase: airportPhase ?? this.airportPhase,
       airportErrorMessage: clearAirportError
           ? null
           : airportErrorMessage ?? this.airportErrorMessage,
+      selectedFlightRouteId: clearSelectedFlightRoute
+          ? null
+          : selectedFlightRouteId ?? this.selectedFlightRouteId,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
