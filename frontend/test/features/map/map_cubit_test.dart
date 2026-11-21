@@ -25,6 +25,7 @@ import 'package:beenaround/features/flights/domain/airport.dart';
 import 'package:beenaround/features/flights/domain/airport_repository.dart';
 import 'package:beenaround/features/flights/domain/flight.dart';
 import 'package:beenaround/features/flights/domain/flight_repository.dart';
+import 'package:beenaround/features/map/domain/map_layer_visibility.dart';
 
 final _now = DateTime.utc(2026, 11, 18);
 
@@ -1359,6 +1360,134 @@ void main() {
           expect(cubit.state.airportPhase, MapAirportPhase.ready);
         },
       );
+      test(
+        'hiding flight routes preserves selection and flight history',
+        () async {
+          flightRepository.flights = [
+            makeFlight(
+              id: 'flight-1',
+              departureAirportId: 1,
+              arrivalAirportId: 2,
+            ),
+          ];
+
+          airportRepository.airports = {
+            1: makeAirport(1, 'LIS'),
+            2: makeAirport(2, 'MAD', latitude: 40.4983, longitude: -3.5676),
+          };
+
+          await cubit.loadAirports();
+
+          cubit.selectFlightRoute('1:2');
+
+          final originalRoutes = cubit.state.flightRoutes;
+          final originalGeoJson = cubit.state.flightRoutesGeoJson;
+          final originalAirports = cubit.state.airports;
+          final originalLoadCount = flightRepository.loadCount;
+
+          // Hide the normal flight-route layer.
+          cubit.setFlightRoutesVisible(false);
+
+          expect(cubit.state.layerVisibility.flightRoutes, isFalse);
+
+          // Selection remains active.
+          expect(cubit.state.selectedFlightRouteId, '1:2');
+          expect(cubit.state.selectedFlightRoute, isNotNull);
+
+          // Original data remains unchanged.
+          expect(cubit.state.flightRoutes, same(originalRoutes));
+          expect(cubit.state.flightRoutesGeoJson, originalGeoJson);
+          expect(cubit.state.airports, same(originalAirports));
+
+          // No additional backend requests.
+          expect(flightRepository.loadCount, originalLoadCount);
+
+          // Closing selection does not re-enable the layer.
+          cubit.clearSelection();
+
+          expect(cubit.state.selectedFlightRouteId, isNull);
+          expect(cubit.state.layerVisibility.flightRoutes, isFalse);
+
+          // Re-enabling only changes presentation preferences.
+          cubit.setFlightRoutesVisible(true);
+
+          expect(cubit.state.layerVisibility.flightRoutes, isTrue);
+          expect(cubit.state.flightRoutes, same(originalRoutes));
+          expect(cubit.state.flightRoutesGeoJson, originalGeoJson);
+          expect(flightRepository.loadCount, originalLoadCount);
+        },
+      );
+      test('layer visibility controls are independent', () {
+        cubit.setCountriesVisible(false);
+
+        expect(
+          cubit.state.layerVisibility,
+          const MapLayerVisibility(countries: false),
+        );
+
+        cubit.setCitiesVisible(false);
+
+        expect(
+          cubit.state.layerVisibility,
+          const MapLayerVisibility(countries: false, cities: false),
+        );
+
+        cubit.setAirportsVisible(false);
+
+        expect(
+          cubit.state.layerVisibility,
+          const MapLayerVisibility(
+            countries: false,
+            cities: false,
+            airports: false,
+          ),
+        );
+
+        cubit.setFlightRoutesVisible(false);
+
+        expect(
+          cubit.state.layerVisibility,
+          const MapLayerVisibility(
+            countries: false,
+            cities: false,
+            airports: false,
+            flightRoutes: false,
+          ),
+        );
+
+        // Re-enable only one layer.
+        cubit.setCitiesVisible(true);
+
+        expect(cubit.state.layerVisibility.countries, isFalse);
+        expect(cubit.state.layerVisibility.cities, isTrue);
+        expect(cubit.state.layerVisibility.airports, isFalse);
+        expect(cubit.state.layerVisibility.flightRoutes, isFalse);
+      });
+      test('destination status changes preserve layer visibility', () {
+        const visibility = MapLayerVisibility(
+          countries: false,
+          cities: false,
+          airports: true,
+          flightRoutes: false,
+        );
+
+        cubit.setLayerVisibility(visibility);
+
+        cubit.selectStatus(MapDestinationStatus.wishlist);
+
+        expect(cubit.state.activeStatus, MapDestinationStatus.wishlist);
+        expect(cubit.state.layerVisibility, visibility);
+
+        cubit.selectStatus(MapDestinationStatus.lived);
+
+        expect(cubit.state.activeStatus, MapDestinationStatus.lived);
+        expect(cubit.state.layerVisibility, visibility);
+
+        cubit.selectStatus(MapDestinationStatus.visited);
+
+        expect(cubit.state.activeStatus, MapDestinationStatus.visited);
+        expect(cubit.state.layerVisibility, visibility);
+      });
     });
   });
 }
