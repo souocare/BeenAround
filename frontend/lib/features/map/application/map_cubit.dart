@@ -22,6 +22,7 @@ import '../../flights/domain/flight_repository.dart';
 import 'map_airport_projection.dart';
 import 'map_flight_route_projection.dart';
 import 'map_flight_route_geojson_projection.dart';
+import '../domain/map_layer_visibility.dart';
 
 /// Manages the authenticated user's geographic travel visualization.
 ///
@@ -530,6 +531,46 @@ class MapCubit extends Cubit<MapState> {
   void selectStatus(MapDestinationStatus status) {
     if (isClosed || state.activeStatus == status) {
       return;
+    }
+    // ---------------------------------------------------------------------------
+    // Map layer visibility
+    // ---------------------------------------------------------------------------
+
+    /// Updates geographic layer visibility without reloading or
+    /// modifying any travel records.
+    ///
+    /// Destination-status filtering remains independent.
+    void setLayerVisibility(MapLayerVisibility visibility) {
+      if (isClosed || state.layerVisibility == visibility) {
+        return;
+      }
+
+      emit(state.copyWith(layerVisibility: visibility));
+    }
+
+    /// Controls visibility of country travel-status highlights.
+    ///
+    /// Neutral world geography remains available.
+    void setCountriesVisible(bool visible) {
+      setLayerVisibility(state.layerVisibility.copyWith(countries: visible));
+    }
+
+    /// Controls visibility of normal geographic city markers.
+    void setCitiesVisible(bool visible) {
+      setLayerVisibility(state.layerVisibility.copyWith(cities: visible));
+    }
+
+    /// Controls visibility of completed-flight airport markers.
+    void setAirportsVisible(bool visible) {
+      setLayerVisibility(state.layerVisibility.copyWith(airports: visible));
+    }
+
+    /// Controls visibility of completed-flight route geometry.
+    ///
+    /// This also controls the selected-route visual highlight,
+    /// without clearing the current route selection.
+    void setFlightRoutesVisible(bool visible) {
+      setLayerVisibility(state.layerVisibility.copyWith(flightRoutes: visible));
     }
 
     emit(state.copyWith(activeStatus: status));

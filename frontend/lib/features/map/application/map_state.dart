@@ -5,6 +5,7 @@ import '../domain/map_city_data.dart';
 import '../domain/map_search_destination.dart';
 import '../domain/map_airport_data.dart';
 import '../domain/map_flight_route.dart';
+import '../domain/map_layer_visibility.dart';
 
 enum MapPhase { initial, loading, ready, failure }
 
@@ -33,6 +34,7 @@ class MapState {
     this.flightRoutes = const [],
     this.flightRoutesGeoJson = emptyFlightRoutesGeoJson,
     this.selectedFlightRouteId,
+    this.layerVisibility = const MapLayerVisibility(),
     this.errorMessage,
   });
 
@@ -112,6 +114,11 @@ class MapState {
   /// This is presentation state only and never represents
   /// a persisted route record.
   final String? selectedFlightRouteId;
+
+  /// User-controlled visibility of geographic map layers.
+  ///
+  /// Independent of the active Visited / Lived / Wishlist status.
+  final MapLayerVisibility layerVisibility;
 
   bool get hasData => countryData != null;
 
@@ -194,6 +201,7 @@ class MapState {
     bool clearSelectedFlightRoute = false,
     String? airportErrorMessage,
     bool clearAirportError = false,
+    MapLayerVisibility? layerVisibility,
   }) {
     return MapState(
       phase: phase ?? this.phase,
@@ -220,6 +228,7 @@ class MapState {
       selectedFlightRouteId: clearSelectedFlightRoute
           ? null
           : selectedFlightRouteId ?? this.selectedFlightRouteId,
+      layerVisibility: layerVisibility ?? this.layerVisibility,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
