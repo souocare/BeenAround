@@ -84,6 +84,9 @@ List<MapFlightRoute> buildMapFlightRouteProjection({
             flightId: flight.id,
             departureAirportId: departureId,
             arrivalAirportId: arrivalId,
+            departureOn: flight.departureOn,
+            flightNumber: flight.flightNumber,
+            airlineName: flight.airlineName,
           ),
         );
   }
@@ -115,8 +118,25 @@ List<MapFlightRoute> buildMapFlightRouteProjection({
         firstAirportId: routeAirportIds[routeId]!.$1,
         secondAirportId: routeAirportIds[routeId]!.$2,
         flights: List<MapFlightRouteFlight>.unmodifiable(
-          [...groupedFlights[routeId]!]
-            ..sort((a, b) => a.flightId.compareTo(b.flightId)),
+          [...groupedFlights[routeId]!]..sort((a, b) {
+            final dateA = a.departureOn;
+            final dateB = b.departureOn;
+
+            // Real flight projections always contain departureOn.
+            // Keep a deterministic fallback for legacy fixtures.
+            if (dateA == null && dateB != null) return 1;
+            if (dateA != null && dateB == null) return -1;
+
+            if (dateA != null && dateB != null) {
+              final dateComparison = dateB.compareTo(dateA);
+
+              if (dateComparison != 0) {
+                return dateComparison;
+              }
+            }
+
+            return a.flightId.compareTo(b.flightId);
+          }),
         ),
       ),
   ]);

@@ -9,12 +9,17 @@ void main() {
     required int departureAirportId,
     required int arrivalAirportId,
     FlightStatus status = FlightStatus.flown,
+    String departureOn = '2026-01-15',
+    String? flightNumber,
+    String? airlineName,
   }) {
     return Flight(
       id: id,
       departureAirportId: departureAirportId,
       arrivalAirportId: arrivalAirportId,
-      departureOn: '2026-01-15',
+      departureOn: departureOn,
+      flightNumber: flightNumber,
+      airlineName: airlineName,
       status: status,
       createdAt: DateTime.utc(2026, 1, 1),
       updatedAt: DateTime.utc(2026, 1, 1),
@@ -198,6 +203,95 @@ void main() {
       expect(() => routes.clear(), throwsUnsupportedError);
 
       expect(() => routes.single.flights.clear(), throwsUnsupportedError);
+    });
+    test('preserves flight metadata for contextual presentation', () {
+      final routes = buildMapFlightRouteProjection(
+        flights: [
+          flight(
+            id: 'F1',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2025-09-08',
+            flightNumber: 'TP1234',
+            airlineName: 'TAP Air Portugal',
+          ),
+        ],
+      );
+
+      final projectedFlight = routes.single.flights.single;
+
+      expect(projectedFlight.flightId, 'F1');
+      expect(projectedFlight.departureAirportId, 10);
+      expect(projectedFlight.arrivalAirportId, 20);
+
+      expect(projectedFlight.departureOn, '2025-09-08');
+      expect(projectedFlight.flightNumber, 'TP1234');
+      expect(projectedFlight.airlineName, 'TAP Air Portugal');
+    });
+    test('orders route flights from newest to oldest', () {
+      final routes = buildMapFlightRouteProjection(
+        flights: [
+          flight(
+            id: 'F1',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2024-04-12',
+          ),
+          flight(
+            id: 'F2',
+            departureAirportId: 20,
+            arrivalAirportId: 10,
+            departureOn: '2024-04-19',
+          ),
+          flight(
+            id: 'F3',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2025-09-08',
+          ),
+        ],
+      );
+
+      expect(routes.single.flights.map((flight) => flight.flightId).toList(), [
+        'F3',
+        'F2',
+        'F1',
+      ]);
+
+      expect(
+        routes.single.flights.map((flight) => flight.departureOn).toList(),
+        ['2025-09-08', '2024-04-19', '2024-04-12'],
+      );
+    });
+    test('uses flight ID as a stable tie-breaker for equal dates', () {
+      final routes = buildMapFlightRouteProjection(
+        flights: [
+          flight(
+            id: 'F3',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2025-05-10',
+          ),
+          flight(
+            id: 'F1',
+            departureAirportId: 20,
+            arrivalAirportId: 10,
+            departureOn: '2025-05-10',
+          ),
+          flight(
+            id: 'F2',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2025-05-10',
+          ),
+        ],
+      );
+
+      expect(routes.single.flights.map((flight) => flight.flightId).toList(), [
+        'F1',
+        'F2',
+        'F3',
+      ]);
     });
   });
 }

@@ -2,17 +2,41 @@
 ///
 /// Flight direction is preserved even when multiple flights
 /// share one undirected visual connection.
+///
+/// Contains only the information required for read-only
+/// contextual route presentation.
+///
+/// Dates remain local calendar values from the flight domain.
+/// No timezone conversion occurs here.
 class MapFlightRouteFlight {
   const MapFlightRouteFlight({
     required this.flightId,
     required this.departureAirportId,
     required this.arrivalAirportId,
+    this.departureOn,
+    this.flightNumber,
+    this.airlineName,
   });
 
   final String flightId;
 
   final int departureAirportId;
   final int arrivalAirportId;
+
+  /// Departure airport's local calendar date (YYYY-MM-DD).
+  ///
+  /// Optional for compatibility with existing route fixtures.
+  /// Real completed-flight projections populate this field.
+  final String? departureOn;
+
+  /// Recorded flight number, when available.
+  final String? flightNumber;
+
+  /// Recorded textual airline name, when available.
+  ///
+  /// Flights referencing an airline catalog ID may not
+  /// contain a textual name directly.
+  final String? airlineName;
 }
 
 /// One unique visual connection between two airports.
