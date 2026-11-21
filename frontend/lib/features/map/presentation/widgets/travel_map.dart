@@ -40,6 +40,7 @@ class TravelMap extends StatefulWidget {
     this.searchFocusRequestId = 0,
     this.onSearchDestinationSelected,
     this.onAirportSelected,
+    this.onFlightRouteSelected,
     super.key,
   });
 
@@ -102,6 +103,14 @@ class TravelMap extends StatefulWidget {
   ///
   /// This is read-only geographic presentation data.
   final String flightRoutesGeoJson;
+
+  /// Reports the stable identity of a completed-flight route
+  /// selected directly from the MapLibre route layer.
+  ///
+  /// The route ID is direction-independent, e.g. "10:20".
+  ///
+  /// Selection is read-only and does not modify flight records.
+  final ValueChanged<String>? onFlightRouteSelected;
 
   @override
   State<TravelMap> createState() => _TravelMapState();
@@ -1922,6 +1931,35 @@ class _TravelMapState extends State<TravelMap> {
       if (city != null) {
         unawaited(_focusCity(city));
       }
+
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // 4. Completed-flight routes
+    //
+    // Routes are queried after airport and city markers so
+    // those destinations keep interaction priority.
+    //
+    // A route is one undirected geographic connection between
+    // two airports, independently of flight count or direction.
+    //
+    // The renderer reports only the stable route identity.
+    // ---------------------------------------------------------
+
+    final routeFeatures = controller.featuresAtPoint(
+      event.screenPoint,
+      layerIds: [_flightRoutesLayerId],
+    );
+
+    for (final feature in routeFeatures) {
+      final routeId = feature.properties['route_id'];
+
+      if (routeId is! String || routeId.isEmpty) {
+        continue;
+      }
+
+      widget.onFlightRouteSelected?.call(routeId);
 
       return;
     }

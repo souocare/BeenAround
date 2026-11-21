@@ -5,6 +5,7 @@ import 'package:beenaround/features/map/application/map_state.dart';
 import 'package:beenaround/features/map/domain/map_airport_data.dart';
 import 'package:beenaround/features/map/domain/map_city_data.dart';
 import 'package:beenaround/features/map/domain/map_search_destination.dart';
+import 'package:beenaround/features/map/domain/map_flight_route.dart';
 
 const cityDestination = MapSearchDestination(
   type: MapSearchDestinationType.city,
@@ -241,6 +242,65 @@ void main() {
 
       expect(selection, isA<MapCountryPanelSelection>());
       expect(selection!.key, 'country:PT');
+    });
+    test('resolves a selected completed-flight route', () {
+      const route = MapFlightRoute(
+        firstAirportId: 10,
+        secondAirportId: 20,
+        flights: [
+          MapFlightRouteFlight(
+            flightId: 'F1',
+            departureAirportId: 10,
+            arrivalAirportId: 20,
+            departureOn: '2025-09-08',
+          ),
+        ],
+      );
+
+      final state = const MapState().copyWith(
+        flightRoutes: const [route],
+        selectedFlightRouteId: '10:20',
+      );
+
+      final selection = resolveMapContextPanelSelection(state);
+
+      expect(selection, isA<MapFlightRoutePanelSelection>());
+
+      final routeSelection = selection! as MapFlightRoutePanelSelection;
+
+      expect(routeSelection.key, 'flight-route:10:20');
+      expect(routeSelection.route.id, '10:20');
+      expect(routeSelection.route.flightCount, 1);
+
+      expect(routeSelection.firstAirport, isNull);
+      expect(routeSelection.secondAirport, isNull);
+    });
+    test('does not resolve a missing flight route', () {
+      final state = const MapState().copyWith(selectedFlightRouteId: '999:999');
+
+      expect(resolveMapContextPanelSelection(state), isNull);
+    });
+    test('does not resolve a missing flight route', () {
+      final state = const MapState().copyWith(selectedFlightRouteId: '999:999');
+
+      expect(resolveMapContextPanelSelection(state), isNull);
+    });
+    test('selected route takes precedence over stale country selection', () {
+      const route = MapFlightRoute(
+        firstAirportId: 10,
+        secondAirportId: 20,
+        flights: [],
+      );
+
+      final state = const MapState().copyWith(
+        selectedCountryCode: 'PT',
+        selectedFlightRouteId: '10:20',
+        flightRoutes: const [route],
+      );
+
+      final selection = resolveMapContextPanelSelection(state);
+
+      expect(selection, isA<MapFlightRoutePanelSelection>());
     });
   });
 }

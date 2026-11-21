@@ -2,6 +2,7 @@ import '../domain/map_airport_data.dart';
 import '../domain/map_search_destination.dart';
 import 'map_city_panel_projection.dart';
 import 'map_state.dart';
+import '../domain/map_flight_route.dart';
 
 /// Geographic entity currently eligible for a contextual Map panel.
 ///
@@ -59,6 +60,31 @@ class MapAirportPanelSelection extends MapContextPanelSelection {
   String get key => destination.id;
 }
 
+/// Selected completed-flight connection.
+///
+/// A route is a direction-independent geographic connection
+/// between two airports.
+///
+/// Individual flights preserve their original direction.
+///
+/// Airport metadata comes from the existing personal airport
+/// projection. No additional repository requests are performed.
+class MapFlightRoutePanelSelection extends MapContextPanelSelection {
+  const MapFlightRoutePanelSelection({
+    required this.route,
+    required this.firstAirport,
+    required this.secondAirport,
+  });
+
+  final MapFlightRoute route;
+
+  final MapAirportData? firstAirport;
+  final MapAirportData? secondAirport;
+
+  @override
+  String get key => 'flight-route:${route.id}';
+}
+
 /// Resolves the active geographic selection into a contextual
 /// panel selection.
 ///
@@ -66,6 +92,26 @@ class MapAirportPanelSelection extends MapContextPanelSelection {
 ///
 /// No repositories are accessed and no travel records are changed.
 MapContextPanelSelection? resolveMapContextPanelSelection(MapState state) {
+  // ---------------------------------------------------------------------------
+  // Completed-flight route
+  //
+  // A selected route takes priority over other geographic selections.
+  //
+  // The MapCubit normally guarantees mutual exclusivity. This
+  // defensive ordering also supports consistent presentation when
+  // receiving an unexpected intermediate state.
+  // ---------------------------------------------------------------------------
+
+  final selectedRoute = state.selectedFlightRoute;
+
+  if (selectedRoute != null) {
+    return MapFlightRoutePanelSelection(
+      route: selectedRoute,
+      firstAirport: state.airports[selectedRoute.firstAirportId],
+      secondAirport: state.airports[selectedRoute.secondAirportId],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Country
   // ---------------------------------------------------------------------------

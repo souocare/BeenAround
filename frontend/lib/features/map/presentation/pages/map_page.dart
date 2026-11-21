@@ -34,6 +34,7 @@ import '../widgets/map_country_panel.dart';
 import '../widgets/map_search_results_panel.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/travel_map.dart';
+import '../widgets/map_flight_route_panel.dart';
 
 // -----------------------------------------------------------------------------
 // Map page
@@ -359,6 +360,25 @@ class _MapViewState extends State<_MapView> {
           panelScrollController: scrollController,
           showDragHandle: showDragHandle,
         );
+
+      // -----------------------------------------------------------------------
+      // Completed-flight route
+      // -----------------------------------------------------------------------
+
+      case MapFlightRoutePanelSelection(
+        :final route,
+        :final firstAirport,
+        :final secondAirport,
+      ):
+        return MapFlightRoutePanel(
+          key: ValueKey(selection.key),
+          route: route,
+          firstAirport: firstAirport,
+          secondAirport: secondAirport,
+          onClose: context.read<MapCubit>().clearSelection,
+          panelScrollController: scrollController,
+          showDragHandle: showDragHandle,
+        );
     }
   }
 
@@ -473,6 +493,12 @@ class _MapViewState extends State<_MapView> {
                       } else {
                         cubit.selectCountry(countryCode);
                       }
+                    },
+
+                    onFlightRouteSelected: (routeId) {
+                      _closeSearch();
+
+                      context.read<MapCubit>().selectFlightRoute(routeId);
                     },
 
                     // -----------------------------------------------------
