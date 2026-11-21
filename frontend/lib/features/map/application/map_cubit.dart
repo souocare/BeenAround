@@ -569,11 +569,42 @@ class MapCubit extends Cubit<MapState> {
     ///
     /// This also controls the selected-route visual highlight,
     /// without clearing the current route selection.
-    void setFlightRoutesVisible(bool visible) {
-      setLayerVisibility(state.layerVisibility.copyWith(flightRoutes: visible));
-    }
 
     emit(state.copyWith(activeStatus: status));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Map layer visibility
+  // ---------------------------------------------------------------------------
+
+  /// Updates geographic layer visibility without reloading
+  /// or modifying any travel records.
+  void setLayerVisibility(MapLayerVisibility visibility) {
+    if (isClosed || state.layerVisibility == visibility) {
+      return;
+    }
+
+    emit(state.copyWith(layerVisibility: visibility));
+  }
+
+  /// Controls visibility of country travel-status highlights.
+  void setCountriesVisible(bool visible) {
+    setLayerVisibility(state.layerVisibility.copyWith(countries: visible));
+  }
+
+  /// Controls visibility of normal city markers.
+  void setCitiesVisible(bool visible) {
+    setLayerVisibility(state.layerVisibility.copyWith(cities: visible));
+  }
+
+  /// Controls visibility of completed-flight airport markers.
+  void setAirportsVisible(bool visible) {
+    setLayerVisibility(state.layerVisibility.copyWith(airports: visible));
+  }
+
+  /// Controls visibility of completed-flight routes.
+  void setFlightRoutesVisible(bool visible) {
+    setLayerVisibility(state.layerVisibility.copyWith(flightRoutes: visible));
   }
 
   /// Selects a destination from the shared geographic catalog.

@@ -433,15 +433,29 @@ class _MapViewState extends State<_MapView> {
                 // ---------------------------------------------------------
                 Positioned.fill(
                   child: TravelMap(
-                    highlightedCountryCodes: state.highlightedCountryCodes,
+                    highlightedCountryCodes: state.layerVisibility.countries
+                        ? state.highlightedCountryCodes
+                        : {
+                            if (state.selectedCountryCode != null &&
+                                state.highlightedCountryCodes.contains(
+                                  state.selectedCountryCode,
+                                ))
+                              state.selectedCountryCode!,
+                          },
                     selectedCountryCode: state.selectedCountryCode,
-                    cities: state.visibleCities,
+                    cities: state.layerVisibility.cities
+                        ? state.visibleCities
+                        : const [],
                     selectedCity: state.selectedCity,
                     selectedSearchDestination: state.selectedSearchDestination,
                     searchFocusDestination: _searchFocusDestination,
                     searchFocusRequestId: _searchFocusRequestId,
                     airports: state.airports.values.toList(growable: false),
-                    flightRoutesGeoJson: state.flightRoutesGeoJson,
+                    showAirports: state.layerVisibility.airports,
+                    flightRoutesGeoJson: state.layerVisibility.flightRoutes
+                        ? state.flightRoutesGeoJson
+                        : emptyFlightRoutesGeoJson,
+                    selectionFlightRoutesGeoJson: state.flightRoutesGeoJson,
                     selectedFlightRouteId: state.selectedFlightRouteId,
 
                     // -----------------------------------------------------

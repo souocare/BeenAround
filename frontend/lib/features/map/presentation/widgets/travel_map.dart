@@ -31,7 +31,9 @@ class TravelMap extends StatefulWidget {
     this.highlightedCountryCodes = const <String>{},
     this.cities = const <MapCityData>[],
     this.airports = const <MapAirportData>[],
+    this.showAirports = true,
     this.flightRoutesGeoJson = emptyFlightRoutesGeoJson,
+    this.selectionFlightRoutesGeoJson,
     this.selectedFlightRouteId,
     this.onCountrySelected,
     this.selectedCountryCode,
@@ -57,6 +59,12 @@ class TravelMap extends StatefulWidget {
   ///
   /// These are independent of visited countries and cities.
   final List<MapAirportData> airports;
+
+  /// Controls normal completed-flight airport markers.
+  ///
+  /// Airport metadata and selected airport markers remain
+  /// available independently of this setting.
+  final bool showAirports;
 
   /// Reports the tapped country code, or null when tapping outside a country.
   final ValueChanged<String?>? onCountrySelected;
@@ -105,6 +113,14 @@ class TravelMap extends StatefulWidget {
   ///
   /// This is read-only geographic presentation data.
   final String flightRoutesGeoJson;
+
+  /// Complete route geometry used to resolve the selected route.
+  ///
+  /// This remains available when normal flight routes are hidden.
+  ///
+  /// When null, falls back to [flightRoutesGeoJson] for
+  /// backward compatibility.
+  final String? selectionFlightRoutesGeoJson;
 
   /// Reports the stable identity of a completed-flight route
   /// selected directly from the MapLibre route layer.
@@ -299,7 +315,8 @@ class _TravelMapState extends State<TravelMap> {
     _airportGeoJson = buildMapAirportGeoJson(airports: widget.airports);
     _flightRoutesGeoJson = widget.flightRoutesGeoJson;
     _selectedFlightRouteGeoJson = buildMapSelectedFlightRouteGeoJson(
-      flightRoutesGeoJson: widget.flightRoutesGeoJson,
+      flightRoutesGeoJson:
+          widget.selectionFlightRoutesGeoJson ?? widget.flightRoutesGeoJson,
       selectedRouteId: widget.selectedFlightRouteId,
     );
 
@@ -309,25 +326,6 @@ class _TravelMapState extends State<TravelMap> {
     _searchSelectionGeoJson = _buildSearchSelectionGeoJson();
 
     _loadWorld();
-  }
-
-  List<Object> _selectedFlightRouteFilter() {
-    final selectedId = widget.selectedFlightRouteId;
-
-    if (selectedId == null || selectedId.isEmpty) {
-      // Valid filter matching no route.
-      return [
-        '==',
-        ['get', 'route_id'],
-        '',
-      ];
-    }
-
-    return [
-      '==',
-      ['get', 'route_id'],
-      selectedId,
-    ];
   }
 
   @override
@@ -1387,9 +1385,12 @@ class _TravelMapState extends State<TravelMap> {
     }
 
     if (oldWidget.selectedFlightRouteId != widget.selectedFlightRouteId ||
-        oldWidget.flightRoutesGeoJson != widget.flightRoutesGeoJson) {
+        oldWidget.flightRoutesGeoJson != widget.flightRoutesGeoJson ||
+        oldWidget.selectionFlightRoutesGeoJson !=
+            widget.selectionFlightRoutesGeoJson) {
       final nextGeoJson = buildMapSelectedFlightRouteGeoJson(
-        flightRoutesGeoJson: widget.flightRoutesGeoJson,
+        flightRoutesGeoJson:
+            widget.selectionFlightRoutesGeoJson ?? widget.flightRoutesGeoJson,
         selectedRouteId: widget.selectedFlightRouteId,
       );
 
@@ -1411,6 +1412,7 @@ class _TravelMapState extends State<TravelMap> {
 
     if (!identical(oldWidget.airports, widget.airports) ||
         !identical(oldWidget.cities, widget.cities) ||
+        oldWidget.showAirports != widget.showAirports ||
         oldWidget.selectedCity?.cityId != widget.selectedCity?.cityId ||
         oldWidget.selectedSearchDestination?.id !=
             widget.selectedSearchDestination?.id) {
@@ -1717,7 +1719,9 @@ class _TravelMapState extends State<TravelMap> {
     // 3. Build deterministic GeoJSON
     // ---------------------------------------------------------
 
-    final nextGeoJson = buildMapAirportGeoJson(airports: normalAirports);
+    final nextGeoJson = buildMapAirportGeoJson(
+      airports: widget.showAirports ? normalAirports : const <MapAirportData>[],
+    );
 
     // ---------------------------------------------------------
     // 4. Update only when the visible airport set changes
