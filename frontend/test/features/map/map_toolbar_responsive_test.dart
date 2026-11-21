@@ -1,3 +1,4 @@
+import 'package:beenaround/features/map/domain/map_layer_visibility.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,6 +27,9 @@ void main() {
               onSearchClose: () {},
               onSearchChanged: (_) {},
               onStatusSelected: (_) {},
+              layerVisibility: const MapLayerVisibility(),
+
+              onLayerVisibilityChanged: (_) {},
             ),
           ),
         ),

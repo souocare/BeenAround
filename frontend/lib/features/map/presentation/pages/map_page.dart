@@ -586,6 +586,11 @@ class _MapViewState extends State<_MapView> {
                       onSearchClose: _closeSearch,
                       onSearchChanged: _onSearchChanged,
                       allowCompactFilter: overlayLayout.hasSidePanel,
+                      layerVisibility: state.layerVisibility,
+
+                      onLayerVisibilityChanged: (visibility) {
+                        context.read<MapCubit>().setLayerVisibility(visibility);
+                      },
                       onStatusSelected: (status) {
                         _closeSearch();
 

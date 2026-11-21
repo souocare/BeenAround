@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../domain/map_destination_status.dart';
 import 'map_search_control.dart';
 import 'map_status_filter.dart';
+import '../../domain/map_layer_visibility.dart';
+import 'map_layer_filter_control.dart';
 
 /// Responsive toolbar for geographic search and status filtering.
 ///
@@ -18,6 +20,8 @@ class MapToolbar extends StatelessWidget {
     required this.onSearchOpen,
     required this.onSearchClose,
     required this.onSearchChanged,
+    required this.layerVisibility,
+    required this.onLayerVisibilityChanged,
     this.allowCompactFilter = true,
     super.key,
   });
@@ -34,6 +38,9 @@ class MapToolbar extends StatelessWidget {
   final VoidCallback onSearchOpen;
   final VoidCallback onSearchClose;
   final ValueChanged<String> onSearchChanged;
+  final MapLayerVisibility layerVisibility;
+
+  final ValueChanged<MapLayerVisibility> onLayerVisibilityChanged;
 
   /// Allows compact filter labels when horizontal space is constrained.
   ///
@@ -64,12 +71,24 @@ class MapToolbar extends StatelessWidget {
             const SizedBox(width: 8),
 
             // ---------------------------------------------------------------
-            // Destination status filter
+            // Destination status (Visited / Lived / Wishlist)
             // ---------------------------------------------------------------
             MapStatusFilter(
               selectedStatus: selectedStatus,
               compact: useCompactFilter,
               onSelected: onStatusSelected,
+            ),
+
+            const SizedBox(width: 8),
+
+            // ---------------------------------------------------------------
+            // Independent geographic layer visibility
+            // ---------------------------------------------------------------
+            MapLayerFilterControl(
+              visibility: layerVisibility,
+              onVisibilityChanged: onLayerVisibilityChanged,
+              isSearchOpen: isSearchOpen,
+              onSearchClose: onSearchClose,
             ),
           ],
         );
