@@ -1,10 +1,20 @@
 """Read-only queries for the shared airport catalog."""
 
-from sqlalchemy import case, func, or_, select
+import re
+from sqlalchemy import (
+    bindparam,
+    case,
+    func,
+    literal_column,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.orm import Session
 
 from app.models.airport import Airport
 from app.models.country import Country
+
 
 
 class AirportRepository:
@@ -12,6 +22,28 @@ class AirportRepository:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    @staticmethod
+    def _fts_candidates(query: str):
+        """Return indexed airport IDs for supported substring searches.
+
+        The FTS index is only a candidate filter. The original
+        SQL predicates remain responsible for final matching.
+
+        Short queries, special characters and non-ASCII input
+        use the existing SQL search path.
+        """
+        if re.fullmatch(r"[A-Za-z0-9]{3,}", query) is None:
+            return None
+
+        candidates = (
+            select(literal_column("rowid"))
+            .select_from(text("airports_fts"))
+            .where(text("airports_fts MATCH :fts_query"))
+            .params(fts_query=f'"{query}"')
+        )
+
+        return Airport.id.in_(candidates)
 
     def search(
         self,
@@ -46,9 +78,18 @@ class AirportRepository:
                     Airport.municipality.ilike(pattern, escape="\\"),
                 )
             )
+            fts_filter = self._fts_candidates(normalized_query)
+
+            if fts_filter is not None:
+                conditions.append(fts_filter)
 
         total = (
-            self._session.scalar(select(func.count()).select_from(Airport).where(*conditions)) or 0
+            self._session.scalar(
+                select(func.count())
+                .select_from(Airport)
+                .where(*conditions)
+            )
+            or 0
         )
 
         statement = (
@@ -105,7 +146,9 @@ class AirportRepository:
                 Airport.id,
             )
 
-        rows = self._session.execute(statement.limit(limit).offset(offset)).all()
+        rows = self._session.execute(
+            statement.limit(limit).offset(offset)
+        ).all()
 
         return [(airport, country_name) for airport, country_name in rows], total
 
@@ -113,7 +156,6 @@ class AirportRepository:
         """Return an airport by its stable catalog ID."""
 
         return self._session.get(Airport, airport_id)
-
 
     def get_with_country(
         self,

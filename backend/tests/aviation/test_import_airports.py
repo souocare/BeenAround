@@ -1,6 +1,11 @@
 """Tests for the OurAirports catalog importer."""
 
 import csv
+import importlib
+
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from sqlalchemy import text
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -348,3 +353,91 @@ def test_reimport_updates_airport_timezone(engine, tmp_path):
         airport = connection.execute(select(Airport.__table__)).one()
 
     assert airport.timezone_id == "Asia/Tokyo"
+
+def test_reimport_keeps_fts_index_synchronized(engine, tmp_path):
+    """Airport upserts keep the trigram index synchronized."""
+
+    migration = importlib.import_module(
+        "migrations.versions.a40699dd94cf_add_airport_trigram_search_index"
+    )
+
+    # Install the real FTS5 infrastructure on the isolated test database.
+    with engine.begin() as connection:
+        context = MigrationContext.configure(connection)
+
+        with Operations.context(context):
+            migration.upgrade()
+
+    def search_fts(term: str) -> list[int]:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT rowid
+                    FROM airports_fts
+                    WHERE airports_fts MATCH :term
+                    ORDER BY rowid
+                    """
+                ),
+                {"term": f'"{term}"'},
+            ).all()
+
+        return [row[0] for row in rows]
+
+    # First import: create a new airport.
+    original_catalog = write_catalog(
+        tmp_path,
+        [
+            airport_row(
+                airport_id="100",
+                ident="LPPT",
+                name="Zenith Airfield",
+            )
+        ],
+    )
+
+    first_report = import_airports(
+        engine=engine,
+        catalog_path=original_catalog,
+    )
+
+    assert first_report.inserted == 1
+    assert first_report.updated == 0
+
+    assert search_fts("zenith") == [100]
+    assert search_fts("quartz") == []
+
+    # Second import: update the existing airport.
+    updated_catalog = write_catalog(
+        tmp_path,
+        [
+            airport_row(
+                airport_id="100",
+                ident="LPPT",
+                name="Quartz Airfield",
+            )
+        ],
+    )
+
+    second_report = import_airports(
+        engine=engine,
+        catalog_path=updated_catalog,
+    )
+
+    assert second_report.inserted == 0
+    assert second_report.updated == 1
+
+    # The new name must be searchable.
+    assert search_fts("quartz") == [100]
+
+    # The old name must no longer be indexed.
+    assert search_fts("zenith") == []
+
+    # The existing airport ID must remain unchanged.
+    with engine.connect() as connection:
+        airport = connection.execute(
+            select(Airport.__table__).where(Airport.id == 100)
+        ).one()
+
+    assert airport.id == 100
+    assert airport.name == "Quartz Airfield"

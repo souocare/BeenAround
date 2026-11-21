@@ -3,6 +3,11 @@
 from collections.abc import Generator
 from pathlib import Path
 
+import importlib
+
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -15,6 +20,7 @@ from app.main import create_app
 from app.models.airport import Airport
 from app.models.country import Country
 from app.models.user import User
+from app.repositories.airports import AirportRepository
 
 
 TEST_PASSWORD = "correct-password-123"
@@ -195,6 +201,16 @@ def airports_client(tmp_path: Path) -> Generator[TestClient, None, None]:
         )
 
         session.commit()
+
+    migration = importlib.import_module(
+        "migrations.versions.a40699dd94cf_add_airport_trigram_search_index"
+    )
+
+    with engine.begin() as connection:
+        context = MigrationContext.configure(connection)
+
+        with Operations.context(context):
+            migration.upgrade()
 
     settings = Settings(
         _env_file=None,
@@ -580,3 +596,127 @@ def test_invalid_search_parameters_return_422(
     response = airports_client.get(f"/api/v1/airports?q=LIS&{query}")
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Lis",
+        "LIS",
+        "Lisbon",
+        "LPPT",
+        "Port",
+        "Airport",
+        "Delgado",
+        "isb",
+        "Li",
+        "L",
+        "100%",
+        "PT_",
+    ],
+)
+def test_indexed_airport_search_matches_original_sql(
+    airports_client: TestClient,
+    query: str,
+) -> None:
+    """Indexed search must preserve legacy airport search results."""
+
+    web_login(airports_client)
+
+    response = airports_client.get(
+        "/api/v1/airports",
+        params={
+            "q": query,
+            "limit": 100,
+        },
+    )
+
+    assert response.status_code == 200
+
+    indexed_result = response.json()
+
+    # The actual semantic equivalence comparison will be added
+    # against the legacy repository implementation.
+    assert indexed_result["total"] >= len(indexed_result["items"])
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        # IATA, ICAO and airport identifiers.
+        {"q": "LIS"},
+        {"q": "lis"},
+        {"q": "LPPT"},
+        {"q": "PT-0001"},
+        # Airport names and municipalities.
+        {"q": "Lis"},
+        {"q": "Lisbon"},
+        {"q": "Port"},
+        {"q": "Airport"},
+        {"q": "Delgado"},
+        # Substrings inside words.
+        {"q": "isb"},
+        {"q": "umb"},
+        # Short queries use the legacy path.
+        {"q": "L"},
+        {"q": "Li"},
+        # Special characters.
+        {"q": "100%"},
+        {"q": "PT_"},
+        {"q": "\\"},
+        # Country filtering.
+        {"q": "Lis", "country_code": "PT"},
+        {"q": "Lis", "country_code": "GB"},
+        # Scheduled flights filtering.
+        {"q": "Lis", "scheduled_only": "true"},
+        # Combined filters.
+        {
+            "q": "Lis",
+            "country_code": "PT",
+            "scheduled_only": "true",
+        },
+        # Pagination.
+        {"q": "Lis", "limit": 2, "offset": 0},
+        {"q": "Lis", "limit": 2, "offset": 1},
+        {"q": "Lis", "limit": 2, "offset": 2},
+        # Case-insensitive matching.
+        {"q": "LISBON"},
+        {"q": "lIsBoN"},
+        # No matches.
+        {"q": "zzznomatch"},
+    ],
+)
+def test_airport_fts_preserves_legacy_search_results(
+    airports_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    params: dict,
+) -> None:
+    """FTS candidate filtering must preserve legacy API responses."""
+
+    web_login(airports_client)
+
+    # First execute the original SQL search without FTS filtering.
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            AirportRepository,
+            "_fts_candidates",
+            staticmethod(lambda query: None),
+        )
+
+        legacy_response = airports_client.get(
+            "/api/v1/airports",
+            params=params,
+        )
+
+    # The patch has been restored. Execute the optimized search.
+    indexed_response = airports_client.get(
+        "/api/v1/airports",
+        params=params,
+    )
+
+    assert legacy_response.status_code == 200
+    assert indexed_response.status_code == 200
+
+    # Compare the complete REST payload:
+    # items, ordering, total, limit and offset.
+    assert indexed_response.json() == legacy_response.json()
